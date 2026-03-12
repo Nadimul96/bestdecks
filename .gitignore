@@ -8,3 +8,4 @@ dist
 app_data
 output
 tsconfig.tsbuildinfo
+.vercel

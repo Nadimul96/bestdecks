@@ -16,13 +16,16 @@ import {
 } from "@/components/ui/sidebar";
 import { workspaceNavGroups } from "@/lib/workspace-navigation";
 
-const rootUser = {
-  name: "Nadim Haque",
-  email: "owner@customproposals.app",
-  avatar: "",
-};
-
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+export function AppSidebar({
+  user,
+  ...props
+}: React.ComponentProps<typeof Sidebar> & {
+  readonly user: {
+    readonly name: string;
+    readonly email: string;
+    readonly avatar: string;
+  };
+}) {
   return (
     <Sidebar {...props} collapsible="icon">
       <SidebarHeader>
@@ -44,7 +47,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
       <SidebarFooter>
         <SidebarSupportCard />
-        <NavUser user={rootUser} />
+        <NavUser user={user} />
       </SidebarFooter>
     </Sidebar>
   );

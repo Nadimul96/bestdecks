@@ -20,6 +20,7 @@
     "validate:example": "tsx src/bin/validate-example.ts"
   },
   "dependencies": {
+    "better-auth": "^1.5.5",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dotenv": "^17.3.1",

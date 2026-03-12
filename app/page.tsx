@@ -9,11 +9,26 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
+import { getAdminSession } from "@/src/server/auth";
+import { redirect } from "next/navigation";
 
-export default function Page() {
+export default async function Page() {
+  const session = await getAdminSession();
+
+  if (!session) {
+    redirect("/login");
+  }
+
   return (
     <SidebarProvider defaultOpen>
-      <AppSidebar variant="inset" />
+      <AppSidebar
+        variant="inset"
+        user={{
+          name: session.user.name || "Admin",
+          email: session.user.email,
+          avatar: session.user.image || "",
+        }}
+      />
       <SidebarInset>
         <header className="sticky top-0 z-40 flex h-12 shrink-0 items-center gap-2 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <div className="flex w-full items-center justify-between px-4 lg:px-6">

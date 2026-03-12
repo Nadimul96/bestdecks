@@ -16,7 +16,7 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Custom Proposals",
+  title: "Bestdecks",
   description:
     "Batch website research and proposal generation for tailored outreach decks.",
 };

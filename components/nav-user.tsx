@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import {
   CircleUser,
   CreditCard,
@@ -24,6 +25,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { authClient } from "@/lib/auth-client";
 import { getInitials } from "@/lib/utils";
 
 export function NavUser({
@@ -36,6 +38,14 @@ export function NavUser({
   };
 }) {
   const { isMobile } = useSidebar();
+  const [isPending, startTransition] = React.useTransition();
+
+  function handleSignOut() {
+    startTransition(async () => {
+      await authClient.signOut();
+      window.location.href = "/login";
+    });
+  }
 
   return (
     <SidebarMenu>
@@ -95,9 +105,9 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={handleSignOut} disabled={isPending}>
               <LogOut />
-              Log out
+              {isPending ? "Signing out..." : "Log out"}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

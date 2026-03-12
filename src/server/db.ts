@@ -6,6 +6,18 @@ import { loadEnv } from "@/src/config/env";
 
 let database: DatabaseSync | null = null;
 
+function getDefaultDatabasePath() {
+  if (process.env.LOCAL_DB_PATH) {
+    return process.env.LOCAL_DB_PATH;
+  }
+
+  if (process.env.VERCEL === "1") {
+    return "/tmp/bestdecks.sqlite";
+  }
+
+  return ".data/custom-proposals.sqlite";
+}
+
 function migrate(db: DatabaseSync) {
   db.exec(`
     PRAGMA journal_mode = WAL;
@@ -99,7 +111,7 @@ export function getDb() {
   }
 
   const env = loadEnv();
-  const filePath = resolve(process.cwd(), env.LOCAL_DB_PATH ?? ".data/custom-proposals.sqlite");
+  const filePath = resolve(process.cwd(), env.LOCAL_DB_PATH ?? getDefaultDatabasePath());
   mkdirSync(dirname(filePath), { recursive: true });
   database = new DatabaseSync(filePath);
   migrate(database);

@@ -6,8 +6,14 @@ import {
   parseTargetsFromCsvRows,
   parseTargetsFromMultilineInput,
 } from "@/src/domain/intake";
+import { getAdminSession } from "@/src/server/auth";
 
 export async function POST(request: Request) {
+  const session = await getAdminSession();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const body = (await request.json()) as {
     mode: "multiline" | "csv";
     input: string;

@@ -12,6 +12,11 @@ export const envSchema = z.object({
   PRESENTON_BASE_URL: z.string().url().optional(),
   PRESENTON_API_KEY: z.string().min(1).optional(),
   PRESENTON_TEMPLATE: z.string().min(1).optional(),
+  BETTER_AUTH_URL: z.string().url().optional(),
+  BETTER_AUTH_SECRET: z.string().min(1).optional(),
+  ADMIN_NAME: z.string().min(1).optional(),
+  ADMIN_EMAIL: z.string().email().optional(),
+  ADMIN_PASSWORD: z.string().min(1).optional(),
   APP_SECRETS_KEY: z.string().min(1).optional(),
   LOCAL_DB_PATH: z.string().min(1).optional(),
 });

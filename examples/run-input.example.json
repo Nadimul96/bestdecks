@@ -1,0 +1,61 @@
+{
+  "sellerContext": {
+    "websiteUrl": "https://seller.example.com",
+    "companyName": "Seller Example",
+    "offerSummary": "We help local service businesses improve outbound conversion with tailored visual proposals.",
+    "services": [
+      "Outbound strategy",
+      "AI-assisted proposal generation",
+      "Presentation design"
+    ],
+    "differentiators": [
+      "Each proposal is personalized from the target company's public footprint",
+      "Decks are generated in minutes instead of days"
+    ],
+    "targetCustomer": "Founders and revenue leaders at SMBs and mid-market companies",
+    "desiredOutcome": "Book a discovery call",
+    "proofPoints": [
+      "Reduced proposal turnaround time by 90 percent"
+    ],
+    "constraints": [
+      "Do not make unverifiable claims about the target company"
+    ]
+  },
+  "questionnaire": {
+    "archetype": "cold_outreach",
+    "audience": "Founder or head of growth at the target company",
+    "objective": "Convince the target to take a discovery call about improving outbound performance",
+    "callToAction": "Book a 20-minute introductory call",
+    "outputFormat": "presenton_editor",
+    "desiredCardCount": 8,
+    "tone": "consultative",
+    "visualStyle": "sales_polished",
+    "imagePolicy": "auto",
+    "mustInclude": [
+      "Why this company was selected",
+      "Specific observations from the website",
+      "A concrete next step"
+    ],
+    "mustAvoid": [
+      "Generic buzzwords",
+      "Unsupported revenue claims"
+    ],
+    "extraInstructions": "Keep each card concise and easy to skim.",
+    "optionalReview": true,
+    "allowUserApprovedCrawlException": false
+  },
+  "targets": [
+    {
+      "websiteUrl": "https://target-one.example.com",
+      "companyName": "Target One",
+      "firstName": "Casey",
+      "lastName": "Lee",
+      "role": "Founder",
+      "campaignGoal": "Pitch a tailored outbound proposal",
+      "notes": "Mention local market positioning if it is clearly visible."
+    },
+    {
+      "websiteUrl": "https://target-two.example.com"
+    }
+  ]
+}

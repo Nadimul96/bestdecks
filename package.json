@@ -1,0 +1,44 @@
+{
+  "name": "bestdecks",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.13.1",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "check": "pnpm typecheck && pnpm validate:example && pnpm plan:example",
+    "doctor": "tsx src/bin/doctor.ts",
+    "smoke:cloudflare": "tsx src/bin/smoke-cloudflare.ts",
+    "smoke:gemini": "tsx src/bin/smoke-gemini.ts",
+    "smoke:perplexity": "tsx src/bin/smoke-perplexity.ts",
+    "smoke:presenton": "tsx src/bin/smoke-presenton.ts",
+    "presenton:start": "bash scripts/start-presenton.sh",
+    "plan:example": "tsx src/bin/plan-example.ts",
+    "typecheck": "tsc --noEmit",
+    "validate:example": "tsx src/bin/validate-example.ts"
+  },
+  "dependencies": {
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "dotenv": "^17.3.1",
+    "lucide-react": "^0.577.0",
+    "next": "^16.1.6",
+    "radix-ui": "^1.4.3",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "tailwind-merge": "^3.5.0",
+    "tw-animate-css": "^1.4.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.2.1",
+    "@types/node": "^24.3.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "tailwindcss": "^4.2.1",
+    "tsx": "^4.19.3",
+    "typescript": "^5.9.2"
+  }
+}

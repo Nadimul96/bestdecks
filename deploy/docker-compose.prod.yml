@@ -1,0 +1,57 @@
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: deploy/app/Dockerfile
+    container_name: bestdecks-app
+    restart: unless-stopped
+    env_file:
+      - ../.env.production
+    environment:
+      NODE_ENV: production
+      LOCAL_DB_PATH: .data/custom-proposals.sqlite
+    volumes:
+      - bestdecks-data:/app/.data
+    depends_on:
+      - presenton
+
+  presenton:
+    build:
+      context: ..
+      dockerfile: deploy/presenton/Dockerfile
+    container_name: bestdecks-presenton
+    restart: unless-stopped
+    environment:
+      CAN_CHANGE_KEYS: "false"
+      LLM: openai
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: gpt-4.1
+      DISABLE_IMAGE_GENERATION: "true"
+    volumes:
+      - presenton-data:/app_data
+    ports:
+      - "5050:80"
+
+  caddy:
+    image: caddy:2
+    container_name: bestdecks-caddy
+    restart: unless-stopped
+    depends_on:
+      - app
+      - presenton
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
+      PRESENTON_DOMAIN: ${PRESENTON_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  bestdecks-data:
+  presenton-data:
+  caddy-data:
+  caddy-config:

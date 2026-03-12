@@ -1,0 +1,19 @@
+{
+  auto_https disable_redirects
+}
+
+{$APP_DOMAIN} {
+  reverse_proxy app:3000
+}
+
+www.{$APP_DOMAIN} {
+  redir https://{$APP_DOMAIN}{uri}
+}
+
+{$PRESENTON_DOMAIN} {
+  reverse_proxy presenton:80
+}
+
+:80 {
+  reverse_proxy app:3000
+}

@@ -1,4 +1,4 @@
-import { headers as nextHeaders } from "next/headers";
+import { cookies as nextCookiesStore, headers as nextHeaders } from "next/headers";
 
 import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { getMigrations } from "better-auth/db/migration";
@@ -93,8 +93,20 @@ export async function ensureAuthReady() {
 
 export async function getSession() {
   await ensureAuthReady();
+  const headerStore = await nextHeaders();
+  const cookieStore = await nextCookiesStore();
+  const requestHeaders = new Headers(headerStore);
+  const cookieHeader = cookieStore
+    .getAll()
+    .map((cookie) => `${cookie.name}=${cookie.value}`)
+    .join("; ");
+
+  if (cookieHeader) {
+    requestHeaders.set("cookie", cookieHeader);
+  }
+
   return auth.api.getSession({
-    headers: await nextHeaders(),
+    headers: requestHeaders,
   });
 }
 

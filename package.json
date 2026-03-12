@@ -9,6 +9,8 @@
     "build": "next build",
     "start": "next start",
     "check": "pnpm typecheck && pnpm validate:example && pnpm plan:example",
+    "test:unit": "tsx --test src/**/*.test.ts",
+    "uat:smoke": "tsx scripts/uat-smoke.ts",
     "doctor": "tsx src/bin/doctor.ts",
     "smoke:cloudflare": "tsx src/bin/smoke-cloudflare.ts",
     "smoke:gemini": "tsx src/bin/smoke-gemini.ts",
@@ -38,6 +40,7 @@
     "@types/node": "^24.3.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "playwright": "^1.58.2",
     "tailwindcss": "^4.2.1",
     "tsx": "^4.19.3",
     "typescript": "^5.9.2"

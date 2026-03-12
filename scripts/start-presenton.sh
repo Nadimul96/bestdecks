@@ -4,6 +4,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="${ROOT_DIR}/.env.local"
+PATCHED_LAYOUT_LOADER="${ROOT_DIR}/scripts/presenton/get_layout_by_name.py"
 
 if [[ -f "${ENV_FILE}" ]]; then
   set -a
@@ -29,6 +30,7 @@ docker run -d \
   --name "${CONTAINER_NAME}" \
   -p "${PRESENTON_PORT}:80" \
   -v "${ROOT_DIR}/app_data:/app_data" \
+  -v "${PATCHED_LAYOUT_LOADER}:/app/servers/fastapi/utils/get_layout_by_name.py:ro" \
   -e CAN_CHANGE_KEYS="false" \
   -e LLM="${PRESENTON_LLM}" \
   -e OPENAI_API_KEY="${OPENAI_API_KEY:-}" \

@@ -3,7 +3,10 @@ import { randomUUID } from "node:crypto";
 import { intakeRunSchema, type IntakeRun } from "@/src/domain/schemas";
 import { encryptSecret } from "@/src/server/crypto";
 import { getDb } from "@/src/server/db";
-import type { IntegrationProviderKey } from "@/src/server/settings";
+import {
+  resolveIntegrationConfig,
+  type IntegrationProviderKey,
+} from "@/src/server/settings";
 
 export interface OnboardingPayload {
   profile: {
@@ -22,6 +25,10 @@ export interface OnboardingPayload {
     config?: Record<string, unknown>;
     secret?: string;
   }>;
+  intakeDraft?: {
+    websitesText?: string;
+    contactsCsvText?: string;
+  };
 }
 
 function now() {
@@ -40,8 +47,9 @@ export function saveOnboarding(payload: OnboardingPayload) {
     `
       INSERT INTO workspace_state (
         id, owner_name, owner_email, company_name, website_url, timezone, default_signature,
-        seller_context_json, questionnaire_json, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        seller_context_json, questionnaire_json, draft_websites_text, draft_contacts_csv_text,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         owner_name = excluded.owner_name,
         owner_email = excluded.owner_email,
@@ -51,6 +59,8 @@ export function saveOnboarding(payload: OnboardingPayload) {
         default_signature = excluded.default_signature,
         seller_context_json = excluded.seller_context_json,
         questionnaire_json = excluded.questionnaire_json,
+        draft_websites_text = excluded.draft_websites_text,
+        draft_contacts_csv_text = excluded.draft_contacts_csv_text,
         updated_at = excluded.updated_at
     `,
   ).run(
@@ -63,6 +73,8 @@ export function saveOnboarding(payload: OnboardingPayload) {
     payload.profile.defaultSignature ?? null,
     payload.sellerContext ? JSON.stringify(payload.sellerContext) : null,
     payload.questionnaire ? JSON.stringify(payload.questionnaire) : null,
+    payload.intakeDraft?.websitesText ?? null,
+    payload.intakeDraft?.contactsCsvText ?? null,
     timestamp,
     timestamp,
   );
@@ -90,6 +102,7 @@ export function saveOnboarding(payload: OnboardingPayload) {
 
 export function getOnboarding() {
   const db = getDb();
+  const resolved = resolveIntegrationConfig();
   const row = db
     .prepare("SELECT * FROM workspace_state WHERE id = ? LIMIT 1")
     .get("default") as
@@ -102,16 +115,92 @@ export function getOnboarding() {
         default_signature: string | null;
         seller_context_json: string | null;
         questionnaire_json: string | null;
+        draft_websites_text: string | null;
+        draft_contacts_csv_text: string | null;
       }
     | undefined;
 
   const integrations = db
-    .prepare("SELECT provider, display_name, config_json FROM integration_settings ORDER BY provider")
+    .prepare(
+      `
+        SELECT provider, display_name, config_json, secret_ciphertext
+        FROM integration_settings
+        ORDER BY provider
+      `,
+    )
     .all() as Array<{
     provider: string;
     display_name: string | null;
     config_json: string | null;
+    secret_ciphertext: string | null;
   }>;
+
+  const byProvider = new Map(
+    integrations.map((integration) => [
+      integration.provider as IntegrationProviderKey,
+      integration,
+    ]),
+  );
+
+  const effectiveIntegrations: Array<{
+    provider: IntegrationProviderKey;
+    displayName?: string;
+    config?: Record<string, unknown>;
+    hasSecret?: boolean;
+  }> = [
+    {
+      provider: "cloudflare" as const,
+      displayName: byProvider.get("cloudflare")?.display_name ?? undefined,
+      config: resolved.cloudflareAccountId
+        ? { accountId: resolved.cloudflareAccountId }
+        : undefined,
+      hasSecret: Boolean(
+        byProvider.get("cloudflare")?.secret_ciphertext ?? resolved.cloudflareApiToken,
+      ),
+    },
+    {
+      provider: "deepcrawl" as const,
+      displayName: byProvider.get("deepcrawl")?.display_name ?? undefined,
+      config: undefined,
+      hasSecret: Boolean(
+        byProvider.get("deepcrawl")?.secret_ciphertext ?? resolved.deepcrawlApiKey,
+      ),
+    },
+    {
+      provider: "perplexity" as const,
+      displayName: byProvider.get("perplexity")?.display_name ?? undefined,
+      config: undefined,
+      hasSecret: Boolean(
+        byProvider.get("perplexity")?.secret_ciphertext ?? resolved.perplexityApiKey,
+      ),
+    },
+    {
+      provider: "gemini" as const,
+      displayName: byProvider.get("gemini")?.display_name ?? undefined,
+      config: undefined,
+      hasSecret: Boolean(
+        byProvider.get("gemini")?.secret_ciphertext ?? resolved.geminiApiKey,
+      ),
+    },
+    {
+      provider: "openai" as const,
+      displayName: byProvider.get("openai")?.display_name ?? undefined,
+      config: undefined,
+      hasSecret: Boolean(
+        byProvider.get("openai")?.secret_ciphertext ?? resolved.openaiApiKey,
+      ),
+    },
+    {
+      provider: "presenton" as const,
+      displayName: byProvider.get("presenton")?.display_name ?? undefined,
+      config: resolved.presentonBaseUrl
+        ? { baseUrl: resolved.presentonBaseUrl }
+        : undefined,
+      hasSecret: Boolean(
+        byProvider.get("presenton")?.secret_ciphertext ?? resolved.presentonApiKey,
+      ),
+    },
+  ].filter((integration) => integration.config || integration.hasSecret);
 
   return {
     profile: row
@@ -126,11 +215,11 @@ export function getOnboarding() {
       : {},
     sellerContext: parseJson<IntakeRun["sellerContext"]>(row?.seller_context_json ?? null),
     questionnaire: parseJson<IntakeRun["questionnaire"]>(row?.questionnaire_json ?? null),
-    integrations: integrations.map((integration) => ({
-      provider: integration.provider,
-      displayName: integration.display_name ?? undefined,
-      config: parseJson<Record<string, unknown>>(integration.config_json),
-    })),
+    intakeDraft: {
+      websitesText: row?.draft_websites_text ?? undefined,
+      contactsCsvText: row?.draft_contacts_csv_text ?? undefined,
+    },
+    integrations: effectiveIntegrations,
   };
 }
 
@@ -239,7 +328,13 @@ export function getRun(runId: string) {
     createdAt: run.created_at,
     updatedAt: run.updated_at,
     targets,
-    artifacts,
+    artifacts: artifacts.map((artifact) => ({
+      ...artifact,
+      artifact_json:
+        typeof artifact.artifact_json === "string"
+          ? JSON.parse(artifact.artifact_json)
+          : artifact.artifact_json,
+    })),
     events,
   };
 }

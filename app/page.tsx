@@ -56,7 +56,12 @@ export default async function Page() {
         </header>
 
         <div className="h-full p-4 md:p-6">
-          <RunBuilderShell />
+          <RunBuilderShell
+            currentUser={{
+              name: session.user.name,
+              email: session.user.email,
+            }}
+          />
         </div>
       </SidebarInset>
     </SidebarProvider>

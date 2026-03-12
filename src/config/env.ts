@@ -14,6 +14,7 @@ export const envSchema = z.object({
   PRESENTON_TEMPLATE: z.string().min(1).optional(),
   BETTER_AUTH_URL: z.string().url().optional(),
   BETTER_AUTH_SECRET: z.string().min(1).optional(),
+  RENDER_EXTERNAL_URL: z.string().url().optional(),
   ADMIN_NAME: z.string().min(1).optional(),
   ADMIN_EMAIL: z.string().email().optional(),
   ADMIN_PASSWORD: z.string().min(1).optional(),

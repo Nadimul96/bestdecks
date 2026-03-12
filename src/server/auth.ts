@@ -15,6 +15,10 @@ function resolveAuthBaseUrl() {
     return env.BETTER_AUTH_URL;
   }
 
+  if (env.RENDER_EXTERNAL_URL) {
+    return env.RENDER_EXTERNAL_URL;
+  }
+
   if (process.env.VERCEL_URL) {
     return `https://${process.env.VERCEL_URL}`;
   }

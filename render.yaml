@@ -1,0 +1,68 @@
+services:
+  - type: web
+    name: bestdecks-app
+    runtime: node
+    plan: starter
+    region: ohio
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm build
+    startCommand: corepack enable && pnpm start
+    healthCheckPath: /api/health
+    disk:
+      name: bestdecks-data
+      mountPath: /opt/render/project/src/.data
+      sizeGB: 5
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: LOCAL_DB_PATH
+        value: .data/custom-proposals.sqlite
+      - key: APP_SECRETS_KEY
+        generateValue: true
+      - key: BETTER_AUTH_SECRET
+        generateValue: true
+      - key: BETTER_AUTH_URL
+        sync: false
+      - key: RENDER_EXTERNAL_URL
+        sync: false
+      - key: PRESENTON_BASE_URL
+        sync: false
+      - key: ADMIN_NAME
+        value: Nadimul Haque
+      - key: ADMIN_EMAIL
+        value: nadimul96@gmail.com
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: CLOUDFLARE_ACCOUNT_ID
+        sync: false
+      - key: CLOUDFLARE_API_TOKEN
+        sync: false
+      - key: DEEPCRAWL_API_KEY
+        sync: false
+      - key: PERPLEXITY_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+
+  - type: web
+    name: bestdecks-presenton
+    runtime: docker
+    plan: starter
+    region: ohio
+    dockerfilePath: ./deploy/presenton/Dockerfile
+    dockerContext: .
+    healthCheckPath: /
+    disk:
+      name: presenton-data
+      mountPath: /app_data
+      sizeGB: 10
+    envVars:
+      - key: CAN_CHANGE_KEYS
+        value: "false"
+      - key: LLM
+        value: openai
+      - key: OPENAI_MODEL
+        value: gpt-4.1
+      - key: DISABLE_IMAGE_GENERATION
+        value: "true"
+      - key: OPENAI_API_KEY
+        sync: false

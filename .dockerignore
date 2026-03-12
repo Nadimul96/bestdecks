@@ -1,0 +1,12 @@
+.git
+.github
+.next
+.data
+app_data
+node_modules
+output
+tmp
+*.log
+.env
+.env.local
+.DS_Store

@@ -47,64 +47,86 @@ export class ProposalOrchestrator {
       input.sellerContext,
     );
 
-    const preparedCompanies = [];
+    const preparedCompanies: Array<{
+      target: IntakeRun["targets"][number];
+      crawlResult: Awaited<ReturnType<typeof crawlWithFallback>>;
+      enrichment: Awaited<ReturnType<EnrichmentProvider["enrichCompany"]>>;
+      companyBrief: CompanyBrief;
+    }> = [];
+    const failedCompanies: Array<{
+      target: IntakeRun["targets"][number];
+      stage: "crawl_or_enrichment";
+      message: string;
+    }> = [];
 
     for (const target of input.targets) {
-      const crawlResult = await crawlWithFallback(
-        {
+      try {
+        const crawlResult = await crawlWithFallback(
+          {
+            websiteUrl: target.websiteUrl,
+            maxPages: 100,
+            maxDepth: 5,
+            source: "all",
+            requestedFormats: ["markdown"],
+            includePatterns: undefined,
+            excludePatterns: undefined,
+            userApprovedException:
+              input.questionnaire.allowUserApprovedCrawlException,
+          },
+          this.dependencies.primaryCrawler,
+          this.dependencies.fallbackCrawler,
+        );
+
+        const enrichment = await this.dependencies.enrichmentProvider.enrichCompany({
           websiteUrl: target.websiteUrl,
-          maxPages: 100,
-          maxDepth: 5,
-          source: "all",
-          requestedFormats: ["markdown"],
-          includePatterns: undefined,
-          excludePatterns: undefined,
-          userApprovedException:
-            input.questionnaire.allowUserApprovedCrawlException,
-        },
-        this.dependencies.primaryCrawler,
-        this.dependencies.fallbackCrawler,
-      );
+          companyName: target.companyName,
+          sellerPositioningSummary: sellerBrief.positioningSummary,
+          requestedSignals: [
+            "industry",
+            "locale",
+            "recent activity",
+            "buyer signals",
+            "observable proof points",
+          ],
+        });
 
-      const enrichment = await this.dependencies.enrichmentProvider.enrichCompany({
-        websiteUrl: target.websiteUrl,
-        companyName: target.companyName,
-        sellerPositioningSummary: sellerBrief.positioningSummary,
-        requestedSignals: [
-          "industry",
-          "locale",
-          "recent activity",
-          "buyer signals",
-          "observable proof points",
-        ],
-      });
+        const companyBrief = await this.dependencies.companyBriefBuilder.buildCompanyBrief({
+          target,
+          sellerBrief,
+          crawlMarkdown: crawlResult.pages
+            .map((page) => page.markdown)
+            .filter((value): value is string => Boolean(value))
+            .join("\n\n---\n\n"),
+          sourceUrls: [
+            ...crawlResult.discoveredUrls,
+            ...enrichment.evidence.map((item) => item.url),
+          ],
+          enrichmentSummary: enrichment.synthesizedSummary,
+        });
 
-      const companyBrief = await this.dependencies.companyBriefBuilder.buildCompanyBrief({
-        target,
-        sellerBrief,
-        crawlMarkdown: crawlResult.pages
-          .map((page) => page.markdown)
-          .filter((value): value is string => Boolean(value))
-          .join("\n\n---\n\n"),
-        sourceUrls: [
-          ...crawlResult.discoveredUrls,
-          ...enrichment.evidence.map((item) => item.url),
-        ],
-        enrichmentSummary: enrichment.synthesizedSummary,
-      });
-
-      preparedCompanies.push({
-        target,
-        crawlResult,
-        enrichment,
-        companyBrief,
-      });
+        preparedCompanies.push({
+          target,
+          crawlResult,
+          enrichment,
+          companyBrief,
+        });
+      } catch (error) {
+        failedCompanies.push({
+          target,
+          stage: "crawl_or_enrichment",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Target preparation failed for an unknown reason.",
+        });
+      }
     }
 
     return {
       plan,
       sellerBrief,
       preparedCompanies,
+      failedCompanies,
     };
   }
 }

@@ -7,6 +7,7 @@ export type IntegrationProviderKey =
   | "deepcrawl"
   | "perplexity"
   | "gemini"
+  | "openai"
   | "presenton";
 
 export interface IntegrationRecord {
@@ -50,6 +51,7 @@ export function resolveIntegrationConfig() {
     deepcrawlApiKey: records.get("deepcrawl")?.secret ?? env.DEEPCRAWL_API_KEY,
     perplexityApiKey: records.get("perplexity")?.secret ?? env.PERPLEXITY_API_KEY,
     geminiApiKey: records.get("gemini")?.secret ?? env.GEMINI_API_KEY,
+    openaiApiKey: records.get("openai")?.secret,
     presentonBaseUrl:
       (presenton?.config?.baseUrl as string | undefined) ?? env.PRESENTON_BASE_URL,
     presentonApiKey: presenton?.secret ?? env.PRESENTON_API_KEY,

@@ -6,6 +6,21 @@ import { loadEnv } from "@/src/config/env";
 
 let database: DatabaseSync | null = null;
 
+function ensureColumn(
+  db: DatabaseSync,
+  tableName: string,
+  columnName: string,
+  definition: string,
+) {
+  const columns = db
+    .prepare(`PRAGMA table_info(${tableName})`)
+    .all() as Array<{ name: string }>;
+
+  if (!columns.some((column) => column.name === columnName)) {
+    db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+  }
+}
+
 function getDefaultDatabasePath() {
   if (process.env.LOCAL_DB_PATH) {
     return process.env.LOCAL_DB_PATH;
@@ -103,6 +118,9 @@ function migrate(db: DatabaseSync) {
     CREATE INDEX IF NOT EXISTS idx_run_artifacts_run_id ON run_artifacts(run_id);
     CREATE INDEX IF NOT EXISTS idx_run_events_run_id ON run_events(run_id);
   `);
+
+  ensureColumn(db, "workspace_state", "draft_websites_text", "TEXT");
+  ensureColumn(db, "workspace_state", "draft_contacts_csv_text", "TEXT");
 }
 
 export function getDb() {

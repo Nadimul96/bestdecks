@@ -5,20 +5,13 @@ import { LoaderCircle, LockKeyhole, Mail } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { authClient } from "@/lib/auth-client";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Logo } from "@/components/logo";
 
 export function LoginForm() {
   const router = useRouter();
-  const [email, setEmail] = React.useState("nadimul96@gmail.com");
+  const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
@@ -52,65 +45,65 @@ export function LoginForm() {
   }
 
   return (
-    <Card className="w-full max-w-md border-border/60 bg-card/95 shadow-2xl shadow-black/30">
-      <CardHeader className="space-y-4">
-        <Badge variant="secondary" className="w-fit">
-          Admin access
-        </Badge>
-        <div className="space-y-2">
-          <CardTitle className="text-3xl font-semibold tracking-tight">Sign in to Bestdecks</CardTitle>
-          <CardDescription className="text-sm leading-6">
-            Better Auth is now protecting the workspace. Use the seeded admin
-            account to access onboarding, runs, and delivery controls.
-          </CardDescription>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <form className="space-y-4" onSubmit={handleSubmit}>
-          <label className="space-y-2 text-sm font-medium text-foreground">
+    <div className="w-full max-w-sm">
+      <form className="space-y-5" onSubmit={handleSubmit}>
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-foreground/80">
             Email
-            <div className="relative">
-              <Mail className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                type="email"
-                required
-                autoComplete="email"
-                className="pl-9"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-              />
-            </div>
           </label>
+          <div className="relative">
+            <Mail className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/60" />
+            <Input
+              type="email"
+              required
+              autoComplete="email"
+              placeholder="you@company.com"
+              className="h-11 rounded-lg border-border/60 bg-white/80 pl-10 text-sm shadow-sm backdrop-blur transition-colors placeholder:text-muted-foreground/50 focus:border-primary/40 focus:bg-white dark:bg-card/50 dark:focus:bg-card/80"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+            />
+          </div>
+        </div>
 
-          <label className="space-y-2 text-sm font-medium text-foreground">
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-foreground/80">
             Password
-            <div className="relative">
-              <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                type="password"
-                required
-                autoComplete="current-password"
-                className="pl-9"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-              />
-            </div>
           </label>
+          <div className="relative">
+            <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/60" />
+            <Input
+              type="password"
+              required
+              autoComplete="current-password"
+              placeholder="••••••••"
+              className="h-11 rounded-lg border-border/60 bg-white/80 pl-10 text-sm shadow-sm backdrop-blur transition-colors placeholder:text-muted-foreground/50 focus:border-primary/40 focus:bg-white dark:bg-card/50 dark:focus:bg-card/80"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+            />
+          </div>
+        </div>
 
-          {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        {error ? (
+          <div className="animate-fade-in rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+            {error}
+          </div>
+        ) : null}
 
-          <Button type="submit" className="w-full" disabled={isPending}>
-            {isPending ? (
-              <>
-                <LoaderCircle className="size-4 animate-spin" />
-                Signing in
-              </>
-            ) : (
-              "Sign in"
-            )}
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+        <Button
+          type="submit"
+          className="h-11 w-full rounded-lg text-sm font-semibold shadow-md shadow-primary/20 transition-all hover:shadow-lg hover:shadow-primary/25"
+          disabled={isPending}
+        >
+          {isPending ? (
+            <>
+              <LoaderCircle className="size-4 animate-spin" />
+              Signing in…
+            </>
+          ) : (
+            "Sign in"
+          )}
+        </Button>
+      </form>
+    </div>
   );
 }

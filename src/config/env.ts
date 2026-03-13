@@ -9,6 +9,7 @@ export const envSchema = z.object({
   DEEPCRAWL_API_KEY: z.string().min(1).optional(),
   PERPLEXITY_API_KEY: z.string().min(1).optional(),
   GEMINI_API_KEY: z.string().min(1).optional(),
+  OPENAI_API_KEY: z.string().min(1).optional(),
   PRESENTON_BASE_URL: z.string().url().optional(),
   PRESENTON_API_KEY: z.string().min(1).optional(),
   PRESENTON_TEMPLATE: z.string().min(1).optional(),

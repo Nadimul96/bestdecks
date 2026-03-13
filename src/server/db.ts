@@ -121,6 +121,7 @@ function migrate(db: DatabaseSync) {
 
   ensureColumn(db, "workspace_state", "draft_websites_text", "TEXT");
   ensureColumn(db, "workspace_state", "draft_contacts_csv_text", "TEXT");
+  ensureColumn(db, "workspace_state", "seller_brief_md", "TEXT");
 }
 
 export function getDb() {

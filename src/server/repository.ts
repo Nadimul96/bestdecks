@@ -100,6 +100,31 @@ export function saveOnboarding(payload: OnboardingPayload) {
   }
 }
 
+export function saveSellerBriefMd(markdown: string) {
+  const db = getDb();
+  const timestamp = now();
+
+  // Upsert: if workspace_state row already exists, update; otherwise insert with minimal data
+  db.prepare(
+    `
+      INSERT INTO workspace_state (id, seller_brief_md, created_at, updated_at)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        seller_brief_md = excluded.seller_brief_md,
+        updated_at = excluded.updated_at
+    `,
+  ).run("default", markdown, timestamp, timestamp);
+}
+
+export function getSellerBriefMd(): string | null {
+  const db = getDb();
+  const row = db
+    .prepare("SELECT seller_brief_md FROM workspace_state WHERE id = ? LIMIT 1")
+    .get("default") as { seller_brief_md: string | null } | undefined;
+
+  return row?.seller_brief_md ?? null;
+}
+
 export function getOnboarding() {
   const db = getDb();
   const resolved = resolveIntegrationConfig();
@@ -117,6 +142,7 @@ export function getOnboarding() {
         questionnaire_json: string | null;
         draft_websites_text: string | null;
         draft_contacts_csv_text: string | null;
+        seller_brief_md: string | null;
       }
     | undefined;
 
@@ -215,6 +241,7 @@ export function getOnboarding() {
       : {},
     sellerContext: parseJson<IntakeRun["sellerContext"]>(row?.seller_context_json ?? null),
     questionnaire: parseJson<IntakeRun["questionnaire"]>(row?.questionnaire_json ?? null),
+    sellerBriefMd: row?.seller_brief_md ?? undefined,
     intakeDraft: {
       websitesText: row?.draft_websites_text ?? undefined,
       contactsCsvText: row?.draft_contacts_csv_text ?? undefined,

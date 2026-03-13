@@ -1,10 +1,9 @@
 "use client";
 
-import { Command } from "lucide-react";
-
 import { NavMain } from "@/components/nav-main";
 import { NavUser } from "@/components/nav-user";
-import { SidebarSupportCard } from "@/components/sidebar-support-card";
+import { Logo } from "@/components/logo";
+import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Sidebar,
   SidebarContent,
@@ -13,6 +12,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { workspaceNavGroups } from "@/lib/workspace-navigation";
 
@@ -31,22 +31,31 @@ export function AppSidebar({
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild>
-              <a href="#overview">
-                <Command />
-                <span className="text-base font-semibold">Custom Proposals</span>
+            <SidebarMenuButton
+              asChild
+              className="h-10 hover:bg-transparent active:bg-transparent"
+            >
+              <a href="#overview" className="flex items-center gap-2.5">
+                <Logo size="sm" showText={false} />
+                <span className="text-sm font-semibold tracking-tight text-brand-navy dark:text-foreground">
+                  bestdecks
+                </span>
               </a>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
 
-      <SidebarContent>
+      <SidebarSeparator />
+
+      <SidebarContent className="pt-1">
         <NavMain items={workspaceNavGroups} />
       </SidebarContent>
 
       <SidebarFooter>
-        <SidebarSupportCard />
+        <div className="flex items-center justify-between px-2 group-data-[collapsible=icon]:hidden">
+          <ThemeToggle />
+        </div>
         <NavUser user={user} />
       </SidebarFooter>
     </Sidebar>

@@ -6,50 +6,27 @@ import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function SearchTrigger() {
-  const focusSearch = React.useCallback(() => {
-    const focusVisibleInput = () => {
-      const input = document.getElementById("search-input");
-      if (!(input instanceof HTMLInputElement)) {
-        return false;
-      }
-
-      input.scrollIntoView({ behavior: "smooth", block: "center" });
-      input.focus();
-      return true;
-    };
-
-    if (focusVisibleInput()) {
-      return;
-    }
-
-    window.location.hash = "#overview";
-    window.setTimeout(() => {
-      focusVisibleInput();
-    }, 50);
+  const openCommandMenu = React.useCallback(() => {
+    // Dispatch the ⌘K shortcut to open the CommandMenu
+    document.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "k",
+        metaKey: true,
+        bubbles: true,
+      }),
+    );
   }, []);
-
-  React.useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "j" && (event.metaKey || event.ctrlKey)) {
-        event.preventDefault();
-        focusSearch();
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [focusSearch]);
 
   return (
     <Button
-      onClick={focusSearch}
-      variant="link"
-      className="px-0! font-normal text-muted-foreground hover:no-underline"
+      onClick={openCommandMenu}
+      variant="outline"
+      className="relative h-8 w-56 justify-start gap-2 rounded-lg border-border/60 bg-muted/40 px-3 text-xs text-muted-foreground shadow-none hover:bg-muted/60"
     >
-      <Search data-icon="inline-start" />
-      Search
-      <kbd className="inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-medium text-[10px]">
-        <span className="text-xs">⌘</span>J
+      <Search className="size-3.5" />
+      <span className="flex-1 text-left">Search…</span>
+      <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-0.5 rounded border bg-background px-1.5 font-mono text-[10px] font-medium text-muted-foreground/70">
+        <span className="text-xs">⌘</span>K
       </kbd>
     </Button>
   );

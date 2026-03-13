@@ -1,11 +1,11 @@
 import {
+  Briefcase,
   FileText,
-  KeyRound,
-  LayoutTemplate,
+  LayoutDashboard,
+  Rocket,
   SearchCheck,
   Settings2,
   Upload,
-  WandSparkles,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -13,6 +13,7 @@ export interface NavItem {
   title: string;
   url: `#${string}`;
   icon?: LucideIcon;
+  description?: string;
 }
 
 export interface NavGroup {
@@ -37,13 +38,60 @@ export const workspaceNavGroups: NavGroup[] = [
     id: "workspace",
     label: "Workspace",
     items: [
-      { title: "Overview", url: "#overview", icon: LayoutTemplate },
-      { title: "Onboarding", url: "#onboarding", icon: KeyRound },
-      { title: "Seller Context", url: "#seller-context", icon: WandSparkles },
-      { title: "Run Settings", url: "#run-settings", icon: Settings2 },
-      { title: "Target Intake", url: "#target-intake", icon: Upload },
-      { title: "Pipeline", url: "#pipeline", icon: SearchCheck },
-      { title: "Delivery", url: "#delivery", icon: FileText },
+      {
+        title: "Overview",
+        url: "#overview",
+        icon: LayoutDashboard,
+        description: "Dashboard and readiness summary",
+      },
+      {
+        title: "Get Started",
+        url: "#onboarding",
+        icon: Rocket,
+        description: "Set up your workspace",
+      },
+    ],
+  },
+  {
+    id: "configure",
+    label: "Configure",
+    items: [
+      {
+        title: "Your Business",
+        url: "#seller-context",
+        icon: Briefcase,
+        description: "What you sell and who you help",
+      },
+      {
+        title: "Run Settings",
+        url: "#run-settings",
+        icon: Settings2,
+        description: "Deck style, tone, and format",
+      },
+      {
+        title: "Targets",
+        url: "#target-intake",
+        icon: Upload,
+        description: "Import companies to personalize for",
+      },
+    ],
+  },
+  {
+    id: "execute",
+    label: "Execute",
+    items: [
+      {
+        title: "Pipeline",
+        url: "#pipeline",
+        icon: SearchCheck,
+        description: "Research and generation progress",
+      },
+      {
+        title: "Delivery",
+        url: "#delivery",
+        icon: FileText,
+        description: "Review and download decks",
+      },
     ],
   },
 ];

@@ -58,6 +58,9 @@ const kyselyDb = new Kysely({
   }),
 });
 
+const isProduction = process.env.NODE_ENV === "production" ||
+  resolveAuthBaseUrl().includes("bestdecks.co");
+
 const authOptions: BetterAuthOptions = {
   database: {
     db: kyselyDb,
@@ -85,6 +88,20 @@ const authOptions: BetterAuthOptions = {
     "http://localhost:3000",
     "http://localhost:3001",
   ],
+  // Share auth cookies across bestdecks.co and console.bestdecks.co
+  ...(isProduction && {
+    advanced: {
+      crossSubDomainCookies: {
+        enabled: true,
+        domain: ".bestdecks.co",
+      },
+      defaultCookieAttributes: {
+        domain: ".bestdecks.co",
+        secure: true,
+        sameSite: "lax" as const,
+      },
+    },
+  }),
 };
 
 export const auth = betterAuth(authOptions);

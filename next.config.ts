@@ -9,8 +9,9 @@ const nextConfig: NextConfig = {
     return {
       beforeFiles: [
         // console.bestdecks.co → /console (production subdomain routing)
+        // Exclude /api/*, /login, /signup so auth routes work on subdomain
         {
-          source: "/:path*",
+          source: "/:path((?!api|login|signup|_next).*)*",
           has: [{ type: "host", value: "console.bestdecks.co" }],
           destination: "/console/:path*",
         },
@@ -26,6 +27,19 @@ const nextConfig: NextConfig = {
         source: "/console/:path*",
         has: [{ type: "host", value: "bestdecks.co" }],
         destination: "https://console.bestdecks.co/:path*",
+        permanent: false,
+      },
+      // console.bestdecks.co/login → bestdecks.co/login (keep auth on main domain)
+      {
+        source: "/login",
+        has: [{ type: "host", value: "console.bestdecks.co" }],
+        destination: "https://bestdecks.co/login",
+        permanent: false,
+      },
+      {
+        source: "/signup",
+        has: [{ type: "host", value: "console.bestdecks.co" }],
+        destination: "https://bestdecks.co/signup",
         permanent: false,
       },
     ];

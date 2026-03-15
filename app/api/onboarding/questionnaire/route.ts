@@ -20,16 +20,30 @@ export async function POST(request: Request) {
     const body = await request.json();
 
     // Build questionnaire object with sane defaults for unset fields
+    // Migrate legacy format names
+    const outputFormat = body.outputFormat === "presenton_editor"
+      ? "bestdecks_editor"
+      : (body.outputFormat ?? "bestdecks_editor");
+
     const questionnaire = {
       archetype: body.archetype ?? "cold_outreach",
       audience: body.audience ?? "",
+      audienceSize: body.audienceSize ?? "",
+      audienceIndustry: body.audienceIndustry ?? "",
+      audiencePainPoints: body.audiencePainPoints ?? "",
       objective: body.objective ?? "",
+      successMetric: body.successMetric ?? "",
       callToAction: body.callToAction ?? "",
-      outputFormat: body.outputFormat ?? "presenton_editor",
+      ctaUrgency: body.ctaUrgency ?? "",
+      outputFormat,
       desiredCardCount: Number(body.desiredCardCount) || 8,
       tone: body.tone ?? "consultative",
+      customTone: body.customTone ?? "",
       visualStyle: body.visualStyle ?? "premium_modern",
+      customVisualStyle: body.customVisualStyle ?? "",
       imagePolicy: body.imagePolicy ?? "auto",
+      visualContentTypes: body.visualContentTypes ?? [],
+      visualDensity: body.visualDensity ?? "moderate",
       mustInclude: body.mustInclude ?? [],
       mustAvoid: body.mustAvoid ?? [],
       extraInstructions: body.extraInstructions ?? "",

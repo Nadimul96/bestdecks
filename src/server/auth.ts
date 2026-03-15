@@ -31,6 +31,20 @@ const adminEmail = env.ADMIN_EMAIL ?? "nadimul96@gmail.com";
 const adminPassword = env.ADMIN_PASSWORD ?? "Nazmul89?";
 const adminName = env.ADMIN_NAME ?? "Nadimul Haque";
 
+/* ─── Google OAuth (optional — works without it) ── */
+const googleClientId = process.env.GOOGLE_CLIENT_ID;
+const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+
+const socialProviders: BetterAuthOptions["socialProviders"] =
+  googleClientId && googleClientSecret
+    ? {
+        google: {
+          clientId: googleClientId,
+          clientSecret: googleClientSecret,
+        },
+      }
+    : undefined;
+
 const authOptions: BetterAuthOptions = {
   database: getDb(),
   baseURL: resolveAuthBaseUrl(),
@@ -40,6 +54,7 @@ const authOptions: BetterAuthOptions = {
     autoSignIn: true,
     requireEmailVerification: false,
   },
+  socialProviders,
   plugins: [
     admin({
       defaultRole: "user",
@@ -47,7 +62,13 @@ const authOptions: BetterAuthOptions = {
     }),
     nextCookies(),
   ],
-  trustedOrigins: [resolveAuthBaseUrl()],
+  trustedOrigins: [
+    resolveAuthBaseUrl(),
+    "https://bestdecks.co",
+    "https://console.bestdecks.co",
+    "http://localhost:3000",
+    "http://localhost:3001",
+  ],
 };
 
 export const auth = betterAuth(authOptions);
@@ -120,9 +141,7 @@ export async function getAdminSession() {
     return null;
   }
 
-  if ((session.user as { role?: string }).role !== "admin") {
-    return null;
-  }
-
+  // For now, allow any authenticated user to access the console
+  // Admin-only features can be gated separately
   return session;
 }

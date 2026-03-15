@@ -4,12 +4,18 @@ import { AuthForm } from "@/components/auth-form";
 import { Logo } from "@/components/logo";
 import { getSession } from "@/src/server/auth";
 
-export default async function LoginPage() {
+export default async function SignupPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ ref?: string }>;
+}) {
   const session = await getSession();
-
   if (session?.user) {
     redirect("/console");
   }
+
+  const params = await searchParams;
+  const referralCode = params.ref || null;
 
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background">
@@ -35,19 +41,27 @@ export default async function LoginPage() {
           <Logo size="lg" showText={false} className="mb-5" />
 
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            Welcome back
+            Create your account
           </h1>
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            Sign in to your bestdecks account
+            Get 3 free decks when you sign up — no credit card required
           </p>
+          {referralCode && (
+            <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-700">
+              🎁 Referral bonus: +20 extra credits on your first plan
+            </div>
+          )}
         </div>
 
         {/* Auth form */}
-        <AuthForm mode="login" />
+        <AuthForm mode="signup" referralCode={referralCode} />
 
         {/* Footer */}
         <p className="mt-8 text-center text-xs text-muted-foreground/60">
-          Powered by research-driven AI personalization
+          By signing up you agree to our{" "}
+          <a href="#" className="underline hover:text-foreground/60">Terms</a>
+          {" "}and{" "}
+          <a href="#" className="underline hover:text-foreground/60">Privacy Policy</a>
         </p>
       </div>
     </main>

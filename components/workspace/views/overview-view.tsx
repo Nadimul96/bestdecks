@@ -10,6 +10,8 @@ import {
   Rocket,
   SearchCheck,
   Settings2,
+  Sparkles,
+  Star,
   Upload,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -20,6 +22,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ViewLayout, StatusPill } from "../view-layout";
 import type { CurrentUser, RunSummary } from "@/lib/workspace-types";
 import { viewMeta } from "@/lib/workspace-types";
+import { useBusinessContext } from "@/lib/business-context";
+import { cn } from "@/lib/utils";
 
 const meta = viewMeta.overview;
 
@@ -33,6 +37,7 @@ interface ReadinessItem {
 }
 
 export function OverviewView({ currentUser }: { currentUser: CurrentUser }) {
+  const { currentBusiness, businesses, credits } = useBusinessContext();
   const [runs, setRuns] = React.useState<RunSummary[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [readinessLoading, setReadinessLoading] = React.useState(true);
@@ -43,6 +48,8 @@ export function OverviewView({ currentUser }: { currentUser: CurrentUser }) {
     settings: false,
     targets: false,
   });
+
+  const setupComplete = currentBusiness?.setupComplete ?? false;
 
   /* Fetch runs */
   React.useEffect(() => {
@@ -57,6 +64,12 @@ export function OverviewView({ currentUser }: { currentUser: CurrentUser }) {
 
   /* Check actual readiness — mirrors setup-guide.tsx logic */
   React.useEffect(() => {
+    if (setupComplete) {
+      setReadinessState({ seller: true, settings: true, targets: true });
+      setReadinessLoading(false);
+      return;
+    }
+
     async function checkReadiness() {
       const done: Record<string, boolean> = {
         seller: false,
@@ -105,7 +118,7 @@ export function OverviewView({ currentUser }: { currentUser: CurrentUser }) {
     }
 
     checkReadiness();
-  }, []);
+  }, [setupComplete]);
 
   const readiness: ReadinessItem[] = [
     {
@@ -143,92 +156,152 @@ export function OverviewView({ currentUser }: { currentUser: CurrentUser }) {
   const completedCount = readiness.filter((r) => r.status === "ready").length;
   const progress = Math.round((completedCount / readiness.length) * 100);
 
+  const firstName = currentUser?.name?.split(" ")[0];
+
   return (
     <ViewLayout
       eyebrow={meta.eyebrow}
-      title={`Welcome${currentUser?.name ? `, ${currentUser.name.split(" ")[0]}` : ""}`}
-      description={meta.description}
+      title={`Welcome${firstName ? `, ${firstName}` : ""}`}
+      description={
+        setupComplete && currentBusiness
+          ? `Managing ${currentBusiness.name}. ${businesses.length > 1 ? `${businesses.length} businesses total.` : ""}`
+          : meta.description
+      }
     >
-      {/* Quick-start banner */}
-      {readinessLoading ? (
-        <Skeleton className="h-28 w-full rounded-xl" />
-      ) : (
-        progress < 100 && (
-          <div className="rounded-xl border border-primary/10 bg-gradient-to-r from-primary/[0.04] to-transparent p-6">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Rocket className="size-4 text-primary" />
-                  <h2 className="text-sm font-semibold text-foreground">
-                    Complete your setup
-                  </h2>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  {completedCount} of {readiness.length} steps done — finish
-                  setup to launch your first run.
-                </p>
-                <Progress value={progress} className="h-1.5 w-64" />
+      {/* ── Setup complete: ready-state hero ── */}
+      {setupComplete && (
+        <div className="rounded-xl border border-emerald-500/15 bg-gradient-to-br from-emerald-500/[0.04] via-background to-background p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-xl bg-emerald-500/10">
+                <Sparkles className="size-5 text-emerald-500" />
               </div>
-              <Button asChild size="sm">
-                <a
-                  href={
-                    readiness.find((r) => r.status === "incomplete")?.hash ??
-                    "#onboarding"
-                  }
-                >
-                  Continue setup
-                  <ArrowRight className="size-3.5" />
+              <div>
+                <p className="text-[15px] font-semibold text-foreground">
+                  {currentBusiness?.name} is ready
+                </p>
+                <p className="text-[13px] text-muted-foreground">
+                  {credits
+                    ? `${credits.balance} credit${credits.balance !== 1 ? "s" : ""} available`
+                    : "Start generating decks for your targets"}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button asChild variant="outline" size="sm" className="gap-1.5">
+                <a href="#delivery">
+                  <FileText className="size-3.5" />
+                  View decks
+                </a>
+              </Button>
+              <Button asChild size="sm" className="gap-1.5 shadow-sm">
+                <a href="#target-intake">
+                  <Rocket className="size-3.5" />
+                  New run
                 </a>
               </Button>
             </div>
           </div>
-        )
+        </div>
       )}
 
-      {/* Readiness checklist */}
-      {readinessLoading ? (
-        <div className="grid gap-3 sm:grid-cols-3">
-          {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-24 rounded-xl" />
-          ))}
-        </div>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-3">
-          {readiness.map((item) => (
-            <a
-              key={item.label}
-              href={item.hash}
-              className="group flex items-start gap-3 rounded-xl border border-border/50 bg-card p-4 shadow-sm transition-all hover:border-border hover:shadow-md"
-            >
-              <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted">
-                {item.status === "ready" ? (
-                  <CheckCircle2 className="size-4 text-emerald-500" />
-                ) : (
-                  <item.icon className="size-4 text-muted-foreground" />
-                )}
-              </div>
-              <div className="min-w-0 flex-1 space-y-1">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium text-foreground">
-                    {item.label}
-                  </p>
-                  <StatusPill status={item.status} />
+      {/* ── Setup incomplete: progress banner ── */}
+      {!setupComplete && (
+        <>
+          {readinessLoading ? (
+            <Skeleton className="h-28 w-full rounded-xl" />
+          ) : (
+            progress < 100 && (
+              <div className="card-elevated rounded-xl border border-primary/15 bg-gradient-to-br from-primary/[0.06] via-primary/[0.02] to-transparent p-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="flex size-7 items-center justify-center rounded-lg bg-primary/10">
+                        <Rocket className="size-3.5 text-primary" />
+                      </div>
+                      <h2 className="text-[15px] font-semibold text-foreground">
+                        {currentBusiness
+                          ? `Set up ${currentBusiness.name}`
+                          : "Complete your setup"}
+                      </h2>
+                    </div>
+                    <p className="text-[13px] leading-relaxed text-muted-foreground">
+                      {completedCount} of {readiness.length} steps done — finish
+                      setup to launch your first run.
+                    </p>
+                    <Progress value={progress} className="h-1.5 w-64" />
+                  </div>
+                  <Button asChild size="sm" className="gap-1.5 shadow-sm">
+                    <a
+                      href={
+                        readiness.find((r) => r.status === "incomplete")?.hash ??
+                        "#onboarding"
+                      }
+                    >
+                      Continue setup
+                      <ArrowRight className="size-3.5" />
+                    </a>
+                  </Button>
                 </div>
-                <p className="text-xs text-muted-foreground">{item.detail}</p>
               </div>
-            </a>
-          ))}
-        </div>
+            )
+          )}
+
+          {/* Readiness checklist */}
+          {readinessLoading ? (
+            <div className="grid gap-3 sm:grid-cols-3">
+              {[0, 1, 2].map((i) => (
+                <Skeleton key={i} className="h-24 rounded-xl" />
+              ))}
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-3">
+              {readiness.map((item) => (
+                <a
+                  key={item.label}
+                  href={item.hash}
+                  className="card-elevated group flex items-start gap-3.5 rounded-xl border border-border/50 bg-card p-4 transition-all hover:border-border hover:shadow-md"
+                >
+                  <div
+                    className={cn(
+                      "flex size-9 shrink-0 items-center justify-center rounded-lg transition-colors",
+                      item.status === "ready"
+                        ? "bg-emerald-500/10"
+                        : "bg-muted group-hover:bg-muted/80",
+                    )}
+                  >
+                    {item.status === "ready" ? (
+                      <CheckCircle2 className="size-4 text-emerald-500" />
+                    ) : (
+                      <item.icon className="size-4 text-muted-foreground" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[13px] font-medium text-foreground">
+                        {item.label}
+                      </p>
+                      <StatusPill status={item.status} />
+                    </div>
+                    <p className="text-[12px] leading-relaxed text-muted-foreground">
+                      {item.detail}
+                    </p>
+                  </div>
+                </a>
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {/* Recent runs */}
-      <div className="space-y-3">
+      <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-foreground">
+          <h2 className="text-[15px] font-semibold text-foreground">
             Recent runs
           </h2>
           {runs.length > 0 && (
-            <Button variant="ghost" size="sm" asChild>
+            <Button variant="ghost" size="sm" className="gap-1.5 text-xs" asChild>
               <a href="#pipeline">
                 View all
                 <ArrowRight className="size-3" />
@@ -244,32 +317,42 @@ export function OverviewView({ currentUser }: { currentUser: CurrentUser }) {
             ))}
           </div>
         ) : runs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/60 bg-card/50 py-16">
-            <div className="mb-3 flex size-12 items-center justify-center rounded-xl bg-muted">
-              <SearchCheck className="size-5 text-muted-foreground" />
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/50 bg-card/50 py-16">
+            <div className="mb-4 flex size-12 items-center justify-center rounded-xl bg-muted">
+              <SearchCheck className="size-5 text-muted-foreground/60" />
             </div>
-            <p className="text-sm font-medium text-foreground">No runs yet</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Complete setup to launch your first batch of personalized decks.
+            <p className="text-[13px] font-medium text-foreground">
+              No runs yet
             </p>
-            <Button asChild variant="outline" size="sm" className="mt-4">
-              <a href="#onboarding">Get started</a>
+            <p className="mt-1 max-w-[260px] text-center text-[12px] leading-relaxed text-muted-foreground">
+              {setupComplete
+                ? "Import targets to launch your first batch of personalized decks."
+                : "Complete setup and import targets to launch your first batch of personalized decks."}
+            </p>
+            <Button asChild variant="outline" size="sm" className="mt-5 gap-1.5">
+              <a href={setupComplete ? "#target-intake" : "#onboarding"}>
+                {setupComplete ? "Import targets" : "Get started"}
+                <ArrowRight className="size-3" />
+              </a>
             </Button>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {runs.slice(0, 5).map((run) => (
-              <div
+              <a
                 key={run.id}
-                className="flex items-center justify-between rounded-lg border border-border/40 bg-card px-4 py-3 transition-colors hover:bg-muted/30"
+                href="#pipeline"
+                className="flex items-center justify-between rounded-lg border border-border/40 bg-card px-4 py-3 transition-all hover:border-border/60 hover:bg-muted/30"
               >
                 <div className="flex items-center gap-3">
-                  <FileText className="size-4 text-muted-foreground" />
+                  <div className="flex size-8 items-center justify-center rounded-md bg-muted">
+                    <FileText className="size-3.5 text-muted-foreground" />
+                  </div>
                   <div>
-                    <p className="text-sm font-medium text-foreground">
-                      Run #{run.id.slice(0, 8)}
+                    <p className="text-[13px] font-medium text-foreground">
+                      Run #{run.id.slice(0, 6)}
                     </p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-[11px] text-muted-foreground">
                       {run.target_count} target
                       {run.target_count !== 1 ? "s" : ""} ·{" "}
                       {run.delivery_format}
@@ -289,11 +372,14 @@ export function OverviewView({ currentUser }: { currentUser: CurrentUser }) {
                     }
                     label={run.status}
                   />
-                  <span className="text-xs text-muted-foreground">
-                    {new Date(run.created_at).toLocaleDateString()}
+                  <span className="hidden text-[11px] text-muted-foreground sm:inline">
+                    {new Date(run.created_at).toLocaleDateString(undefined, {
+                      month: "short",
+                      day: "numeric",
+                    })}
                   </span>
                 </div>
-              </div>
+              </a>
             ))}
           </div>
         )}

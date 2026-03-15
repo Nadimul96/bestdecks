@@ -357,7 +357,7 @@ export class PresentonDeckProvider implements PresentonProvider {
       cardCount: input.cardCount,
     });
 
-    if (input.outputFormat === "presenton_editor") {
+    if (input.outputFormat === "bestdecks_editor" || input.outputFormat === ("presenton_editor" as string)) {
       return this.createEditorDeck(input, content, instructions);
     }
 

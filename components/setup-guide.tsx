@@ -17,6 +17,7 @@ import type { LucideIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { useBusinessContext } from "@/lib/business-context";
 import { cn } from "@/lib/utils";
 
 /* ─────────────────────────────────────────────
@@ -64,61 +65,97 @@ const steps: SetupStep[] = [
    ───────────────────────────────────────────── */
 
 export function SetupGuide() {
+  const { currentBusiness, loading: bizLoading } = useBusinessContext();
   const [expanded, setExpanded] = React.useState(true);
   const [dismissed, setDismissed] = React.useState(false);
   const [completed, setCompleted] = React.useState<Set<string>>(new Set());
   const [loading, setLoading] = React.useState(true);
 
-  /* Check actual setup state on mount */
-  React.useEffect(() => {
-    async function checkReadiness() {
-      const done = new Set<string>();
+  /* ── If the current business is already set up, don't show ── */
+  const businessSetupComplete = currentBusiness?.setupComplete ?? false;
 
-      try {
-        // Check seller context
-        const sellerRes = await fetch("/api/onboarding/seller-context");
-        if (sellerRes.ok) {
-          const data = await sellerRes.json();
-          if (data?.companyName || data?.offerSummary) {
-            done.add("seller");
-          }
+  /* ── Extracted readiness checker (callable from multiple triggers) ── */
+  const checkReadiness = React.useCallback(async () => {
+    const done = new Set<string>();
+
+    try {
+      const sellerRes = await fetch("/api/onboarding/seller-context");
+      if (sellerRes.ok) {
+        const data = await sellerRes.json();
+        if (data?.companyName || data?.offerSummary) {
+          done.add("seller");
         }
-      } catch {
-        // ignore
       }
-
-      try {
-        // Check questionnaire
-        const questRes = await fetch("/api/onboarding/questionnaire");
-        if (questRes.ok) {
-          const data = await questRes.json();
-          if (data?.audience || data?.objective) {
-            done.add("settings");
-          }
-        }
-      } catch {
-        // ignore
-      }
-
-      try {
-        // Check runs — if any exist, targets have been imported
-        const runsRes = await fetch("/api/runs");
-        if (runsRes.ok) {
-          const data = await runsRes.json();
-          if (Array.isArray(data) && data.length > 0) {
-            done.add("targets");
-          }
-        }
-      } catch {
-        // ignore
-      }
-
-      setCompleted(done);
-      setLoading(false);
+    } catch {
+      // ignore
     }
 
-    checkReadiness();
+    try {
+      const questRes = await fetch("/api/onboarding/questionnaire");
+      if (questRes.ok) {
+        const data = await questRes.json();
+        if (data?.audience || data?.objective) {
+          done.add("settings");
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const runsRes = await fetch("/api/runs");
+      if (runsRes.ok) {
+        const data = await runsRes.json();
+        if (Array.isArray(data) && data.length > 0) {
+          done.add("targets");
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    setCompleted(done);
+    setLoading(false);
   }, []);
+
+  /* ── Initial check on mount ── */
+  React.useEffect(() => {
+    if (!businessSetupComplete) {
+      checkReadiness();
+    } else {
+      setLoading(false);
+    }
+  }, [checkReadiness, businessSetupComplete]);
+
+  /* ── Re-check when user navigates (hash-based routing) ── */
+  React.useEffect(() => {
+    if (businessSetupComplete) return;
+    const onHashChange = () => {
+      checkReadiness();
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, [checkReadiness, businessSetupComplete]);
+
+  /* ── Re-check when tab regains focus ── */
+  React.useEffect(() => {
+    if (businessSetupComplete) return;
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        checkReadiness();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [checkReadiness, businessSetupComplete]);
+
+  /* ── Poll every 10 s while setup is still incomplete ── */
+  React.useEffect(() => {
+    if (businessSetupComplete) return;
+    if (completed.size >= steps.length) return;
+    const id = setInterval(checkReadiness, 10_000);
+    return () => clearInterval(id);
+  }, [completed.size, checkReadiness, businessSetupComplete]);
 
   const completedCount = completed.size;
   const allDone = completedCount === steps.length;
@@ -132,13 +169,19 @@ export function SetupGuide() {
     }
   }, [allDone, loading]);
 
-  /* Don't render if dismissed or all done */
+  /* ── Don't render if: ──
+     1. Still loading business context
+     2. Current business setup is complete
+     3. User dismissed the guide
+  */
+  if (bizLoading || loading) return null;
+  if (businessSetupComplete) return null;
   if (dismissed) return null;
 
   /* Minimized pill */
   if (!expanded) {
     return (
-      <div className="fixed bottom-6 right-6 z-50 animate-scale-in">
+      <div className="fixed bottom-6 left-6 z-50 animate-scale-in">
         <button
           type="button"
           onClick={() => setExpanded(true)}
@@ -173,7 +216,7 @@ export function SetupGuide() {
 
   /* Expanded card */
   return (
-    <div className="fixed bottom-6 right-6 z-50 w-80 animate-scale-in">
+    <div className="fixed bottom-6 left-6 z-50 w-80 animate-scale-in">
       <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-xl">
         {/* Header */}
         <div className="flex items-center justify-between bg-gradient-to-r from-primary/[0.06] to-transparent px-4 py-3">
@@ -184,7 +227,11 @@ export function SetupGuide() {
               <Rocket className="size-4 text-primary" />
             )}
             <h3 className="text-sm font-semibold text-foreground">
-              {allDone ? "You're all set!" : "Setup guide"}
+              {allDone
+                ? "You're all set!"
+                : currentBusiness
+                  ? `Set up ${currentBusiness.name}`
+                  : "Setup guide"}
             </h3>
           </div>
           <div className="flex items-center gap-0.5">

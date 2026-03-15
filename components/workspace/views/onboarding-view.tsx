@@ -4,7 +4,9 @@ import * as React from "react";
 import {
   ArrowRight,
   CheckCircle2,
+  ChevronDown,
   Globe,
+  Info,
   LoaderCircle,
   Rocket,
   Sparkles,
@@ -18,13 +20,21 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { ViewLayout, SectionCard, FieldGroup } from "../view-layout";
 import {
   viewMeta,
   intentOptions,
   type CurrentUser,
   type DeckIntent,
+  type Business,
 } from "@/lib/workspace-types";
+import { useBusinessContext } from "@/lib/business-context";
 import { cn } from "@/lib/utils";
 
 const meta = viewMeta.onboarding;
@@ -56,19 +66,25 @@ interface OnboardingState {
   targetCustomer: string;
   intent: DeckIntent;
   websitesText: string;
+  contactsCsvText: string;
+  showCsv: boolean;
 }
 
 export function OnboardingView({ currentUser }: { currentUser: CurrentUser }) {
+  const { currentBusiness, addBusiness, updateBusiness } = useBusinessContext();
+
   const [currentStep, setCurrentStep] = React.useState<number>(0);
   const [crawling, setCrawling] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [state, setState] = React.useState<OnboardingState>({
-    websiteUrl: "",
-    companyName: "",
-    offerSummary: "",
-    targetCustomer: "",
+    websiteUrl: currentBusiness?.websiteUrl ?? "",
+    companyName: currentBusiness?.name ?? "",
+    offerSummary: currentBusiness?.sellerContext?.offerSummary ?? "",
+    targetCustomer: currentBusiness?.sellerContext?.targetCustomer ?? "",
     intent: "cold_pitch",
     websitesText: "",
+    contactsCsvText: "",
+    showCsv: false,
   });
 
   const step = steps[currentStep];
@@ -150,6 +166,11 @@ export function OnboardingView({ currentUser }: { currentUser: CurrentUser }) {
         post_call: "warm_intro",
         agency_rfp: "agency_proposal",
         investor: "cold_outreach",
+        partnership: "warm_intro",
+        event_sponsor: "agency_proposal",
+        product_demo: "warm_intro",
+        upsell: "warm_intro",
+        board_update: "agency_proposal",
         custom: "cold_outreach",
       };
       await fetch("/api/onboarding/questionnaire", {
@@ -166,8 +187,46 @@ export function OnboardingView({ currentUser }: { currentUser: CurrentUser }) {
         await fetch("/api/runs", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ websitesText: state.websitesText }),
+          body: JSON.stringify({
+            websitesText: state.websitesText,
+            contactsCsvText: state.contactsCsvText || undefined,
+          }),
         });
+      }
+
+      // Create or update the business entity in context
+      const now = new Date().toISOString();
+      if (currentBusiness && currentBusiness.id !== "default") {
+        updateBusiness(currentBusiness.id, {
+          name: state.companyName || currentBusiness.name,
+          websiteUrl: state.websiteUrl,
+          setupComplete: true,
+          updatedAt: now,
+        });
+      } else {
+        const newBiz: Business = {
+          id: crypto.randomUUID(),
+          name: state.companyName || "My Business",
+          websiteUrl: state.websiteUrl,
+          setupComplete: true,
+          createdAt: now,
+          updatedAt: now,
+        };
+        addBusiness(newBiz);
+
+        // Persist to API (may not exist yet)
+        try {
+          await fetch("/api/businesses", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(newBiz),
+          });
+        } catch {
+          // context state is already updated
+        }
+      }
+
+      if (urls.length > 0) {
         toast.success(
           `Setup complete! Launched a run with ${urls.length} target${urls.length > 1 ? "s" : ""}.`,
         );
@@ -335,31 +394,49 @@ export function OnboardingView({ currentUser }: { currentUser: CurrentUser }) {
             title="What are you building decks for?"
             description="This shapes how we research targets and frame your pitch."
           >
-            <div className="grid gap-3 sm:grid-cols-2">
-              {intentOptions.map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => update("intent", opt.value)}
-                  className={cn(
-                    "flex items-start gap-4 rounded-xl border p-4 text-left transition-all",
-                    state.intent === opt.value
-                      ? "border-primary bg-primary/5 ring-1 ring-primary/20"
-                      : "border-border/60 bg-card hover:border-border",
-                  )}
-                >
-                  <span className="mt-0.5 text-xl">{opt.emoji}</span>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">
-                      {opt.label}
-                    </p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {opt.description}
-                    </p>
-                  </div>
-                </button>
-              ))}
-            </div>
+            <TooltipProvider delayDuration={200}>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {intentOptions.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => update("intent", opt.value)}
+                    className={cn(
+                      "group relative flex items-start gap-3 rounded-xl border p-4 text-left transition-all",
+                      state.intent === opt.value
+                        ? "border-primary bg-primary/5 ring-1 ring-primary/20"
+                        : "border-border/60 bg-card hover:border-border",
+                    )}
+                  >
+                    <span className="mt-0.5 text-lg shrink-0">{opt.emoji}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-foreground">
+                        {opt.label}
+                      </p>
+                      <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
+                        {opt.description}
+                      </p>
+                    </div>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span
+                          className="absolute right-2.5 top-2.5 shrink-0 rounded-full p-0.5 text-muted-foreground/40 transition-colors hover:text-muted-foreground"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Info className="size-3.5" />
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent
+                        side="top"
+                        className="max-w-[280px] text-xs leading-relaxed"
+                      >
+                        {opt.detail}
+                      </TooltipContent>
+                    </Tooltip>
+                  </button>
+                ))}
+              </div>
+            </TooltipProvider>
           </SectionCard>
         </div>
       )}
@@ -386,19 +463,51 @@ export function OnboardingView({ currentUser }: { currentUser: CurrentUser }) {
                 className="min-h-[160px] resize-none font-mono text-xs leading-relaxed"
               />
             </FieldGroup>
-
-            <p className="text-xs text-muted-foreground">
-              Have a CSV with contacts?{" "}
-              <button
-                type="button"
-                className="text-primary underline underline-offset-2"
-                onClick={() => (window.location.hash = "target-intake")}
-              >
-                Use the advanced import
-              </button>{" "}
-              instead.
-            </p>
           </SectionCard>
+
+          {/* Inline CSV — collapsible */}
+          <div className="rounded-xl border border-border/40 bg-card">
+            <button
+              type="button"
+              onClick={() => update("showCsv", !state.showCsv)}
+              className="flex w-full items-center justify-between px-5 py-3.5 text-left"
+            >
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  Have a CSV with contacts?
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Optional — personalizes greetings and CTAs per person
+                </p>
+              </div>
+              <ChevronDown
+                className={cn(
+                  "size-4 text-muted-foreground transition-transform",
+                  state.showCsv && "rotate-180",
+                )}
+              />
+            </button>
+
+            {state.showCsv && (
+              <div className="border-t border-border/40 px-5 py-4 space-y-3">
+                <FieldGroup label="Contacts CSV" hint="Optional">
+                  <Textarea
+                    value={state.contactsCsvText}
+                    onChange={(e) => update("contactsCsvText", e.target.value)}
+                    placeholder={`websiteUrl,firstName,lastName,role,email\nhttps://acmeplumbing.com,Sarah,Lee,Founder,sarah@acmeplumbing.com\nhttps://northshoreclinic.com,Marcus,Reed,Director,marcus@northshoreclinic.com`}
+                    className="min-h-[120px] resize-none font-mono text-xs leading-relaxed"
+                  />
+                </FieldGroup>
+                <p className="text-xs text-muted-foreground">
+                  Columns:{" "}
+                  <code className="rounded bg-muted px-1 py-0.5 text-xs">
+                    websiteUrl, firstName, lastName, role, email, campaignGoal,
+                    notes
+                  </code>
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

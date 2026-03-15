@@ -1,5 +1,6 @@
 import {
   Briefcase,
+  CreditCard,
   FileText,
   LayoutDashboard,
   Rocket,
@@ -29,7 +30,8 @@ export type WorkspaceViewId =
   | "run-settings"
   | "target-intake"
   | "pipeline"
-  | "delivery";
+  | "delivery"
+  | "pricing";
 
 export const DEFAULT_WORKSPACE_VIEW: WorkspaceViewId = "overview";
 
@@ -63,10 +65,10 @@ export const workspaceNavGroups: NavGroup[] = [
         description: "What you sell and who you help",
       },
       {
-        title: "Run Settings",
+        title: "Deck Style",
         url: "#run-settings",
         icon: Settings2,
-        description: "Deck style, tone, and format",
+        description: "Archetype, tone, visuals, and export format",
       },
       {
         title: "Targets",
@@ -94,6 +96,18 @@ export const workspaceNavGroups: NavGroup[] = [
       },
     ],
   },
+  {
+    id: "account",
+    label: "Account",
+    items: [
+      {
+        title: "Plans & Credits",
+        url: "#pricing",
+        icon: CreditCard,
+        description: "Manage your plan and credits",
+      },
+    ],
+  },
 ];
 
 const workspaceViewIds = new Set<WorkspaceViewId>([
@@ -104,6 +118,7 @@ const workspaceViewIds = new Set<WorkspaceViewId>([
   "target-intake",
   "pipeline",
   "delivery",
+  "pricing",
 ]);
 
 export function isWorkspaceViewId(value: string): value is WorkspaceViewId {

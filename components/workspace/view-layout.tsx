@@ -20,15 +20,15 @@ export function ViewLayout({
   return (
     <div className={cn("stagger-children space-y-8", className)}>
       {/* View header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-1.5">
-          <p className="text-xs font-semibold uppercase tracking-[0.1em] text-primary/70">
+          <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-primary">
             {eyebrow}
           </p>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-[1.65rem]">
             {title}
           </h1>
-          <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          <p className="max-w-2xl text-[13.5px] leading-relaxed text-muted-foreground">
             {description}
           </p>
         </div>
@@ -62,22 +62,22 @@ export function SectionCard({
   return (
     <div
       className={cn(
-        "rounded-xl border border-border/60 bg-card p-6 shadow-sm",
+        "card-elevated rounded-xl border border-border/50 bg-card",
         className,
       )}
     >
-      <div className="mb-5 flex items-start justify-between">
-        <div className="space-y-1">
-          <h2 className="text-base font-semibold text-foreground">{title}</h2>
+      <div className="flex items-start justify-between border-b border-border/40 px-6 py-4">
+        <div className="space-y-0.5">
+          <h2 className="text-[15px] font-semibold text-foreground">{title}</h2>
           {description ? (
-            <p className="text-sm text-muted-foreground">{description}</p>
+            <p className="text-[13px] text-muted-foreground">{description}</p>
           ) : null}
         </div>
         {actions ? (
           <div className="flex shrink-0 items-center gap-2">{actions}</div>
         ) : null}
       </div>
-      {children}
+      <div className="p-6">{children}</div>
     </div>
   );
 }
@@ -98,12 +98,14 @@ export function FieldGroup({
 }: FieldGroupProps) {
   return (
     <div className={cn("space-y-2", className)}>
-      <div className="flex items-baseline justify-between">
-        <label className="text-sm font-medium text-foreground/90">
+      <div className="flex items-baseline justify-between gap-3">
+        <label className="text-[13px] font-medium text-foreground">
           {label}
         </label>
         {hint ? (
-          <span className="text-xs text-muted-foreground/60">{hint}</span>
+          <span className="shrink-0 text-[11px] text-muted-foreground/70">
+            {hint}
+          </span>
         ) : null}
       </div>
       {children}
@@ -120,13 +122,13 @@ interface StatusPillProps {
 export function StatusPill({ status, label }: StatusPillProps) {
   const styles = {
     ready:
-      "bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400",
+      "bg-emerald-500/10 text-emerald-600 ring-emerald-500/20 dark:bg-emerald-500/15 dark:text-emerald-400 dark:ring-emerald-500/25",
     incomplete:
-      "bg-amber-500/10 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400",
+      "bg-amber-500/10 text-amber-600 ring-amber-500/20 dark:bg-amber-500/15 dark:text-amber-400 dark:ring-amber-500/25",
     running:
-      "bg-primary/10 text-primary dark:bg-primary/20",
+      "bg-primary/10 text-primary ring-primary/20 dark:bg-primary/15 dark:ring-primary/25",
     error:
-      "bg-destructive/10 text-destructive dark:bg-destructive/20",
+      "bg-destructive/10 text-destructive ring-destructive/20 dark:bg-destructive/15 dark:ring-destructive/25",
   };
 
   const defaultLabels = {
@@ -139,7 +141,7 @@ export function StatusPill({ status, label }: StatusPillProps) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
+        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset",
         styles[status],
       )}
     >

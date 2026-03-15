@@ -34,7 +34,7 @@ async function main() {
     visualStyle: "sales_polished",
     mustInclude: ["Specific observations"],
     mustAvoid: ["Generic buzzwords"],
-    outputFormat: "presenton_editor",
+    outputFormat: "bestdecks_editor",
     imagePolicy: "never",
   });
 

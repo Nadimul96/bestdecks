@@ -15,6 +15,7 @@ import { RunSettingsView } from "./views/run-settings-view";
 import { TargetIntakeView } from "./views/target-intake-view";
 import { PipelineView } from "./views/pipeline-view";
 import { DeliveryView } from "./views/delivery-view";
+import { PricingView } from "./views/pricing-view";
 
 function useActiveWorkspaceView() {
   const [activeView, setActiveView] =
@@ -57,6 +58,7 @@ export function WorkspaceShell({ currentUser }: WorkspaceShellProps) {
       {activeView === "target-intake" && <TargetIntakeView />}
       {activeView === "pipeline" && <PipelineView />}
       {activeView === "delivery" && <DeliveryView />}
+      {activeView === "pricing" && <PricingView />}
     </div>
   );
 }

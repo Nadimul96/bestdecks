@@ -216,10 +216,18 @@
 ::-webkit-scrollbar-thumb {
   background: var(--color-border);
   border-radius: 999px;
+  transition: background 0.15s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-muted-foreground);
+}
+
+/* ── Focus-visible ring ───────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius);
 }
 
 /* ── Premium animations ─────────────────────── */

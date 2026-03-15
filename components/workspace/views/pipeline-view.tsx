@@ -137,7 +137,7 @@ export function PipelineView() {
                   </TooltipContent>
                 </Tooltip>
                 {i < pipelineSteps.length - 1 && (
-                  <div className="absolute right-0 top-5 hidden h-px w-full translate-x-1/2 bg-border/60 sm:block" />
+                  <div className="absolute right-0 top-5 hidden w-full translate-x-1/2 border-t border-dashed border-border/40 sm:block" />
                 )}
               </div>
             ))}
@@ -157,15 +157,15 @@ export function PipelineView() {
             ))}
           </div>
         ) : runs.length === 0 ? (
-          <div className="flex flex-col items-center py-12 text-center">
-            <div className="mb-3 flex size-12 items-center justify-center rounded-xl bg-muted">
-              <Search className="size-5 text-muted-foreground" />
+          <div className="flex flex-col items-center py-16 text-center">
+            <div className="mb-4 flex size-12 items-center justify-center rounded-xl bg-muted">
+              <Search className="size-5 text-muted-foreground/60" />
             </div>
-            <p className="text-sm font-medium text-foreground">No runs yet</p>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="text-[13px] font-medium text-foreground">No runs yet</p>
+            <p className="mt-1 max-w-[280px] text-[12px] leading-relaxed text-muted-foreground">
               Import targets and launch a run to see progress here.
             </p>
-            <Button asChild variant="outline" size="sm" className="mt-4">
+            <Button asChild variant="outline" size="sm" className="mt-5 gap-1.5">
               <a href="#target-intake">Import targets</a>
             </Button>
           </div>
@@ -185,12 +185,14 @@ export function PipelineView() {
                   )}
                 >
                   <div className="flex items-center gap-3">
-                    <FileText className="size-4 text-muted-foreground" />
+                    <div className="flex size-8 items-center justify-center rounded-md bg-muted">
+                      <FileText className="size-3.5 text-muted-foreground" />
+                    </div>
                     <div>
-                      <p className="text-sm font-medium">
-                        Run #{run.id.slice(0, 8)}
+                      <p className="text-[13px] font-medium">
+                        Run #{run.id.slice(0, 6)}
                       </p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-[11px] text-muted-foreground">
                         {run.target_count} target
                         {run.target_count !== 1 ? "s" : ""} ·{" "}
                         {run.delivery_format}
@@ -210,8 +212,11 @@ export function PipelineView() {
                       }
                       label={run.status}
                     />
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(run.created_at).toLocaleDateString()}
+                    <span className="hidden text-[11px] text-muted-foreground sm:inline">
+                      {new Date(run.created_at).toLocaleDateString(undefined, {
+                        month: "short",
+                        day: "numeric",
+                      })}
                     </span>
                   </div>
                 </button>
@@ -224,7 +229,7 @@ export function PipelineView() {
       {/* Run detail */}
       {selectedRun && (
         <SectionCard
-          title={`Run #${selectedRun.id.slice(0, 8)}`}
+          title={`Run #${selectedRun.id.slice(0, 6)}`}
           description={`${selectedRun.targets.length} targets · ${selectedRun.deliveryFormat}`}
         >
           {detailLoading ? (
@@ -238,16 +243,16 @@ export function PipelineView() {
             <div className="space-y-4">
               {/* Target statuses */}
               <div className="space-y-2">
-                <h3 className="text-sm font-medium text-foreground">
+                <h3 className="text-[13px] font-medium text-foreground">
                   Targets
                 </h3>
-                <div className="space-y-1">
+                <div className="space-y-1.5">
                   {selectedRun.targets.map((target) => (
                     <div
                       key={target.id}
-                      className="flex items-center justify-between rounded-lg border border-border/30 bg-muted/20 px-3 py-2"
+                      className="flex items-center justify-between rounded-lg border border-border/40 bg-muted/30 px-3.5 py-2.5"
                     >
-                      <div className="flex items-center gap-2 text-sm">
+                      <div className="flex items-center gap-2.5">
                         {target.status === "completed" ? (
                           <CheckCircle2 className="size-3.5 text-emerald-500" />
                         ) : target.status === "failed" ? (
@@ -255,11 +260,11 @@ export function PipelineView() {
                         ) : (
                           <Clock3 className="size-3.5 text-muted-foreground" />
                         )}
-                        <span className="font-mono text-xs">
+                        <span className="font-mono text-[11px]">
                           {target.website_url}
                         </span>
                       </div>
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-[11px] capitalize text-muted-foreground">
                         {target.status}
                       </span>
                     </div>
@@ -270,7 +275,7 @@ export function PipelineView() {
               {/* Events log */}
               {selectedRun.events.length > 0 && (
                 <div className="space-y-2">
-                  <h3 className="text-sm font-medium text-foreground">
+                  <h3 className="text-[13px] font-medium text-foreground">
                     Activity log
                   </h3>
                   <ScrollArea className="max-h-[200px]">

@@ -94,19 +94,29 @@ const outputFormatOptions: Array<{
   description: string;
 }> = [
   {
-    value: "presenton_editor",
-    label: "Presenton editor",
-    description: "Fastest local path and the only export mode verified on this machine.",
+    value: "bestdecks_editor",
+    label: "Bestdecks editor",
+    description: "Edit and present directly in our native editor.",
+  },
+  {
+    value: "bestdecks_link",
+    label: "Shareable link",
+    description: "Send a bestdecks.co link for instant viewing.",
   },
   {
     value: "pdf",
-    label: "PDF",
-    description: "Portable file output. Remote Presenton export is recommended.",
+    label: "PDF export",
+    description: "Download as a portable PDF file.",
   },
   {
     value: "pptx",
-    label: "PPTX",
-    description: "Portable slide deck. Remote Presenton export is recommended.",
+    label: "PowerPoint (PPTX)",
+    description: "Export as .pptx — works with PowerPoint, Keynote, and Slides.",
+  },
+  {
+    value: "google_slides",
+    label: "Google Slides",
+    description: "Push directly to Google Slides for sharing and editing.",
   },
 ];
 
@@ -271,10 +281,10 @@ const viewMeta: Record<
       "The deck quality depends on this step. The system needs a clear view of the offer, services, and intended outcome.",
   },
   "run-settings": {
-    eyebrow: "Run Settings",
-    title: "Normalize the run contract",
+    eyebrow: "Deck Style",
+    title: "Design your deck blueprint",
     description:
-      "Let users answer naturally, but convert their request into typed fields that the pipeline can execute consistently.",
+      "Define the archetype, audience, tone, visuals, and export format that shape every deck you generate.",
   },
   "target-intake": {
     eyebrow: "Target Intake",
@@ -293,6 +303,12 @@ const viewMeta: Record<
     title: "Control output and review",
     description:
       "Surface run status, review gates, and exactly one output format per run once deck generation finishes.",
+  },
+  pricing: {
+    eyebrow: "Pricing",
+    title: "Plans & credits",
+    description:
+      "Choose a plan that fits your volume. 1 credit = 1 deck, end to end.",
   },
 };
 
@@ -323,6 +339,8 @@ interface WorkspaceProfileForm {
 interface SellerContextForm {
   websiteUrl: string;
   companyName: string;
+  logoUrl: string;
+  logoFile?: File | null;
   offerSummary: string;
   servicesText: string;
   differentiatorsText: string;
@@ -330,18 +348,31 @@ interface SellerContextForm {
   desiredOutcome: string;
   proofPointsText: string;
   constraintsText: string;
+  facebookUrl: string;
+  twitterUrl: string;
+  instagramUrl: string;
+  tiktokUrl: string;
 }
 
 interface QuestionnaireForm {
   archetype: DeckArchetype;
   audience: string;
+  audienceSize: string;
+  audienceIndustry: string;
+  audiencePainPoints: string;
   objective: string;
+  successMetric: string;
   callToAction: string;
+  ctaUrgency: string;
   outputFormat: DeliveryFormat;
   desiredCardCount: string;
   tone: Tone;
+  customTone: string;
   visualStyle: VisualStyle;
+  customVisualStyle: string;
   imagePolicy: ImagePolicy;
+  visualContentTypes: string[];
+  visualDensity: string;
   mustIncludeText: string;
   mustAvoidText: string;
   extraInstructions: string;
@@ -490,6 +521,8 @@ function defaultSellerContext(): SellerContextForm {
   return {
     websiteUrl: "",
     companyName: "",
+    logoUrl: "",
+    logoFile: null,
     offerSummary: "",
     servicesText: "",
     differentiatorsText: "",
@@ -497,6 +530,10 @@ function defaultSellerContext(): SellerContextForm {
     desiredOutcome: "",
     proofPointsText: "",
     constraintsText: "",
+    facebookUrl: "",
+    twitterUrl: "",
+    instagramUrl: "",
+    tiktokUrl: "",
   };
 }
 
@@ -504,13 +541,22 @@ function defaultQuestionnaire(): QuestionnaireForm {
   return {
     archetype: "cold_outreach",
     audience: "",
+    audienceSize: "",
+    audienceIndustry: "",
+    audiencePainPoints: "",
     objective: "",
+    successMetric: "",
     callToAction: "",
-    outputFormat: "presenton_editor",
+    ctaUrgency: "",
+    outputFormat: "bestdecks_editor",
     desiredCardCount: "8",
     tone: "consultative",
+    customTone: "",
     visualStyle: "premium_modern",
+    customVisualStyle: "",
     imagePolicy: "auto",
+    visualContentTypes: [],
+    visualDensity: "moderate",
     mustIncludeText: "",
     mustAvoidText: "",
     extraInstructions: "",
@@ -543,9 +589,12 @@ function sellerContextToForm(value?: SellerContext): SellerContextForm {
     return defaultSellerContext();
   }
 
+  const ext = value as Record<string, unknown>;
   return {
     websiteUrl: value.websiteUrl ?? "",
     companyName: value.companyName ?? "",
+    logoUrl: (ext.logoUrl as string) ?? "",
+    logoFile: null,
     offerSummary: value.offerSummary,
     servicesText: value.services.join("\n"),
     differentiatorsText: value.differentiators.join("\n"),
@@ -553,6 +602,10 @@ function sellerContextToForm(value?: SellerContext): SellerContextForm {
     desiredOutcome: value.desiredOutcome,
     proofPointsText: value.proofPoints.join("\n"),
     constraintsText: value.constraints.join("\n"),
+    facebookUrl: (ext.facebookUrl as string) ?? "",
+    twitterUrl: (ext.twitterUrl as string) ?? "",
+    instagramUrl: (ext.instagramUrl as string) ?? "",
+    tiktokUrl: (ext.tiktokUrl as string) ?? "",
   };
 }
 
@@ -564,13 +617,22 @@ function questionnaireToForm(value?: RunQuestionnaire): QuestionnaireForm {
   return {
     archetype: value.archetype,
     audience: value.audience,
+    audienceSize: (value as Record<string, unknown>).audienceSize as string ?? "",
+    audienceIndustry: (value as Record<string, unknown>).audienceIndustry as string ?? "",
+    audiencePainPoints: (value as Record<string, unknown>).audiencePainPoints as string ?? "",
     objective: value.objective,
+    successMetric: (value as Record<string, unknown>).successMetric as string ?? "",
     callToAction: value.callToAction,
-    outputFormat: value.outputFormat,
+    ctaUrgency: (value as Record<string, unknown>).ctaUrgency as string ?? "",
+    outputFormat: value.outputFormat === ("presenton_editor" as string) ? "bestdecks_editor" : value.outputFormat,
     desiredCardCount: String(value.desiredCardCount),
     tone: value.tone,
+    customTone: value.customTone ?? "",
     visualStyle: value.visualStyle,
+    customVisualStyle: value.customVisualStyle ?? "",
     imagePolicy: value.imagePolicy,
+    visualContentTypes: value.visualContentTypes ?? [],
+    visualDensity: value.visualDensity ?? "moderate",
     mustIncludeText: value.mustInclude.join("\n"),
     mustAvoidText: value.mustAvoid.join("\n"),
     extraInstructions: value.extraInstructions ?? "",
@@ -607,6 +669,10 @@ function buildQuestionnairePayload(form: QuestionnaireForm): RunQuestionnaire {
     mustInclude: toTextList(form.mustIncludeText),
     mustAvoid: toTextList(form.mustAvoidText),
     extraInstructions: toOptional(form.extraInstructions),
+    customTone: toOptional(form.customTone),
+    customVisualStyle: toOptional(form.customVisualStyle),
+    visualContentTypes: (form.visualContentTypes ?? []) as RunQuestionnaire["visualContentTypes"],
+    visualDensity: (form.visualDensity ?? "moderate") as RunQuestionnaire["visualDensity"],
     optionalReview: form.optionalReview,
     allowUserApprovedCrawlException: form.allowUserApprovedCrawlException,
   };

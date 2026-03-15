@@ -11,7 +11,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  return NextResponse.json(getOnboarding());
+  return NextResponse.json(await getOnboarding());
 }
 
 export async function POST(request: Request) {
@@ -22,8 +22,8 @@ export async function POST(request: Request) {
 
   try {
     const payload = await request.json();
-    saveOnboarding(payload);
-    return NextResponse.json({ ok: true, onboarding: getOnboarding() });
+    await saveOnboarding(payload);
+    return NextResponse.json({ ok: true, onboarding: await getOnboarding() });
   } catch (error) {
     return NextResponse.json(
       {

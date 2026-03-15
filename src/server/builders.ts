@@ -19,7 +19,7 @@ export class LocalSellerBriefBuilder implements SellerBriefBuilder {
   ): Promise<SellerDiscoveryResult> {
     // If a comprehensive .md brief exists from onboarding, use it as the
     // positioning summary — it contains far richer context than the form fields.
-    const sellerBriefMd = getSellerBriefMd();
+    const sellerBriefMd = await getSellerBriefMd();
 
     const fallbackSummary = [
       input.companyName ? `${input.companyName} offers ${input.offerSummary}.` : input.offerSummary,

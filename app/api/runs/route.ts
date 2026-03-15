@@ -12,7 +12,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  return NextResponse.json({ runs: listRuns() });
+  return NextResponse.json({ runs: await listRuns() });
 }
 
 export async function POST(request: Request) {
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
       autoLaunch?: boolean;
     };
 
-    const runId = createRun(body.run as never);
+    const runId = await createRun(body.run as never);
     if (body.autoLaunch) {
       launchRunProcessing(runId);
     }

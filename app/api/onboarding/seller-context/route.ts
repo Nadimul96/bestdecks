@@ -57,7 +57,7 @@ export async function POST(request: Request) {
     };
 
     // Use existing saveOnboarding with just sellerContext + profile fields
-    saveOnboarding({
+    await saveOnboarding({
       profile: {
         companyName: body.companyName,
         websiteUrl: body.websiteUrl,

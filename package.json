@@ -22,11 +22,14 @@
     "validate:example": "tsx src/bin/validate-example.ts"
   },
   "dependencies": {
+    "@libsql/client": "^0.17.0",
+    "@libsql/kysely-libsql": "^0.4.1",
     "better-auth": "^1.5.5",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "dotenv": "^17.3.1",
+    "kysely": "^0.28.12",
     "lucide-react": "^0.577.0",
     "next": "^16.1.6",
     "next-themes": "^0.4.6",

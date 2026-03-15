@@ -39,11 +39,11 @@ function parseJson<T>(value: string | null) {
   return value ? (JSON.parse(value) as T) : undefined;
 }
 
-export function saveOnboarding(payload: OnboardingPayload) {
-  const db = getDb();
+export async function saveOnboarding(payload: OnboardingPayload) {
+  const db = await getDb();
   const timestamp = now();
 
-  db.prepare(
+  await db.run(
     `
       INSERT INTO workspace_state (
         id, owner_name, owner_email, company_name, website_url, timezone, default_signature,
@@ -63,24 +63,25 @@ export function saveOnboarding(payload: OnboardingPayload) {
         draft_contacts_csv_text = excluded.draft_contacts_csv_text,
         updated_at = excluded.updated_at
     `,
-  ).run(
-    "default",
-    payload.profile.ownerName ?? null,
-    payload.profile.ownerEmail ?? null,
-    payload.profile.companyName ?? null,
-    payload.profile.websiteUrl ?? null,
-    payload.profile.timezone ?? null,
-    payload.profile.defaultSignature ?? null,
-    payload.sellerContext ? JSON.stringify(payload.sellerContext) : null,
-    payload.questionnaire ? JSON.stringify(payload.questionnaire) : null,
-    payload.intakeDraft?.websitesText ?? null,
-    payload.intakeDraft?.contactsCsvText ?? null,
-    timestamp,
-    timestamp,
+    [
+      "default",
+      payload.profile.ownerName ?? null,
+      payload.profile.ownerEmail ?? null,
+      payload.profile.companyName ?? null,
+      payload.profile.websiteUrl ?? null,
+      payload.profile.timezone ?? null,
+      payload.profile.defaultSignature ?? null,
+      payload.sellerContext ? JSON.stringify(payload.sellerContext) : null,
+      payload.questionnaire ? JSON.stringify(payload.questionnaire) : null,
+      payload.intakeDraft?.websitesText ?? null,
+      payload.intakeDraft?.contactsCsvText ?? null,
+      timestamp,
+      timestamp,
+    ],
   );
 
   for (const integration of payload.integrations ?? []) {
-    db.prepare(
+    await db.run(
       `
         INSERT INTO integration_settings (provider, display_name, config_json, secret_ciphertext, updated_at)
         VALUES (?, ?, ?, ?, ?)
@@ -90,22 +91,22 @@ export function saveOnboarding(payload: OnboardingPayload) {
           secret_ciphertext = COALESCE(excluded.secret_ciphertext, integration_settings.secret_ciphertext),
           updated_at = excluded.updated_at
       `,
-    ).run(
-      integration.provider,
-      integration.displayName ?? null,
-      integration.config ? JSON.stringify(integration.config) : null,
-      integration.secret ? encryptSecret(integration.secret) : null,
-      timestamp,
+      [
+        integration.provider,
+        integration.displayName ?? null,
+        integration.config ? JSON.stringify(integration.config) : null,
+        integration.secret ? encryptSecret(integration.secret) : null,
+        timestamp,
+      ],
     );
   }
 }
 
-export function saveSellerBriefMd(markdown: string) {
-  const db = getDb();
+export async function saveSellerBriefMd(markdown: string) {
+  const db = await getDb();
   const timestamp = now();
 
-  // Upsert: if workspace_state row already exists, update; otherwise insert with minimal data
-  db.prepare(
+  await db.run(
     `
       INSERT INTO workspace_state (id, seller_brief_md, created_at, updated_at)
       VALUES (?, ?, ?, ?)
@@ -113,24 +114,27 @@ export function saveSellerBriefMd(markdown: string) {
         seller_brief_md = excluded.seller_brief_md,
         updated_at = excluded.updated_at
     `,
-  ).run("default", markdown, timestamp, timestamp);
+    ["default", markdown, timestamp, timestamp],
+  );
 }
 
-export function getSellerBriefMd(): string | null {
-  const db = getDb();
-  const row = db
-    .prepare("SELECT seller_brief_md FROM workspace_state WHERE id = ? LIMIT 1")
-    .get("default") as { seller_brief_md: string | null } | undefined;
+export async function getSellerBriefMd(): Promise<string | null> {
+  const db = await getDb();
+  const row = await db.execute(
+    "SELECT seller_brief_md FROM workspace_state WHERE id = ? LIMIT 1",
+    ["default"],
+  ) as { seller_brief_md: string | null } | undefined;
 
   return row?.seller_brief_md ?? null;
 }
 
-export function getOnboarding() {
-  const db = getDb();
-  const resolved = resolveIntegrationConfig();
-  const row = db
-    .prepare("SELECT * FROM workspace_state WHERE id = ? LIMIT 1")
-    .get("default") as
+export async function getOnboarding() {
+  const db = await getDb();
+  const resolved = await resolveIntegrationConfig();
+  const row = await db.execute(
+    "SELECT * FROM workspace_state WHERE id = ? LIMIT 1",
+    ["default"],
+  ) as
     | {
         owner_name: string | null;
         owner_email: string | null;
@@ -146,15 +150,13 @@ export function getOnboarding() {
       }
     | undefined;
 
-  const integrations = db
-    .prepare(
-      `
-        SELECT provider, display_name, config_json, secret_ciphertext
-        FROM integration_settings
-        ORDER BY provider
-      `,
-    )
-    .all() as Array<{
+  const integrations = await db.executeAll(
+    `
+      SELECT provider, display_name, config_json, secret_ciphertext
+      FROM integration_settings
+      ORDER BY provider
+    `,
+  ) as unknown as Array<{
     provider: string;
     display_name: string | null;
     config_json: string | null;
@@ -250,58 +252,58 @@ export function getOnboarding() {
   };
 }
 
-export function createRun(input: IntakeRun) {
+export async function createRun(input: IntakeRun) {
   const parsed = intakeRunSchema.parse(input);
-  const db = getDb();
+  const db = await getDb();
   const runId = randomUUID();
   const timestamp = now();
 
-  db.prepare(
+  await db.run(
     `
       INSERT INTO runs (
         id, status, seller_context_json, questionnaire_json, target_count, delivery_format,
         review_gate_enabled, created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
-  ).run(
-    runId,
-    "queued",
-    JSON.stringify(parsed.sellerContext),
-    JSON.stringify(parsed.questionnaire),
-    parsed.targets.length,
-    parsed.questionnaire.outputFormat,
-    parsed.questionnaire.optionalReview ? 1 : 0,
-    timestamp,
-    timestamp,
-  );
-
-  const insertTarget = db.prepare(
-    `
-      INSERT INTO run_targets (
-        id, run_id, website_url, company_name, first_name, last_name, role, campaign_goal, notes,
-        status, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `,
+    [
+      runId,
+      "queued",
+      JSON.stringify(parsed.sellerContext),
+      JSON.stringify(parsed.questionnaire),
+      parsed.targets.length,
+      parsed.questionnaire.outputFormat,
+      parsed.questionnaire.optionalReview ? 1 : 0,
+      timestamp,
+      timestamp,
+    ],
   );
 
   for (const target of parsed.targets) {
-    insertTarget.run(
-      randomUUID(),
-      runId,
-      target.websiteUrl,
-      target.companyName ?? null,
-      target.firstName ?? null,
-      target.lastName ?? null,
-      target.role ?? null,
-      target.campaignGoal ?? null,
-      target.notes ?? null,
-      "queued",
-      timestamp,
-      timestamp,
+    await db.run(
+      `
+        INSERT INTO run_targets (
+          id, run_id, website_url, company_name, first_name, last_name, role, campaign_goal, notes,
+          status, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        randomUUID(),
+        runId,
+        target.websiteUrl,
+        target.companyName ?? null,
+        target.firstName ?? null,
+        target.lastName ?? null,
+        target.role ?? null,
+        target.campaignGoal ?? null,
+        target.notes ?? null,
+        "queued",
+        timestamp,
+        timestamp,
+      ],
     );
   }
 
-  addRunEvent(runId, {
+  await addRunEvent(runId, {
     level: "info",
     stage: "run_created",
     message: `Run created with ${parsed.targets.length} target rows.`,
@@ -310,9 +312,9 @@ export function createRun(input: IntakeRun) {
   return runId;
 }
 
-export function getRun(runId: string) {
-  const db = getDb();
-  const run = db.prepare("SELECT * FROM runs WHERE id = ? LIMIT 1").get(runId) as
+export async function getRun(runId: string) {
+  const db = await getDb();
+  const run = await db.execute("SELECT * FROM runs WHERE id = ? LIMIT 1", [runId]) as
     | {
         id: string;
         status: string;
@@ -332,15 +334,18 @@ export function getRun(runId: string) {
     return null;
   }
 
-  const targets = db
-    .prepare("SELECT * FROM run_targets WHERE run_id = ? ORDER BY created_at ASC")
-    .all(runId);
-  const artifacts = db
-    .prepare("SELECT * FROM run_artifacts WHERE run_id = ? ORDER BY created_at ASC")
-    .all(runId);
-  const events = db
-    .prepare("SELECT * FROM run_events WHERE run_id = ? ORDER BY created_at ASC")
-    .all(runId);
+  const targets = await db.executeAll(
+    "SELECT * FROM run_targets WHERE run_id = ? ORDER BY created_at ASC",
+    [runId],
+  );
+  const artifacts = await db.executeAll(
+    "SELECT * FROM run_artifacts WHERE run_id = ? ORDER BY created_at ASC",
+    [runId],
+  );
+  const events = await db.executeAll(
+    "SELECT * FROM run_events WHERE run_id = ? ORDER BY created_at ASC",
+    [runId],
+  );
 
   return {
     id: run.id,
@@ -355,7 +360,7 @@ export function getRun(runId: string) {
     createdAt: run.created_at,
     updatedAt: run.updated_at,
     targets,
-    artifacts: artifacts.map((artifact) => ({
+    artifacts: (artifacts as unknown as Array<{ artifact_json: string | unknown; [key: string]: unknown }>).map((artifact) => ({
       ...artifact,
       artifact_json:
         typeof artifact.artifact_json === "string"
@@ -366,44 +371,45 @@ export function getRun(runId: string) {
   };
 }
 
-export function listRuns() {
-  const db = getDb();
-  return db
-    .prepare("SELECT id, status, target_count, delivery_format, created_at, updated_at FROM runs ORDER BY created_at DESC")
-    .all();
+export async function listRuns() {
+  const db = await getDb();
+  return db.executeAll(
+    "SELECT id, status, target_count, delivery_format, created_at, updated_at FROM runs ORDER BY created_at DESC",
+  );
 }
 
-export function updateRun(runId: string, values: {
+export async function updateRun(runId: string, values: {
   status?: string;
   sellerBriefJson?: unknown;
   lastError?: string | null;
 }) {
-  const db = getDb();
-  const existing = db.prepare("SELECT * FROM runs WHERE id = ? LIMIT 1").get(runId) as
+  const db = await getDb();
+  const existing = await db.execute("SELECT * FROM runs WHERE id = ? LIMIT 1", [runId]) as
     | { status: string; seller_brief_json: string | null; last_error: string | null }
     | undefined;
   if (!existing) {
     throw new Error(`Run ${runId} was not found.`);
   }
 
-  db.prepare(
+  await db.run(
     `
       UPDATE runs
       SET status = ?, seller_brief_json = ?, last_error = ?, updated_at = ?
       WHERE id = ?
     `,
-  ).run(
-    values.status ?? existing.status,
-    values.sellerBriefJson === undefined
-      ? existing.seller_brief_json
-      : JSON.stringify(values.sellerBriefJson),
-    values.lastError === undefined ? existing.last_error : values.lastError,
-    now(),
-    runId,
+    [
+      values.status ?? existing.status,
+      values.sellerBriefJson === undefined
+        ? existing.seller_brief_json
+        : JSON.stringify(values.sellerBriefJson),
+      values.lastError === undefined ? existing.last_error : values.lastError,
+      now(),
+      runId,
+    ],
   );
 }
 
-export function updateRunTarget(
+export async function updateRunTarget(
   targetId: string,
   values: {
     status?: string;
@@ -411,10 +417,11 @@ export function updateRunTarget(
     lastError?: string | null;
   },
 ) {
-  const db = getDb();
-  const existing = db
-    .prepare("SELECT status, crawl_provider, last_error FROM run_targets WHERE id = ? LIMIT 1")
-    .get(targetId) as
+  const db = await getDb();
+  const existing = await db.execute(
+    "SELECT status, crawl_provider, last_error FROM run_targets WHERE id = ? LIMIT 1",
+    [targetId],
+  ) as
     | { status: string; crawl_provider: string | null; last_error: string | null }
     | undefined;
 
@@ -422,61 +429,64 @@ export function updateRunTarget(
     throw new Error(`Run target ${targetId} was not found.`);
   }
 
-  db.prepare(
+  await db.run(
     `
       UPDATE run_targets
       SET status = ?, crawl_provider = ?, last_error = ?, updated_at = ?
       WHERE id = ?
     `,
-  ).run(
-    values.status ?? existing.status,
-    values.crawlProvider === undefined ? existing.crawl_provider : values.crawlProvider,
-    values.lastError === undefined ? existing.last_error : values.lastError,
-    now(),
-    targetId,
+    [
+      values.status ?? existing.status,
+      values.crawlProvider === undefined ? existing.crawl_provider : values.crawlProvider,
+      values.lastError === undefined ? existing.last_error : values.lastError,
+      now(),
+      targetId,
+    ],
   );
 }
 
-export function addArtifact(runId: string, input: {
+export async function addArtifact(runId: string, input: {
   targetId?: string;
   artifactType: string;
   artifactJson: unknown;
 }) {
-  const db = getDb();
-  db.prepare(
+  const db = await getDb();
+  await db.run(
     `
       INSERT INTO run_artifacts (id, run_id, target_id, artifact_type, artifact_json, created_at)
       VALUES (?, ?, ?, ?, ?, ?)
     `,
-  ).run(
-    randomUUID(),
-    runId,
-    input.targetId ?? null,
-    input.artifactType,
-    JSON.stringify(input.artifactJson),
-    now(),
+    [
+      randomUUID(),
+      runId,
+      input.targetId ?? null,
+      input.artifactType,
+      JSON.stringify(input.artifactJson),
+      now(),
+    ],
   );
 }
 
-export function addRunEvent(runId: string, input: {
+export async function addRunEvent(runId: string, input: {
   targetId?: string;
   stage?: string;
   level: "info" | "warning" | "error";
   message: string;
 }) {
-  const db = getDb();
-  db.prepare(
+  const db = await getDb();
+  await db.run(
     `
       INSERT INTO run_events (id, run_id, target_id, stage, level, message, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `,
-  ).run(
-    randomUUID(),
-    runId,
-    input.targetId ?? null,
-    input.stage ?? null,
-    input.level,
-    input.message,
-    now(),
+    [
+      randomUUID(),
+      runId,
+      input.targetId ?? null,
+      input.stage ?? null,
+      input.level,
+      input.message,
+      now(),
+    ],
   );
 }

@@ -52,7 +52,7 @@ export async function POST(request: Request) {
         body.allowUserApprovedCrawlException ?? false,
     };
 
-    saveOnboarding({
+    await saveOnboarding({
       profile: {},
       questionnaire,
     });

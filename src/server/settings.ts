@@ -17,18 +17,16 @@ export interface IntegrationRecord {
   secret?: string;
 }
 
-export function listIntegrationRecords(): IntegrationRecord[] {
-  const db = getDb();
-  const rows = db
-    .prepare(
-      "SELECT provider, display_name, config_json, secret_ciphertext FROM integration_settings ORDER BY provider",
-    )
-    .all() as Array<{
-      provider: IntegrationProviderKey;
-      display_name: string | null;
-      config_json: string | null;
-      secret_ciphertext: string | null;
-    }>;
+export async function listIntegrationRecords(): Promise<IntegrationRecord[]> {
+  const db = await getDb();
+  const rows = await db.executeAll(
+    "SELECT provider, display_name, config_json, secret_ciphertext FROM integration_settings ORDER BY provider",
+  ) as unknown as Array<{
+    provider: IntegrationProviderKey;
+    display_name: string | null;
+    config_json: string | null;
+    secret_ciphertext: string | null;
+  }>;
 
   return rows.map((row) => ({
     provider: row.provider,
@@ -38,9 +36,9 @@ export function listIntegrationRecords(): IntegrationRecord[] {
   }));
 }
 
-export function resolveIntegrationConfig() {
+export async function resolveIntegrationConfig() {
   const env = loadEnv();
-  const records = new Map(listIntegrationRecords().map((record) => [record.provider, record]));
+  const records = new Map((await listIntegrationRecords()).map((record) => [record.provider, record]));
   const cloudflare = records.get("cloudflare");
   const presenton = records.get("presenton");
 

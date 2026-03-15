@@ -36,23 +36,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
-  const db = getDb();
-
-  // Ensure credits table
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS "user_credits" (
-      "user_id" TEXT PRIMARY KEY,
-      "balance" INTEGER NOT NULL DEFAULT 0,
-      "total_earned" INTEGER NOT NULL DEFAULT 0,
-      "referral_code" TEXT UNIQUE,
-      "referred_by" TEXT,
-      "plan_tier" TEXT DEFAULT 'free',
-      "stripe_customer_id" TEXT,
-      "stripe_subscription_id" TEXT,
-      "created_at" TEXT NOT NULL DEFAULT (datetime('now')),
-      "updated_at" TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `);
+  const db = await getDb();
 
   switch (event.type) {
     case "checkout.session.completed": {
@@ -67,7 +51,7 @@ export async function POST(request: NextRequest) {
       const subId = resolveId(session.subscription as string | { id: string } | null);
 
       // Update or insert user credits
-      db.prepare(`
+      await db.run(`
         INSERT INTO "user_credits" ("user_id", "balance", "total_earned", "plan_tier", "stripe_customer_id", "stripe_subscription_id", "updated_at")
         VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
         ON CONFLICT("user_id") DO UPDATE SET
@@ -77,24 +61,25 @@ export async function POST(request: NextRequest) {
           "stripe_customer_id" = ?,
           "stripe_subscription_id" = ?,
           "updated_at" = datetime('now')
-      `).run(
+      `, [
         userId, credits, credits, tier, customerId, subId,
         credits, credits, tier, customerId, subId,
-      );
+      ]);
 
       // If user was referred, award referral bonus to referrer
-      const userCredits = db
-        .prepare('SELECT "referred_by" FROM "user_credits" WHERE "user_id" = ?')
-        .get(userId) as { referred_by: string | null } | undefined;
+      const userCredits = await db.execute(
+        'SELECT "referred_by" FROM "user_credits" WHERE "user_id" = ?',
+        [userId],
+      ) as { referred_by: string | null } | undefined;
 
       if (userCredits?.referred_by) {
-        db.prepare(`
+        await db.run(`
           UPDATE "user_credits"
           SET "balance" = "balance" + 20,
               "total_earned" = "total_earned" + 20,
               "updated_at" = datetime('now')
           WHERE "user_id" = ?
-        `).run(userCredits.referred_by);
+        `, [userCredits.referred_by]);
       }
 
       console.log(`[Stripe] Checkout complete: user=${userId} tier=${tier} credits=${credits}`);
@@ -110,19 +95,20 @@ export async function POST(request: NextRequest) {
       const subId = resolveId((invoice as unknown as { subscription: string | null }).subscription);
       if (!subId) break;
 
-      const userRow = db
-        .prepare('SELECT "user_id", "plan_tier" FROM "user_credits" WHERE "stripe_subscription_id" = ?')
-        .get(subId) as { user_id: string; plan_tier: string } | undefined;
+      const userRow = await db.execute(
+        'SELECT "user_id", "plan_tier" FROM "user_credits" WHERE "stripe_subscription_id" = ?',
+        [subId],
+      ) as { user_id: string; plan_tier: string } | undefined;
 
       if (userRow) {
         const credits = PLAN_CREDITS[userRow.plan_tier] ?? 0;
-        db.prepare(`
+        await db.run(`
           UPDATE "user_credits"
           SET "balance" = "balance" + ?,
               "total_earned" = "total_earned" + ?,
               "updated_at" = datetime('now')
           WHERE "user_id" = ?
-        `).run(credits, credits, userRow.user_id);
+        `, [credits, credits, userRow.user_id]);
 
         console.log(`[Stripe] Invoice paid: refill ${credits} credits for user=${userRow.user_id}`);
       }
@@ -131,13 +117,13 @@ export async function POST(request: NextRequest) {
 
     case "customer.subscription.deleted": {
       const subscription = event.data.object;
-      db.prepare(`
+      await db.run(`
         UPDATE "user_credits"
         SET "plan_tier" = 'free',
             "stripe_subscription_id" = NULL,
             "updated_at" = datetime('now')
         WHERE "stripe_subscription_id" = ?
-      `).run(subscription.id);
+      `, [subscription.id]);
 
       console.log(`[Stripe] Subscription cancelled: ${subscription.id}`);
       break;

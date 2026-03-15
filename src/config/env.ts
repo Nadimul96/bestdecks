@@ -21,6 +21,8 @@ export const envSchema = z.object({
   ADMIN_PASSWORD: z.string().min(1).optional(),
   APP_SECRETS_KEY: z.string().min(1).optional(),
   LOCAL_DB_PATH: z.string().min(1).optional(),
+  TURSO_DATABASE_URL: z.string().min(1).optional(),
+  TURSO_AUTH_TOKEN: z.string().min(1).optional(),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

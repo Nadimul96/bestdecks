@@ -34,7 +34,7 @@ interface PersistedRunTarget {
   status: string;
 }
 
-function buildDeckInput(run: ReturnType<typeof getRun>, companyBrief: DeckGenerationInput["companyBrief"], sellerPositioningSummary: string): DeckGenerationInput {
+function buildDeckInput(run: Awaited<ReturnType<typeof getRun>>, companyBrief: DeckGenerationInput["companyBrief"], sellerPositioningSummary: string): DeckGenerationInput {
   if (!run) {
     throw new Error("Run payload was not found.");
   }
@@ -56,7 +56,7 @@ function buildDeckInput(run: ReturnType<typeof getRun>, companyBrief: DeckGenera
   };
 }
 
-function buildIntakeRun(run: NonNullable<ReturnType<typeof getRun>>): IntakeRun {
+function buildIntakeRun(run: NonNullable<Awaited<ReturnType<typeof getRun>>>): IntakeRun {
   const persistedTargets = run.targets as unknown as PersistedRunTarget[];
 
   return {
@@ -75,15 +75,15 @@ function buildIntakeRun(run: NonNullable<ReturnType<typeof getRun>>): IntakeRun 
 }
 
 async function processRun(runId: string) {
-  const run = getRun(runId);
+  const run = await getRun(runId);
   if (!run) {
     throw new Error(`Run ${runId} was not found.`);
   }
 
-  updateRun(runId, { status: "running", lastError: null });
-  addRunEvent(runId, { level: "info", stage: "run_started", message: "Run processing started." });
+  await updateRun(runId, { status: "running", lastError: null });
+  await addRunEvent(runId, { level: "info", stage: "run_started", message: "Run processing started." });
 
-  const settings = resolveIntegrationConfig();
+  const settings = await resolveIntegrationConfig();
   if (!settings.cloudflareAccountId || !settings.cloudflareApiToken) {
     throw new Error("Cloudflare configuration is missing.");
   }
@@ -126,9 +126,9 @@ async function processRun(runId: string) {
 
   const input = buildIntakeRun(run);
   const prepared = await orchestrator.prepareRun(input);
-  updateRun(runId, { sellerBriefJson: prepared.sellerBrief });
-  addArtifact(runId, { artifactType: "run_plan", artifactJson: buildRunPlan(input) });
-  addArtifact(runId, { artifactType: "seller_brief", artifactJson: prepared.sellerBrief });
+  await updateRun(runId, { sellerBriefJson: prepared.sellerBrief });
+  await addArtifact(runId, { artifactType: "run_plan", artifactJson: buildRunPlan(input) });
+  await addArtifact(runId, { artifactType: "seller_brief", artifactJson: prepared.sellerBrief });
   const persistedTargets = run.targets as unknown as PersistedRunTarget[];
 
   for (const failedCompany of prepared.failedCompanies) {
@@ -140,11 +140,11 @@ async function processRun(runId: string) {
       continue;
     }
 
-    updateRunTarget(targetRow.id, {
+    await updateRunTarget(targetRow.id, {
       status: "failed",
       lastError: failedCompany.message,
     });
-    addRunEvent(runId, {
+    await addRunEvent(runId, {
       targetId: targetRow.id,
       level: "error",
       stage: failedCompany.stage,
@@ -162,27 +162,27 @@ async function processRun(runId: string) {
     }
 
     try {
-      updateRunTarget(targetRow.id, {
+      await updateRunTarget(targetRow.id, {
         status: "brief_ready",
         crawlProvider: preparedCompany.crawlResult.provider,
         lastError: null,
       });
-      addArtifact(runId, {
+      await addArtifact(runId, {
         targetId: targetRow.id,
         artifactType: "crawl_result",
         artifactJson: preparedCompany.crawlResult,
       });
-      addArtifact(runId, {
+      await addArtifact(runId, {
         targetId: targetRow.id,
         artifactType: "enrichment",
         artifactJson: preparedCompany.enrichment,
       });
-      addArtifact(runId, {
+      await addArtifact(runId, {
         targetId: targetRow.id,
         artifactType: "company_brief",
         artifactJson: preparedCompany.companyBrief,
       });
-      addRunEvent(runId, {
+      await addRunEvent(runId, {
         targetId: targetRow.id,
         level: "info",
         stage: "company_brief",
@@ -205,13 +205,13 @@ async function processRun(runId: string) {
             objective: deckInput.objective,
           });
           imageUrls = imageResult.assetUrls;
-          addArtifact(runId, {
+          await addArtifact(runId, {
             targetId: targetRow.id,
             artifactType: "image_strategy",
             artifactJson: imageResult,
           });
         } catch (error) {
-          addRunEvent(runId, {
+          await addRunEvent(runId, {
             targetId: targetRow.id,
             level: "warning",
             stage: "image_strategy",
@@ -224,13 +224,13 @@ async function processRun(runId: string) {
       }
 
       const delivery = await presentonProvider.createDeck(deckInput, imageUrls);
-      addArtifact(runId, {
+      await addArtifact(runId, {
         targetId: targetRow.id,
         artifactType: "presentation_delivery",
         artifactJson: delivery,
       });
-      updateRunTarget(targetRow.id, { status: "delivered", lastError: null });
-      addRunEvent(runId, {
+      await updateRunTarget(targetRow.id, { status: "delivered", lastError: null });
+      await addRunEvent(runId, {
         targetId: targetRow.id,
         level: "info",
         stage: "delivery",
@@ -239,11 +239,11 @@ async function processRun(runId: string) {
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Target processing failed for an unknown reason.";
-      updateRunTarget(targetRow.id, {
+      await updateRunTarget(targetRow.id, {
         status: "failed",
         lastError: message,
       });
-      addRunEvent(runId, {
+      await addRunEvent(runId, {
         targetId: targetRow.id,
         level: "error",
         stage: "target_failed",
@@ -252,7 +252,7 @@ async function processRun(runId: string) {
     }
   }
 
-  const refreshedRun = getRun(runId);
+  const refreshedRun = await getRun(runId);
   if (!refreshedRun) {
     throw new Error("Run disappeared during processing.");
   }
@@ -260,11 +260,11 @@ async function processRun(runId: string) {
   const failedTargets = (refreshedRun.targets as unknown as PersistedRunTarget[]).filter(
     (target) => target.status === "failed",
   );
-  updateRun(runId, {
+  await updateRun(runId, {
     status: failedTargets.length > 0 ? "partially_completed" : "completed",
     lastError: failedTargets.length > 0 ? "One or more targets failed." : null,
   });
-  addRunEvent(runId, {
+  await addRunEvent(runId, {
     level: failedTargets.length > 0 ? "warning" : "info",
     stage: "run_finished",
     message:
@@ -281,12 +281,12 @@ export function launchRunProcessing(runId: string) {
 
   activeRuns.add(runId);
   void processRun(runId)
-    .catch((error) => {
-      updateRun(runId, {
+    .catch(async (error) => {
+      await updateRun(runId, {
         status: "failed",
         lastError: error instanceof Error ? error.message : "Unknown run failure.",
       });
-      addRunEvent(runId, {
+      await addRunEvent(runId, {
         level: "error",
         stage: "run_failed",
         message: error instanceof Error ? error.message : "Unknown run failure.",

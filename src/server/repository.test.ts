@@ -24,8 +24,8 @@ after(() => {
   rmSync(tempDir, { recursive: true, force: true });
 });
 
-test("saveOnboarding persists workspace drafts and integration secret markers", () => {
-  saveOnboarding({
+test("saveOnboarding persists workspace drafts and integration secret markers", async () => {
+  await saveOnboarding({
     profile: {
       ownerName: "Nadimul Haque",
       ownerEmail: "nadimul96@gmail.com",
@@ -79,7 +79,7 @@ test("saveOnboarding persists workspace drafts and integration secret markers", 
     ],
   });
 
-  const onboarding = getOnboarding();
+  const onboarding = await getOnboarding();
 
   assert.equal(onboarding.profile.ownerEmail, "nadimul96@gmail.com");
   assert.equal(onboarding.intakeDraft.websitesText, "https://acme.com");

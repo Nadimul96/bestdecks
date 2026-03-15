@@ -39,50 +39,36 @@ export async function GET() {
       });
     }
 
-    const db = getDb();
-
-    // Ensure credits table
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS "user_credits" (
-        "user_id" TEXT PRIMARY KEY,
-        "balance" INTEGER NOT NULL DEFAULT 0,
-        "total_earned" INTEGER NOT NULL DEFAULT 0,
-        "plan_tier" TEXT NOT NULL DEFAULT 'starter',
-        "monthly_allowance" INTEGER NOT NULL DEFAULT 0,
-        "bonus_credits" INTEGER NOT NULL DEFAULT 0,
-        "reset_date" TEXT,
-        "referral_code" TEXT UNIQUE,
-        "referred_by" TEXT,
-        "created_at" TEXT NOT NULL DEFAULT (datetime('now')),
-        "updated_at" TEXT NOT NULL DEFAULT (datetime('now'))
-      )
-    `);
+    const db = await getDb();
 
     const userId = session.user.id;
-    let credits = db
-      .prepare('SELECT * FROM "user_credits" WHERE "user_id" = ?')
-      .get(userId) as {
-        user_id: string;
-        balance: number;
-        total_earned: number;
-        plan_tier: string;
-        monthly_allowance: number;
-        bonus_credits: number;
-        reset_date: string | null;
-        referral_code: string;
-        referred_by: string | null;
-      } | undefined;
+    let credits = await db.execute(
+      'SELECT * FROM "user_credits" WHERE "user_id" = ?',
+      [userId],
+    ) as {
+      user_id: string;
+      balance: number;
+      total_earned: number;
+      plan_tier: string;
+      monthly_allowance: number;
+      bonus_credits: number;
+      reset_date: string | null;
+      referral_code: string;
+      referred_by: string | null;
+    } | undefined;
 
     if (!credits) {
       const refCode = generateReferralCode();
-      db.prepare(
+      await db.run(
         `INSERT INTO "user_credits" ("user_id", "balance", "total_earned", "referral_code")
          VALUES (?, ?, ?, ?)`,
-      ).run(userId, SIGNUP_CREDITS, SIGNUP_CREDITS, refCode);
+        [userId, SIGNUP_CREDITS, SIGNUP_CREDITS, refCode],
+      );
 
-      credits = db
-        .prepare('SELECT * FROM "user_credits" WHERE "user_id" = ?')
-        .get(userId) as typeof credits;
+      credits = await db.execute(
+        'SELECT * FROM "user_credits" WHERE "user_id" = ?',
+        [userId],
+      ) as typeof credits;
     }
 
     return NextResponse.json({

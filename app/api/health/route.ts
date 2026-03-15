@@ -7,11 +7,11 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   const env = loadEnv();
-  const db = getDb();
-  const result = db.prepare("SELECT 1 AS ok").get() as { ok: number };
+  const db = await getDb();
+  const result = await db.execute("SELECT 1 AS ok") as { ok: number } | undefined;
 
   return NextResponse.json({
-    status: result.ok === 1 ? "ok" : "degraded",
+    status: result?.ok === 1 ? "ok" : "degraded",
     services: {
       presenton: Boolean(env.PRESENTON_BASE_URL),
       cloudflare: Boolean(env.CLOUDFLARE_ACCOUNT_ID && env.CLOUDFLARE_API_TOKEN),

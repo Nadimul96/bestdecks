@@ -1,42 +1,122 @@
-import { mkdirSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { DatabaseSync } from "node:sqlite";
-
+import { createClient, type Client, type Row, type InValue } from "@libsql/client";
 import { loadEnv } from "@/src/config/env";
 
-let database: DatabaseSync | null = null;
+let client: Client | null = null;
+let migrated = false;
 
-function ensureColumn(
-  db: DatabaseSync,
+/* ─────────────────────────────────────────────
+   Turso / libSQL client
+   - Production: remote Turso DB (TURSO_DATABASE_URL)
+   - Local dev:  file-based SQLite (.data/custom-proposals.sqlite)
+   ───────────────────────────────────────────── */
+
+function resolveDbUrl(): string {
+  if (process.env.TURSO_DATABASE_URL) {
+    return process.env.TURSO_DATABASE_URL;
+  }
+
+  if (process.env.LOCAL_DB_PATH) {
+    return `file:${process.env.LOCAL_DB_PATH}`;
+  }
+
+  return "file:.data/custom-proposals.sqlite";
+}
+
+export function getClient(): Client {
+  if (client) return client;
+
+  const env = loadEnv();
+  const url = resolveDbUrl();
+  const authToken = process.env.TURSO_AUTH_TOKEN ?? env.TURSO_AUTH_TOKEN;
+
+  client = createClient({
+    url,
+    authToken: url.startsWith("libsql://") ? authToken : undefined,
+  });
+
+  return client;
+}
+
+/* ─────────────────────────────────────────────
+   Thin wrapper that mimics the old sync API
+   but returns Promises. Keeps call-site changes
+   minimal (just add `await`).
+   ───────────────────────────────────────────── */
+
+export interface DbWrapper {
+  execute(sql: string, args?: InValue[]): Promise<Row | undefined>;
+  executeAll(sql: string, args?: InValue[]): Promise<Row[]>;
+  run(sql: string, args?: InValue[]): Promise<void>;
+  batch(sql: string): Promise<void>;
+}
+
+export async function getDb(): Promise<DbWrapper> {
+  const c = getClient();
+
+  if (!migrated) {
+    await migrate(c);
+    migrated = true;
+  }
+
+  return {
+    async execute(sql: string, args: InValue[] = []): Promise<Row | undefined> {
+      const result = await c.execute({ sql, args });
+      return result.rows[0] ?? undefined;
+    },
+
+    async executeAll(sql: string, args: InValue[] = []): Promise<Row[]> {
+      const result = await c.execute({ sql, args });
+      return [...result.rows];
+    },
+
+    async run(sql: string, args: InValue[] = []): Promise<void> {
+      await c.execute({ sql, args });
+    },
+
+    async batch(sql: string): Promise<void> {
+      await c.executeMultiple(sql);
+    },
+  };
+}
+
+/* ─────────────────────────────────────────────
+   Database URL + token for better-auth
+   (it has native libSQL support)
+   ───────────────────────────────────────────── */
+
+export function getDbConnectionInfo() {
+  const env = loadEnv();
+  const url = resolveDbUrl();
+  const authToken = process.env.TURSO_AUTH_TOKEN ?? env.TURSO_AUTH_TOKEN;
+
+  return {
+    url,
+    authToken: url.startsWith("libsql://") ? authToken : undefined,
+  };
+}
+
+/* ─────────────────────────────────────────────
+   Migrations
+   ───────────────────────────────────────────── */
+
+async function ensureColumn(
+  c: Client,
   tableName: string,
   columnName: string,
   definition: string,
 ) {
-  const columns = db
-    .prepare(`PRAGMA table_info(${tableName})`)
-    .all() as Array<{ name: string }>;
+  const result = await c.execute(`PRAGMA table_info(${tableName})`);
+  const hasColumn = result.rows.some(
+    (row) => (row as unknown as { name: string }).name === columnName,
+  );
 
-  if (!columns.some((column) => column.name === columnName)) {
-    db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+  if (!hasColumn) {
+    await c.execute(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
   }
 }
 
-function getDefaultDatabasePath() {
-  if (process.env.LOCAL_DB_PATH) {
-    return process.env.LOCAL_DB_PATH;
-  }
-
-  if (process.env.VERCEL === "1") {
-    return "/tmp/bestdecks.sqlite";
-  }
-
-  return ".data/custom-proposals.sqlite";
-}
-
-function migrate(db: DatabaseSync) {
-  db.exec(`
-    PRAGMA journal_mode = WAL;
-
+async function migrate(c: Client) {
+  await c.executeMultiple(`
     CREATE TABLE IF NOT EXISTS workspace_state (
       id TEXT PRIMARY KEY,
       owner_name TEXT,
@@ -114,25 +194,36 @@ function migrate(db: DatabaseSync) {
       FOREIGN KEY (target_id) REFERENCES run_targets(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS user_credits (
+      user_id TEXT PRIMARY KEY,
+      balance INTEGER NOT NULL DEFAULT 0,
+      total_earned INTEGER NOT NULL DEFAULT 0,
+      plan_tier TEXT NOT NULL DEFAULT 'free',
+      monthly_allowance INTEGER NOT NULL DEFAULT 0,
+      bonus_credits INTEGER NOT NULL DEFAULT 0,
+      reset_date TEXT,
+      referral_code TEXT UNIQUE,
+      referred_by TEXT,
+      stripe_customer_id TEXT,
+      stripe_subscription_id TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE INDEX IF NOT EXISTS idx_run_targets_run_id ON run_targets(run_id);
     CREATE INDEX IF NOT EXISTS idx_run_artifacts_run_id ON run_artifacts(run_id);
     CREATE INDEX IF NOT EXISTS idx_run_events_run_id ON run_events(run_id);
   `);
 
-  ensureColumn(db, "workspace_state", "draft_websites_text", "TEXT");
-  ensureColumn(db, "workspace_state", "draft_contacts_csv_text", "TEXT");
-  ensureColumn(db, "workspace_state", "seller_brief_md", "TEXT");
-}
+  await ensureColumn(c, "workspace_state", "draft_websites_text", "TEXT");
+  await ensureColumn(c, "workspace_state", "draft_contacts_csv_text", "TEXT");
+  await ensureColumn(c, "workspace_state", "seller_brief_md", "TEXT");
 
-export function getDb() {
-  if (database) {
-    return database;
-  }
-
-  const env = loadEnv();
-  const filePath = resolve(process.cwd(), env.LOCAL_DB_PATH ?? getDefaultDatabasePath());
-  mkdirSync(dirname(filePath), { recursive: true });
-  database = new DatabaseSync(filePath);
-  migrate(database);
-  return database;
+  // Ensure user_credits has all columns (some were added later)
+  await ensureColumn(c, "user_credits", "plan_tier", "TEXT NOT NULL DEFAULT 'free'");
+  await ensureColumn(c, "user_credits", "monthly_allowance", "INTEGER NOT NULL DEFAULT 0");
+  await ensureColumn(c, "user_credits", "bonus_credits", "INTEGER NOT NULL DEFAULT 0");
+  await ensureColumn(c, "user_credits", "reset_date", "TEXT");
+  await ensureColumn(c, "user_credits", "stripe_customer_id", "TEXT");
+  await ensureColumn(c, "user_credits", "stripe_subscription_id", "TEXT");
 }

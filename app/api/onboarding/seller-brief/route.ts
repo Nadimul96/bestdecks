@@ -15,7 +15,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const markdown = getSellerBriefMd();
+  const markdown = await getSellerBriefMd();
   return NextResponse.json({ markdown });
 }
 
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
       );
     }
 
-    saveSellerBriefMd(body.markdown);
+    await saveSellerBriefMd(body.markdown);
     return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json(

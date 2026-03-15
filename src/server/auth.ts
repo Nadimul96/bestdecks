@@ -5,8 +5,11 @@ import { getMigrations } from "better-auth/db/migration";
 import { toNextJsHandler, nextCookies } from "better-auth/next-js";
 import { admin } from "better-auth/plugins";
 
+import { Kysely } from "kysely";
+import { LibsqlDialect } from "@libsql/kysely-libsql";
+
 import { loadEnv } from "@/src/config/env";
-import { getDb } from "@/src/server/db";
+import { getDbConnectionInfo, getDb } from "@/src/server/db";
 
 function resolveAuthBaseUrl() {
   const env = loadEnv();
@@ -45,8 +48,21 @@ const socialProviders: BetterAuthOptions["socialProviders"] =
       }
     : undefined;
 
+/* ─── Database connection for better-auth ── */
+const dbInfo = getDbConnectionInfo();
+
+const kyselyDb = new Kysely({
+  dialect: new LibsqlDialect({
+    url: dbInfo.url,
+    authToken: dbInfo.authToken,
+  }),
+});
+
 const authOptions: BetterAuthOptions = {
-  database: getDb(),
+  database: {
+    db: kyselyDb,
+    type: "sqlite",
+  },
   baseURL: resolveAuthBaseUrl(),
   secret: env.BETTER_AUTH_SECRET ?? env.APP_SECRETS_KEY ?? "bestdecks-dev-secret",
   emailAndPassword: {
@@ -85,10 +101,11 @@ async function migrateAuthTables() {
 }
 
 async function seedAdminAccount() {
-  const db = getDb();
-  const existing = db
-    .prepare('SELECT "id" FROM "user" WHERE "email" = ? LIMIT 1')
-    .get(adminEmail) as { id: string } | undefined;
+  const db = await getDb();
+  const existing = await db.execute(
+    'SELECT "id" FROM "user" WHERE "email" = ? LIMIT 1',
+    [adminEmail],
+  ) as { id: string } | undefined;
 
   if (!existing) {
     await auth.api.signUpEmail({
@@ -100,9 +117,10 @@ async function seedAdminAccount() {
     });
   }
 
-  db.prepare(
+  await db.run(
     'UPDATE "user" SET "role" = ?, "emailVerified" = ?, "updatedAt" = ? WHERE "email" = ?',
-  ).run("admin", 1, new Date().toISOString(), adminEmail);
+    ["admin", 1, new Date().toISOString(), adminEmail],
+  );
 }
 
 export async function ensureAuthReady() {

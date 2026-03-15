@@ -405,7 +405,7 @@ export async function POST(request: Request) {
   /* ── Step 4: Persist the .md brief ─────────── */
 
   try {
-    saveSellerBriefMd(sellerBriefMd);
+    await saveSellerBriefMd(sellerBriefMd);
   } catch (error) {
     // Non-fatal — we still return the data even if persistence fails
     console.error("[crawl-seller] Failed to persist seller brief .md:", error);

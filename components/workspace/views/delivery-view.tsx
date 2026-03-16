@@ -83,7 +83,7 @@ export function DeliveryView() {
       setRuns(runsData);
 
       const relevantRuns = runsData.filter(
-        (r) => r.status === "completed" || r.status === "partial" || r.status === "running",
+        (r) => r.status === "completed" || r.status === "partially_completed" || r.status === "running",
       );
 
       const cards: DeckCard[] = [];
@@ -112,7 +112,7 @@ export function DeliveryView() {
                 format: run.delivery_format,
                 createdAt: target.created_at,
                 artifacts: artifactsByTarget.get(target.id) ?? [],
-                score: target.status === "completed" ? generateMockScore(target) : undefined,
+                score: (target.status === "completed" || target.status === "delivered") ? generateMockScore(target) : undefined,
               });
             }
           } catch {
@@ -193,7 +193,7 @@ export function DeliveryView() {
     toast.info(`Send ${selected.length} deck${selected.length > 1 ? "s" : ""} — coming soon! This will email decks directly to your contacts.`);
   }
 
-  const completedCount = deckCards.filter((d) => d.status === "completed").length;
+  const completedCount = deckCards.filter((d) => d.status === "completed" || d.status === "delivered").length;
   const totalCount = deckCards.length;
   const scoredDecks = deckCards.filter((d) => d.score);
   const avgScore =

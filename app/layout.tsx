@@ -21,6 +21,9 @@ export const metadata: Metadata = {
   title: "Bestdecks",
   description:
     "Batch website research and proposal generation for tailored outreach decks.",
+  icons: {
+    icon: "/icon.svg",
+  },
 };
 
 export default function RootLayout({

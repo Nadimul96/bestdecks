@@ -51,16 +51,16 @@ export async function saveOnboarding(payload: OnboardingPayload) {
         created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
-        owner_name = excluded.owner_name,
-        owner_email = excluded.owner_email,
-        company_name = excluded.company_name,
-        website_url = excluded.website_url,
-        timezone = excluded.timezone,
-        default_signature = excluded.default_signature,
-        seller_context_json = excluded.seller_context_json,
-        questionnaire_json = excluded.questionnaire_json,
-        draft_websites_text = excluded.draft_websites_text,
-        draft_contacts_csv_text = excluded.draft_contacts_csv_text,
+        owner_name = COALESCE(excluded.owner_name, workspace_state.owner_name),
+        owner_email = COALESCE(excluded.owner_email, workspace_state.owner_email),
+        company_name = COALESCE(excluded.company_name, workspace_state.company_name),
+        website_url = COALESCE(excluded.website_url, workspace_state.website_url),
+        timezone = COALESCE(excluded.timezone, workspace_state.timezone),
+        default_signature = COALESCE(excluded.default_signature, workspace_state.default_signature),
+        seller_context_json = COALESCE(excluded.seller_context_json, workspace_state.seller_context_json),
+        questionnaire_json = COALESCE(excluded.questionnaire_json, workspace_state.questionnaire_json),
+        draft_websites_text = COALESCE(excluded.draft_websites_text, workspace_state.draft_websites_text),
+        draft_contacts_csv_text = COALESCE(excluded.draft_contacts_csv_text, workspace_state.draft_contacts_csv_text),
         updated_at = excluded.updated_at
     `,
     [

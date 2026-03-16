@@ -6,6 +6,24 @@ import { saveOnboarding, getOnboarding } from "@/src/server/repository";
 export const dynamic = "force-dynamic";
 
 /**
+ * GET /api/onboarding/seller-context
+ * Returns the saved seller context so the UI can hydrate on page load.
+ */
+export async function GET() {
+  const session = await getAdminSession();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const data = await getOnboarding();
+    return NextResponse.json(data.sellerContext ?? {});
+  } catch {
+    return NextResponse.json({});
+  }
+}
+
+/**
  * POST /api/onboarding/seller-context
  * Saves seller context fields (company info, offer, services, etc.)
  * Used by both the onboarding wizard and the seller-context settings view.

@@ -1,9 +1,27 @@
 import { NextResponse } from "next/server";
 
 import { getAdminSession } from "@/src/server/auth";
-import { saveOnboarding } from "@/src/server/repository";
+import { saveOnboarding, getOnboarding } from "@/src/server/repository";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * GET /api/onboarding/questionnaire
+ * Returns saved questionnaire/run-settings so the UI can hydrate on page load.
+ */
+export async function GET() {
+  const session = await getAdminSession();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const data = await getOnboarding();
+    return NextResponse.json(data.questionnaire ?? {});
+  } catch {
+    return NextResponse.json({});
+  }
+}
 
 /**
  * POST /api/onboarding/questionnaire

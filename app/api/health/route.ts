@@ -12,7 +12,7 @@ async function checkPresenton(baseUrl: string | undefined): Promise<{ reachable:
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
+    const timeout = setTimeout(() => controller.abort(), 45_000);
     const response = await fetch(baseUrl, { signal: controller.signal });
     clearTimeout(timeout);
     return { reachable: response.ok || response.status < 500, url: baseUrl };

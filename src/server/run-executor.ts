@@ -131,7 +131,7 @@ async function processRun(runId: string) {
   // Pre-flight check: verify Presenton is reachable before doing expensive crawl/enrichment work
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
+    const timeout = setTimeout(() => controller.abort(), 45_000);
     const pingResponse = await fetch(settings.presentonBaseUrl!, { signal: controller.signal });
     clearTimeout(timeout);
     if (pingResponse.status >= 500) {

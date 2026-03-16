@@ -125,7 +125,9 @@ async function processRun(runId: string) {
   });
 
   const input = buildIntakeRun(run);
+  await addRunEvent(runId, { level: "info", stage: "crawl", message: `Starting crawl and enrichment for ${input.targets.length} target(s)...` });
   const prepared = await orchestrator.prepareRun(input);
+  await addRunEvent(runId, { level: "info", stage: "company_brief", message: `Crawl and enrichment complete. ${prepared.preparedCompanies.length} target(s) ready, ${prepared.failedCompanies.length} failed.` });
   await updateRun(runId, { sellerBriefJson: prepared.sellerBrief });
   await addArtifact(runId, { artifactType: "run_plan", artifactJson: buildRunPlan(input) });
   await addArtifact(runId, { artifactType: "seller_brief", artifactJson: prepared.sellerBrief });
@@ -152,106 +154,106 @@ async function processRun(runId: string) {
     });
   }
 
-  // Process all targets concurrently — image generation + deck assembly in parallel across targets
-  await Promise.allSettled(
-    prepared.preparedCompanies.map(async (preparedCompany) => {
-      const targetRow = persistedTargets.find(
-        (target) => target.website_url === preparedCompany.target.websiteUrl,
+  // Process targets sequentially — SQLite cannot handle concurrent writes
+  for (const preparedCompany of prepared.preparedCompanies) {
+    const targetRow = persistedTargets.find(
+      (target) => target.website_url === preparedCompany.target.websiteUrl,
+    );
+
+    if (!targetRow) {
+      continue;
+    }
+
+    try {
+      await updateRunTarget(targetRow.id, {
+        status: "brief_ready",
+        crawlProvider: preparedCompany.crawlResult.provider,
+        lastError: null,
+      });
+      await addArtifact(runId, {
+        targetId: targetRow.id,
+        artifactType: "crawl_result",
+        artifactJson: preparedCompany.crawlResult,
+      });
+      await addArtifact(runId, {
+        targetId: targetRow.id,
+        artifactType: "enrichment",
+        artifactJson: preparedCompany.enrichment,
+      });
+      await addArtifact(runId, {
+        targetId: targetRow.id,
+        artifactType: "company_brief",
+        artifactJson: preparedCompany.companyBrief,
+      });
+      await addRunEvent(runId, {
+        targetId: targetRow.id,
+        level: "info",
+        stage: "company_brief",
+        message: `Prepared brief for ${preparedCompany.target.websiteUrl} using ${preparedCompany.crawlResult.provider}.`,
+      });
+
+      const deckInput = buildDeckInput(
+        run,
+        preparedCompany.companyBrief,
+        prepared.sellerBrief.positioningSummary,
       );
+      let imageUrls: string[] = [];
 
-      if (!targetRow) return;
-
-      try {
-        await updateRunTarget(targetRow.id, {
-          status: "brief_ready",
-          crawlProvider: preparedCompany.crawlResult.provider,
-          lastError: null,
-        });
-        await addArtifact(runId, {
-          targetId: targetRow.id,
-          artifactType: "crawl_result",
-          artifactJson: preparedCompany.crawlResult,
-        });
-        await addArtifact(runId, {
-          targetId: targetRow.id,
-          artifactType: "enrichment",
-          artifactJson: preparedCompany.enrichment,
-        });
-        await addArtifact(runId, {
-          targetId: targetRow.id,
-          artifactType: "company_brief",
-          artifactJson: preparedCompany.companyBrief,
-        });
-        await addRunEvent(runId, {
-          targetId: targetRow.id,
-          level: "info",
-          stage: "company_brief",
-          message: `Prepared brief for ${preparedCompany.target.websiteUrl} using ${preparedCompany.crawlResult.provider}.`,
-        });
-
-        const deckInput = buildDeckInput(
-          run,
-          preparedCompany.companyBrief,
-          prepared.sellerBrief.positioningSummary,
-        );
-        let imageUrls: string[] = [];
-
-        if (deckInput.imagePolicy !== "never" && imageProvider) {
-          try {
-            const imageResult = await imageProvider.generateSupportingAssets({
-              companyBrief: preparedCompany.companyBrief,
-              sellerPositioningSummary: prepared.sellerBrief.positioningSummary,
-              visualStyle: deckInput.visualStyle,
-              objective: deckInput.objective,
-            });
-            imageUrls = imageResult.assetUrls;
-            await addArtifact(runId, {
-              targetId: targetRow.id,
-              artifactType: "image_strategy",
-              artifactJson: imageResult,
-            });
-          } catch (error) {
-            await addRunEvent(runId, {
-              targetId: targetRow.id,
-              level: "warning",
-              stage: "image_strategy",
-              message:
-                error instanceof Error
-                  ? error.message
-                  : "Image generation skipped after an unknown error.",
-            });
-          }
+      if (deckInput.imagePolicy !== "never" && imageProvider) {
+        try {
+          const imageResult = await imageProvider.generateSupportingAssets({
+            companyBrief: preparedCompany.companyBrief,
+            sellerPositioningSummary: prepared.sellerBrief.positioningSummary,
+            visualStyle: deckInput.visualStyle,
+            objective: deckInput.objective,
+          });
+          imageUrls = imageResult.assetUrls;
+          await addArtifact(runId, {
+            targetId: targetRow.id,
+            artifactType: "image_strategy",
+            artifactJson: imageResult,
+          });
+        } catch (error) {
+          await addRunEvent(runId, {
+            targetId: targetRow.id,
+            level: "warning",
+            stage: "image_strategy",
+            message:
+              error instanceof Error
+                ? error.message
+                : "Image generation skipped after an unknown error.",
+          });
         }
-
-        const delivery = await presentonProvider.createDeck(deckInput, imageUrls);
-        await addArtifact(runId, {
-          targetId: targetRow.id,
-          artifactType: "presentation_delivery",
-          artifactJson: delivery,
-        });
-        await updateRunTarget(targetRow.id, { status: "delivered", lastError: null });
-        await addRunEvent(runId, {
-          targetId: targetRow.id,
-          level: "info",
-          stage: "delivery",
-          message: `Deck delivery completed for ${preparedCompany.target.websiteUrl}.`,
-        });
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Target processing failed for an unknown reason.";
-        await updateRunTarget(targetRow.id, {
-          status: "failed",
-          lastError: message,
-        });
-        await addRunEvent(runId, {
-          targetId: targetRow.id,
-          level: "error",
-          stage: "target_failed",
-          message,
-        });
       }
-    }),
-  );
+
+      const delivery = await presentonProvider.createDeck(deckInput, imageUrls);
+      await addArtifact(runId, {
+        targetId: targetRow.id,
+        artifactType: "presentation_delivery",
+        artifactJson: delivery,
+      });
+      await updateRunTarget(targetRow.id, { status: "delivered", lastError: null });
+      await addRunEvent(runId, {
+        targetId: targetRow.id,
+        level: "info",
+        stage: "delivery",
+        message: `Deck delivery completed for ${preparedCompany.target.websiteUrl}.`,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Target processing failed for an unknown reason.";
+      await updateRunTarget(targetRow.id, {
+        status: "failed",
+        lastError: message,
+      });
+      await addRunEvent(runId, {
+        targetId: targetRow.id,
+        level: "error",
+        stage: "target_failed",
+        message,
+      });
+    }
+  }
 
   const refreshedRun = await getRun(runId);
   if (!refreshedRun) {

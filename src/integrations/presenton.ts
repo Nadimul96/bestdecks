@@ -265,14 +265,29 @@ function buildPresentonLayout(templateName: string): PresentonLayoutModel {
   };
 }
 
+const SSE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
 async function requestSseCompletion<T>(
   url: string,
 ): Promise<T> {
-  const response = await fetch(url, {
-    headers: {
-      Accept: "text/event-stream",
-    },
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), SSE_TIMEOUT_MS);
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      headers: {
+        Accept: "text/event-stream",
+      },
+      signal: controller.signal,
+    });
+  } catch (error) {
+    clearTimeout(timeout);
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error(`Presenton SSE stream timed out after ${SSE_TIMEOUT_MS / 1000}s for ${url}`);
+    }
+    throw error;
+  }
 
   if (!response.ok) {
     const bodyText = await response.text();
@@ -312,6 +327,7 @@ async function requestSseCompletion<T>(
         }
 
         if (payload.type === "error") {
+          clearTimeout(timeout);
           throw new Error(String(payload.detail ?? "Presenton stream failed."));
         }
       }
@@ -323,6 +339,8 @@ async function requestSseCompletion<T>(
       break;
     }
   }
+
+  clearTimeout(timeout);
 
   if (!completed) {
     throw new Error(`Presenton stream ${url} completed without a final payload.`);

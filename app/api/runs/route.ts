@@ -112,9 +112,14 @@ export async function POST(request: Request) {
       const sc = onboarding.sellerContext;
       const q = onboarding.questionnaire;
 
+      // Normalize seller websiteUrl — DB may store it without protocol or as empty string
+      const sellerWebsiteUrl = sc.websiteUrl && sc.websiteUrl.trim()
+        ? (!/^https?:\/\//i.test(sc.websiteUrl) ? `https://${sc.websiteUrl}` : sc.websiteUrl)
+        : undefined;
+
       intakeRun = {
         sellerContext: {
-          websiteUrl: sc.websiteUrl,
+          websiteUrl: sellerWebsiteUrl,
           companyName: sc.companyName,
           offerSummary: sc.offerSummary ?? "",
           services: sc.services ?? [],

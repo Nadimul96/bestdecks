@@ -21,22 +21,29 @@ export async function requestJson<T>(
   url: string,
   options: JsonRequestOptions = {},
 ): Promise<T> {
-  const response = await fetch(url, {
-    method: options.method ?? "GET",
-    headers: {
-      Accept: "application/json",
-      ...(options.body === undefined ? {} : { "Content-Type": "application/json" }),
-      ...(options.headers ?? {}),
-    },
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
-    signal: options.signal,
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: options.method ?? "GET",
+      headers: {
+        Accept: "application/json",
+        ...(options.body === undefined ? {} : { "Content-Type": "application/json" }),
+        ...(options.headers ?? {}),
+      },
+      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      signal: options.signal,
+    });
+  } catch (error) {
+    // Network-level failure — provide useful context instead of bare "fetch failed"
+    const cause = error instanceof Error ? error.message : String(error);
+    throw new Error(`Network error calling ${options.method ?? "GET"} ${url}: ${cause}`);
+  }
 
   const text = await response.text();
 
   if (!response.ok) {
     throw new HttpError(
-      `Request failed with status ${response.status} for ${url}`,
+      `HTTP ${response.status} from ${options.method ?? "GET"} ${url}: ${text.slice(0, 500)}`,
       response.status,
       text,
     );

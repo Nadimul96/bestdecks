@@ -266,9 +266,33 @@ function buildPresentonLayout(templateName: string): PresentonLayoutModel {
 }
 
 const SSE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+const MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 3000;
+
+async function retryableRequestJson<T>(
+  url: string,
+  options: Parameters<typeof requestJson>[1],
+  label: string,
+): Promise<T> {
+  let lastError: Error | undefined;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      return await requestJson<T>(url, options);
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      if (attempt < MAX_RETRIES) {
+        const delay = RETRY_DELAY_MS * (attempt + 1);
+        console.error(`[presenton] ${label} attempt ${attempt + 1} failed: ${lastError.message}. Retrying in ${delay}ms...`);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+  }
+  throw new Error(`Presenton ${label} failed after ${MAX_RETRIES + 1} attempts: ${lastError?.message}`);
+}
 
 async function requestSseCompletion<T>(
   url: string,
+  label: string = "SSE stream",
 ): Promise<T> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), SSE_TIMEOUT_MS);
@@ -284,22 +308,25 @@ async function requestSseCompletion<T>(
   } catch (error) {
     clearTimeout(timeout);
     if (error instanceof DOMException && error.name === "AbortError") {
-      throw new Error(`Presenton SSE stream timed out after ${SSE_TIMEOUT_MS / 1000}s for ${url}`);
+      throw new Error(`Presenton ${label} timed out after ${SSE_TIMEOUT_MS / 1000}s for ${url}`);
     }
-    throw error;
+    const cause = error instanceof Error ? error.message : String(error);
+    throw new Error(`Presenton ${label} network error for ${url}: ${cause}`);
   }
 
   if (!response.ok) {
+    clearTimeout(timeout);
     const bodyText = await response.text();
     throw new HttpError(
-      `Request failed with status ${response.status} for ${url}`,
+      `Presenton ${label} HTTP ${response.status} for ${url}: ${bodyText.slice(0, 300)}`,
       response.status,
       bodyText,
     );
   }
 
   if (!response.body) {
-    throw new Error(`No response body received for ${url}.`);
+    clearTimeout(timeout);
+    throw new Error(`Presenton ${label}: No response body received for ${url}.`);
   }
 
   const reader = response.body.getReader();
@@ -328,7 +355,7 @@ async function requestSseCompletion<T>(
 
         if (payload.type === "error") {
           clearTimeout(timeout);
-          throw new Error(String(payload.detail ?? "Presenton stream failed."));
+          throw new Error(`Presenton ${label} stream error: ${String(payload.detail ?? "unknown error")}`);
         }
       }
 
@@ -343,7 +370,7 @@ async function requestSseCompletion<T>(
   clearTimeout(timeout);
 
   if (!completed) {
-    throw new Error(`Presenton stream ${url} completed without a final payload.`);
+    throw new Error(`Presenton ${label} stream completed without a final payload for ${url}.`);
   }
 
   return completed;
@@ -381,7 +408,7 @@ export class PresentonDeckProvider implements PresentonProvider {
 
     const exportAs = input.outputFormat;
 
-    const response = await requestJson<PresentonGenerateResponse>(
+    const response = await retryableRequestJson<PresentonGenerateResponse>(
       `${this.baseUrl}/api/v1/ppt/presentation/generate`,
       {
         method: "POST",
@@ -402,6 +429,7 @@ export class PresentonDeckProvider implements PresentonProvider {
           export_as: exportAs,
         },
       },
+      "generate deck",
     );
 
     return {
@@ -417,7 +445,7 @@ export class PresentonDeckProvider implements PresentonProvider {
     content: string,
     instructions: string,
   ): Promise<PresentonResult> {
-    const created = await requestJson<PresentonPresentationModel>(
+    const created = await retryableRequestJson<PresentonPresentationModel>(
       `${this.baseUrl}/api/v1/ppt/presentation/create`,
       {
         method: "POST",
@@ -433,14 +461,16 @@ export class PresentonDeckProvider implements PresentonProvider {
           web_search: false,
         },
       },
+      "create presentation",
     );
 
     const outlined = await requestSseCompletion<PresentonStreamCompleteEnvelope>(
       `${this.baseUrl}/api/v1/ppt/outlines/stream/${created.id}`,
+      "outline generation",
     );
 
     const layout = buildPresentonLayout(this.defaultTemplate ?? "general");
-    await requestJson<PresentonPresentationModel>(
+    await retryableRequestJson<PresentonPresentationModel>(
       `${this.baseUrl}/api/v1/ppt/presentation/prepare`,
       {
         method: "POST",
@@ -451,10 +481,12 @@ export class PresentonDeckProvider implements PresentonProvider {
           title: outlined.presentation.title ?? undefined,
         },
       },
+      "prepare slides",
     );
 
     await requestSseCompletion<PresentonStreamCompleteEnvelope>(
       `${this.baseUrl}/api/v1/ppt/presentation/stream/${created.id}`,
+      "slide generation",
     );
 
     return {

@@ -243,6 +243,12 @@ async function processRun(runId: string) {
         }
       }
 
+      await addRunEvent(runId, {
+        targetId: targetRow.id,
+        level: "info",
+        stage: "delivery",
+        message: `Generating deck for ${preparedCompany.target.websiteUrl}...`,
+      });
       const delivery = await presentonProvider.createDeck(deckInput, imageUrls);
       await addArtifact(runId, {
         targetId: targetRow.id,
@@ -254,7 +260,7 @@ async function processRun(runId: string) {
         targetId: targetRow.id,
         level: "info",
         stage: "delivery",
-        message: `Deck delivery completed for ${preparedCompany.target.websiteUrl}.`,
+        message: `Deck delivered for ${preparedCompany.target.websiteUrl}. ${delivery.editorUrl ? "Editor: " + delivery.editorUrl : ""}`,
       });
     } catch (error) {
       const message =

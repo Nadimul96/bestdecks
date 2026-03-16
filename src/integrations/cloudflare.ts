@@ -53,8 +53,8 @@ export class CloudflareCrawler implements CrawlProvider {
   public constructor(options: CloudflareCrawlerOptions) {
     this.accountId = options.accountId;
     this.apiToken = options.apiToken;
-    this.pollDelayMs = options.pollDelayMs ?? 5000;
-    this.maxPollAttempts = options.maxPollAttempts ?? 60;
+    this.pollDelayMs = options.pollDelayMs ?? 3000;
+    this.maxPollAttempts = options.maxPollAttempts ?? 30;
   }
 
   public async crawlSite(request: CrawlRequest): Promise<CrawlResult> {

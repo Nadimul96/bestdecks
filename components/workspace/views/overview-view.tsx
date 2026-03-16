@@ -27,6 +27,24 @@ import { cn } from "@/lib/utils";
 
 const meta = viewMeta.overview;
 
+function formatOverviewRunName(run: RunSummary): string {
+  let siteName = "Run";
+  if (run.first_target_url) {
+    try {
+      const u = run.first_target_url;
+      const url = new URL(u.startsWith("http") ? u : `https://${u}`);
+      siteName = url.hostname.replace(/^www\./, "");
+    } catch {
+      siteName = run.first_target_url;
+    }
+  }
+  const d = new Date(run.created_at);
+  const date = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  if (run.target_count > 1) return `${siteName} +${run.target_count - 1} · ${date} ${time}`;
+  return `${siteName} · ${date} ${time}`;
+}
+
 interface ReadinessItem {
   id: string;
   label: string;
@@ -350,7 +368,7 @@ export function OverviewView({ currentUser }: { currentUser: CurrentUser }) {
                   </div>
                   <div>
                     <p className="text-[13px] font-medium text-foreground">
-                      Run #{run.id.slice(0, 6)}
+                      {formatOverviewRunName(run)}
                     </p>
                     <p className="text-[11px] text-muted-foreground">
                       {run.target_count} target

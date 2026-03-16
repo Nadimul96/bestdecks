@@ -264,7 +264,8 @@ export function TargetIntakeView() {
       if (res.ok) {
         setNotice({
           type: "success",
-          message: `Run created with ${websiteCount} target${websiteCount > 1 ? "s" : ""}. View it in Pipeline.`,
+          message: `Run created with ${websiteCount} target${websiteCount > 1 ? "s" : ""}. `,
+          link: { label: "View it in Pipeline →", hash: "#pipeline" },
         });
         toast.success(
           `Run launched with ${websiteCount} target${websiteCount > 1 ? "s" : ""}.`,
@@ -335,7 +336,17 @@ export function TargetIntakeView() {
           ) : (
             <AlertCircle className="mt-0.5 size-4 shrink-0" />
           )}
-          {notice.message}
+          <span>
+            {notice.message}
+            {notice.link && (
+              <a
+                href={notice.link.hash}
+                className="ml-1 font-medium underline underline-offset-2 hover:opacity-80"
+              >
+                {notice.link.label}
+              </a>
+            )}
+          </span>
         </div>
       )}
 

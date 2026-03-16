@@ -248,6 +248,7 @@ export interface RunSummary {
   status: string;
   target_count: number;
   delivery_format: DeliveryFormat;
+  first_target_url?: string;
   created_at: string;
   updated_at: string;
 }
@@ -305,7 +306,7 @@ export interface RunDetail {
 }
 
 export type Notice =
-  | { type: "success" | "error" | "info"; message: string }
+  | { type: "success" | "error" | "info"; message: string; link?: { label: string; hash: string } }
   | null;
 
 /* ─────────────────────────────────────────────

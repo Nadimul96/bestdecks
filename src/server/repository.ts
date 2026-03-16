@@ -405,7 +405,9 @@ export async function getRun(runId: string) {
 export async function listRuns() {
   const db = await getDb();
   return db.executeAll(
-    "SELECT id, status, target_count, delivery_format, created_at, updated_at FROM runs ORDER BY created_at DESC",
+    `SELECT r.id, r.status, r.target_count, r.delivery_format, r.created_at, r.updated_at,
+            (SELECT rt.website_url FROM run_targets rt WHERE rt.run_id = r.id ORDER BY rt.created_at ASC LIMIT 1) AS first_target_url
+     FROM runs r ORDER BY r.created_at DESC`,
   );
 }
 

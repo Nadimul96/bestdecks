@@ -59,36 +59,39 @@ export class ProposalOrchestrator {
       message: string;
     }> = [];
 
-    for (const target of input.targets) {
-      try {
-        const crawlResult = await crawlWithFallback(
-          {
+    // Process all targets concurrently for maximum speed
+    const targetResults = await Promise.allSettled(
+      input.targets.map(async (target) => {
+        // Run crawl and enrichment in parallel — they're independent
+        const [crawlResult, enrichment] = await Promise.all([
+          crawlWithFallback(
+            {
+              websiteUrl: target.websiteUrl,
+              maxPages: 10,
+              maxDepth: 2,
+              source: "all",
+              requestedFormats: ["markdown"],
+              includePatterns: undefined,
+              excludePatterns: undefined,
+              userApprovedException:
+                input.questionnaire.allowUserApprovedCrawlException,
+            },
+            this.dependencies.primaryCrawler,
+            this.dependencies.fallbackCrawler,
+          ),
+          this.dependencies.enrichmentProvider.enrichCompany({
             websiteUrl: target.websiteUrl,
-            maxPages: 100,
-            maxDepth: 5,
-            source: "all",
-            requestedFormats: ["markdown"],
-            includePatterns: undefined,
-            excludePatterns: undefined,
-            userApprovedException:
-              input.questionnaire.allowUserApprovedCrawlException,
-          },
-          this.dependencies.primaryCrawler,
-          this.dependencies.fallbackCrawler,
-        );
-
-        const enrichment = await this.dependencies.enrichmentProvider.enrichCompany({
-          websiteUrl: target.websiteUrl,
-          companyName: target.companyName,
-          sellerPositioningSummary: sellerBrief.positioningSummary,
-          requestedSignals: [
-            "industry",
-            "locale",
-            "recent activity",
-            "buyer signals",
-            "observable proof points",
-          ],
-        });
+            companyName: target.companyName,
+            sellerPositioningSummary: sellerBrief.positioningSummary,
+            requestedSignals: [
+              "industry",
+              "locale",
+              "recent activity",
+              "buyer signals",
+              "observable proof points",
+            ],
+          }),
+        ]);
 
         const companyBrief = await this.dependencies.companyBriefBuilder.buildCompanyBrief({
           target,
@@ -104,19 +107,21 @@ export class ProposalOrchestrator {
           enrichmentSummary: enrichment.synthesizedSummary,
         });
 
-        preparedCompanies.push({
-          target,
-          crawlResult,
-          enrichment,
-          companyBrief,
-        });
-      } catch (error) {
+        return { target, crawlResult, enrichment, companyBrief };
+      }),
+    );
+
+    for (let i = 0; i < targetResults.length; i++) {
+      const result = targetResults[i];
+      if (result.status === "fulfilled") {
+        preparedCompanies.push(result.value);
+      } else {
         failedCompanies.push({
-          target,
+          target: input.targets[i],
           stage: "crawl_or_enrichment",
           message:
-            error instanceof Error
-              ? error.message
+            result.reason instanceof Error
+              ? result.reason.message
               : "Target preparation failed for an unknown reason.",
         });
       }

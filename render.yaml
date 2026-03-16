@@ -61,7 +61,7 @@ services:
       - key: LLM
         value: openai
       - key: OPENAI_MODEL
-        value: gpt-4.1
+        value: gpt-4o
       - key: DISABLE_IMAGE_GENERATION
         value: "true"
       - key: OPENAI_API_KEY

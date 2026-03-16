@@ -125,8 +125,27 @@ async function processRun(runId: string) {
     : undefined;
 
   if (!presentonProvider) {
-    throw new Error("Presenton configuration is missing.");
+    throw new Error("Presenton configuration is missing. Set PRESENTON_BASE_URL to your deployed Presenton service URL.");
   }
+
+  // Pre-flight check: verify Presenton is reachable before doing expensive crawl/enrichment work
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    const pingResponse = await fetch(settings.presentonBaseUrl!, { signal: controller.signal });
+    clearTimeout(timeout);
+    if (pingResponse.status >= 500) {
+      throw new Error(`Presenton returned HTTP ${pingResponse.status}`);
+    }
+  } catch (error) {
+    const cause = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Presenton is unreachable at ${settings.presentonBaseUrl}. ` +
+      `If running on Vercel, PRESENTON_BASE_URL must point to a publicly deployed Presenton instance (not localhost). ` +
+      `Error: ${cause}`
+    );
+  }
+  await addRunEvent(runId, { level: "info", stage: "preflight", message: `Presenton connectivity verified at ${settings.presentonBaseUrl}.` });
 
   const orchestrator = new ProposalOrchestrator({
     primaryCrawler,

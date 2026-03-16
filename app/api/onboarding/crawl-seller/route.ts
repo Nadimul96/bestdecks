@@ -9,7 +9,7 @@ import {
   UnconfiguredDeepcrawlCrawler,
 } from "@/src/integrations/providers";
 import type { CrawlProvider } from "@/src/integrations/providers";
-import { saveSellerBriefMd } from "@/src/server/repository";
+import { saveSellerBriefMd, saveAudienceContext } from "@/src/server/repository";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -43,6 +43,16 @@ interface ExtractedSellerFields {
   targetCustomer: string;
   desiredOutcome: string;
   proofPoints: string[];
+  logoUrl: string;
+  facebookUrl: string;
+  twitterUrl: string;
+  instagramUrl: string;
+  tiktokUrl: string;
+  audienceIndustry: string;
+  audienceSize: string;
+  audiencePainPoints: string;
+  mustInclude: string[];
+  mustAvoid: string[];
 }
 
 /* ── Prompts ─────────────────────────────────── */
@@ -109,7 +119,7 @@ function buildBriefUserPrompt(websiteUrl: string, markdown: string): string {
   ].join("\n");
 }
 
-const EXTRACTION_SYSTEM_PROMPT = `You are a data extraction specialist. Given a comprehensive business intelligence brief (in Markdown), extract structured fields for a form.
+const EXTRACTION_SYSTEM_PROMPT = `You are a data extraction specialist. Given a comprehensive business intelligence brief (in Markdown) and the company's website content, extract structured fields for a form.
 
 Return valid JSON matching this exact schema:
 {
@@ -117,17 +127,34 @@ Return valid JSON matching this exact schema:
   "offerSummary": "1-2 sentence summary of what they sell or do",
   "services": ["specific service or product 1", "specific service or product 2", ...],
   "differentiators": ["what makes them different 1", "what makes them different 2", ...],
-  "targetCustomer": "Who they primarily serve (be specific about industry, size, or role)",
+  "targetCustomer": "Who they primarily serve — specific role/title and industry only (e.g., 'VP of Operations at mid-market logistics companies')",
   "desiredOutcome": "The primary outcome or transformation they deliver for customers",
-  "proofPoints": ["case study, metric, testimonial, or credibility signal 1", ...]
+  "proofPoints": ["case study, metric, testimonial, or credibility signal 1", ...],
+  "logoUrl": "Direct URL to the company's logo image (look for /logo.png, /logo.svg, or og:image in the website HTML). Empty string if not found.",
+  "facebookUrl": "Company Facebook page URL. Empty string if not found.",
+  "twitterUrl": "Company X/Twitter profile URL. Empty string if not found.",
+  "instagramUrl": "Company Instagram profile URL. Empty string if not found.",
+  "tiktokUrl": "Company TikTok profile URL. Empty string if not found.",
+  "audienceIndustry": "The specific industry/vertical their customers are in (e.g., 'Healthcare', 'Real Estate', 'SaaS')",
+  "audienceSize": "Typical customer company size (e.g., '50-500 employees', 'SMBs with $1M-$10M revenue')",
+  "audiencePainPoints": "Top 2-3 pain points their target audience faces, comma-separated",
+  "mustInclude": ["topic or phrase that should always appear in outreach decks about this company", ...],
+  "mustAvoid": ["topic or phrase to never use in outreach for this company", ...]
 }
 
 Rules:
 - services: list 2-6 specific offerings, not vague categories
 - differentiators: list 2-4 concrete advantages, not generic claims like "best quality"
 - proofPoints: real numbers, customer names, awards, or specific results when available. Empty array if none found.
+- targetCustomer: ONLY include the role/title and type of company. Do NOT include company size here — put that in audienceSize.
+- audienceSize: be specific with numbers (employee count, revenue range)
+- audiencePainPoints: concise, comma-separated pain points
+- logoUrl: look for img tags with "logo" in src/alt/class, or og:image meta tag, or favicon. Prefer SVG/PNG. Use the full absolute URL.
+- Social URLs: look for links to facebook.com, twitter.com/x.com, instagram.com, tiktok.com in the website footer or header. Use full URLs.
+- mustInclude: 2-4 topics that are core to this company's value prop (e.g., "ROI data", "customer testimonials", "compliance certifications")
+- mustAvoid: 1-3 topics to avoid (e.g., "competitor comparisons", "unverified claims", "pricing specifics")
 - Keep all text concise — no long paragraphs in any field
-- Extract only — do not invent information not present in the brief`;
+- Extract only — do not invent information not present in the brief or website`;
 
 /* ── Helpers ─────────────────────────────────── */
 
@@ -186,6 +213,16 @@ async function callPerplexity(
             "targetCustomer",
             "desiredOutcome",
             "proofPoints",
+            "logoUrl",
+            "facebookUrl",
+            "twitterUrl",
+            "instagramUrl",
+            "tiktokUrl",
+            "audienceIndustry",
+            "audienceSize",
+            "audiencePainPoints",
+            "mustInclude",
+            "mustAvoid",
           ],
           properties: {
             companyName: { type: "string", minLength: 1 },
@@ -195,6 +232,16 @@ async function callPerplexity(
             targetCustomer: { type: "string", minLength: 1 },
             desiredOutcome: { type: "string", minLength: 1 },
             proofPoints: { type: "array", items: { type: "string" } },
+            logoUrl: { type: "string" },
+            facebookUrl: { type: "string" },
+            twitterUrl: { type: "string" },
+            instagramUrl: { type: "string" },
+            tiktokUrl: { type: "string" },
+            audienceIndustry: { type: "string" },
+            audienceSize: { type: "string" },
+            audiencePainPoints: { type: "string" },
+            mustInclude: { type: "array", items: { type: "string" } },
+            mustAvoid: { type: "array", items: { type: "string" } },
           },
         },
       },
@@ -406,6 +453,14 @@ export async function POST(request: Request) {
 
   try {
     await saveSellerBriefMd(sellerBriefMd);
+    // Also persist audience context for run-settings autofill
+    await saveAudienceContext({
+      audienceIndustry: sellerFields.audienceIndustry || undefined,
+      audienceSize: sellerFields.audienceSize || undefined,
+      audiencePainPoints: sellerFields.audiencePainPoints || undefined,
+      mustInclude: sellerFields.mustInclude?.length ? sellerFields.mustInclude : undefined,
+      mustAvoid: sellerFields.mustAvoid?.length ? sellerFields.mustAvoid : undefined,
+    });
   } catch (error) {
     // Non-fatal — we still return the data even if persistence fails
     console.error("[crawl-seller] Failed to persist seller brief .md:", error);
@@ -426,6 +481,19 @@ export async function POST(request: Request) {
       proofPoints: sellerFields.proofPoints?.length
         ? sellerFields.proofPoints
         : undefined,
+      logoUrl: sellerFields.logoUrl || undefined,
+      facebookUrl: sellerFields.facebookUrl || undefined,
+      twitterUrl: sellerFields.twitterUrl || undefined,
+      instagramUrl: sellerFields.instagramUrl || undefined,
+      tiktokUrl: sellerFields.tiktokUrl || undefined,
+    },
+    // Extra fields for run-settings autofill
+    audienceContext: {
+      audienceIndustry: sellerFields.audienceIndustry || undefined,
+      audienceSize: sellerFields.audienceSize || undefined,
+      audiencePainPoints: sellerFields.audiencePainPoints || undefined,
+      mustInclude: sellerFields.mustInclude?.length ? sellerFields.mustInclude : undefined,
+      mustAvoid: sellerFields.mustAvoid?.length ? sellerFields.mustAvoid : undefined,
     },
     sellerBriefMd: sellerBriefMd,
   });

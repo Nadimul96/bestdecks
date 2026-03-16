@@ -260,34 +260,60 @@ export function RunSettingsView() {
   async function handleAutofill() {
     setAutofilling(true);
     try {
-      const res = await fetch("/api/onboarding/seller-context");
-      if (res.ok) {
-        const data = await res.json();
-        let filled = false;
+      // Fetch both seller context and audience context from crawl
+      const [sellerRes, audienceRes] = await Promise.all([
+        fetch("/api/onboarding/seller-context"),
+        fetch("/api/onboarding/audience-context"),
+      ]);
 
-        if (data?.targetCustomer && !form.audience) {
-          update("audience", data.targetCustomer);
-          filled = true;
-        }
-        if (data?.desiredOutcome && !form.objective) {
-          update("objective", data.desiredOutcome);
-          filled = true;
-        }
-        if (data?.desiredOutcome && !form.callToAction) {
-          const cta = data.desiredOutcome.length > 60
-            ? data.desiredOutcome.slice(0, 60) + "..."
-            : data.desiredOutcome;
-          update("callToAction", cta);
-          filled = true;
-        }
+      const seller = sellerRes.ok ? await sellerRes.json() : null;
+      const audience = audienceRes.ok ? await audienceRes.json() : null;
+      let filled = false;
 
-        if (filled) {
-          toast.success("Fields auto-filled from your business context.");
-        } else {
-          toast.info(
-            "Fields already have values. Clear them first to auto-fill.",
-          );
-        }
+      // Audience fields from seller context
+      if (seller?.targetCustomer && !form.audience) {
+        update("audience", seller.targetCustomer);
+        filled = true;
+      }
+      if (seller?.desiredOutcome && !form.objective) {
+        update("objective", seller.desiredOutcome);
+        filled = true;
+      }
+      if (seller?.desiredOutcome && !form.callToAction) {
+        update("callToAction", "Book a 20-minute call to discuss how we can help");
+        filled = true;
+      }
+
+      // Extra audience details from crawl analysis
+      if (audience?.audienceIndustry && !form.audienceIndustry) {
+        update("audienceIndustry", audience.audienceIndustry);
+        filled = true;
+      }
+      if (audience?.audienceSize && !form.audienceSize) {
+        update("audienceSize", audience.audienceSize);
+        filled = true;
+      }
+      if (audience?.audiencePainPoints && !form.audiencePainPoints) {
+        update("audiencePainPoints", audience.audiencePainPoints);
+        filled = true;
+      }
+
+      // Advanced: must include / must avoid
+      if (audience?.mustInclude?.length && !form.mustIncludeText) {
+        update("mustIncludeText", audience.mustInclude.join("\n"));
+        filled = true;
+      }
+      if (audience?.mustAvoid?.length && !form.mustAvoidText) {
+        update("mustAvoidText", audience.mustAvoid.join("\n"));
+        filled = true;
+      }
+
+      if (filled) {
+        toast.success("Fields auto-filled from your business context.");
+      } else if (seller || audience) {
+        toast.info(
+          "Fields already have values. Clear them first to auto-fill.",
+        );
       } else {
         toast.error("No business context found. Complete the seller context step first.");
       }

@@ -128,6 +128,37 @@ export async function getSellerBriefMd(): Promise<string | null> {
   return row?.seller_brief_md ?? null;
 }
 
+export async function saveAudienceContext(context: Record<string, unknown>) {
+  const db = await getDb();
+  const timestamp = now();
+
+  await db.run(
+    `
+      INSERT INTO workspace_state (id, audience_context_json, created_at, updated_at)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        audience_context_json = excluded.audience_context_json,
+        updated_at = excluded.updated_at
+    `,
+    ["default", JSON.stringify(context), timestamp, timestamp],
+  );
+}
+
+export async function getAudienceContext(): Promise<Record<string, unknown> | null> {
+  const db = await getDb();
+  const row = await db.execute(
+    "SELECT audience_context_json FROM workspace_state WHERE id = ? LIMIT 1",
+    ["default"],
+  ) as { audience_context_json: string | null } | undefined;
+
+  if (!row?.audience_context_json) return null;
+  try {
+    return JSON.parse(row.audience_context_json) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
 export async function getOnboarding() {
   const db = await getDb();
   const resolved = await resolveIntegrationConfig();

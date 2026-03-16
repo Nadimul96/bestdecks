@@ -625,7 +625,7 @@ export function defaultQuestionnaire(): QuestionnaireForm {
     mustIncludeText: "",
     mustAvoidText: "",
     extraInstructions: "",
-    optionalReview: false,
+    optionalReview: true,
     allowUserApprovedCrawlException: false,
   };
 }

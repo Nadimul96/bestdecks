@@ -218,6 +218,7 @@ async function migrate(c: Client) {
   await ensureColumn(c, "workspace_state", "draft_websites_text", "TEXT");
   await ensureColumn(c, "workspace_state", "draft_contacts_csv_text", "TEXT");
   await ensureColumn(c, "workspace_state", "seller_brief_md", "TEXT");
+  await ensureColumn(c, "workspace_state", "audience_context_json", "TEXT");
 
   // Ensure user_credits has all columns (some were added later)
   await ensureColumn(c, "user_credits", "plan_tier", "TEXT NOT NULL DEFAULT 'free'");

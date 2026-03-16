@@ -3,6 +3,7 @@
 import * as React from "react";
 import {
   AlertCircle,
+  Ban,
   CheckCircle2,
   Clock3,
   Cloud,
@@ -14,6 +15,7 @@ import {
   RefreshCcw,
   Search,
   Wand2,
+  XCircle,
 } from "lucide-react";
 
 import { toast } from "sonner";
@@ -228,6 +230,29 @@ export function PipelineView() {
     }
   }
 
+  const [cancelling, setCancelling] = React.useState<string | null>(null);
+
+  async function cancelRun(runId: string) {
+    setCancelling(runId);
+    try {
+      const res = await fetch(`/api/runs/${runId}/cancel`, { method: "POST" });
+      if (res.ok) {
+        toast.success("Run cancelled.");
+        await fetchRuns();
+        if (selectedRun?.id === runId) {
+          await selectRun(runId, true);
+        }
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error ?? "Failed to cancel run.");
+      }
+    } catch {
+      toast.error("Network error.");
+    } finally {
+      setCancelling(null);
+    }
+  }
+
   async function selectRun(runId: string, silent = false) {
     if (!silent) setDetailLoading(true);
     try {
@@ -344,12 +369,12 @@ export function PipelineView() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
                     <StatusPill
                       status={
                         run.status === "completed"
                           ? "ready"
-                          : run.status === "failed"
+                          : run.status === "failed" || run.status === "cancelled"
                             ? "error"
                             : run.status === "running"
                               ? "running"
@@ -357,6 +382,24 @@ export function PipelineView() {
                       }
                       label={run.status}
                     />
+                    {(run.status === "running" || run.status === "queued") && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          cancelRun(run.id);
+                        }}
+                        disabled={cancelling === run.id}
+                        className="rounded-md p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+                        title="Cancel run"
+                      >
+                        {cancelling === run.id ? (
+                          <LoaderCircle className="size-3.5 animate-spin" />
+                        ) : (
+                          <XCircle className="size-3.5" />
+                        )}
+                      </button>
+                    )}
                   </div>
                 </button>
               ))}
@@ -395,9 +438,25 @@ export function PipelineView() {
                     </span>
                   </div>
                   <Progress value={computeProgress(selectedRun).percent} className="h-2" />
-                  <p className="text-[11px] text-muted-foreground">
-                    Typically completes in 1-2 minutes per target.
-                  </p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-[11px] text-muted-foreground">
+                      Typically completes in 1-2 minutes per target.
+                    </p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 gap-1 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={() => cancelRun(selectedRun.id)}
+                      disabled={cancelling === selectedRun.id}
+                    >
+                      {cancelling === selectedRun.id ? (
+                        <LoaderCircle className="size-3 animate-spin" />
+                      ) : (
+                        <Ban className="size-3" />
+                      )}
+                      Cancel run
+                    </Button>
+                  </div>
                 </div>
               )}
 
@@ -428,6 +487,18 @@ export function PipelineView() {
                     <AlertCircle className="size-4 text-destructive" />
                     <span className="text-[13px] font-medium text-destructive">
                       {selectedRun.lastError ?? "Run failed. Check the activity log for details."}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Cancelled banner */}
+              {selectedRun.status === "cancelled" && (
+                <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
+                  <div className="flex items-center gap-2">
+                    <Ban className="size-4 text-amber-600 dark:text-amber-400" />
+                    <span className="text-[13px] font-medium text-amber-600 dark:text-amber-400">
+                      Run was cancelled.
                     </span>
                   </div>
                 </div>

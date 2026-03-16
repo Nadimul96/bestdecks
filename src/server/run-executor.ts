@@ -21,6 +21,20 @@ import {
 import { resolveIntegrationConfig } from "@/src/server/settings";
 
 const activeRuns = new Set<string>();
+const cancelledRuns = new Set<string>();
+
+class RunCancelledError extends Error {
+  constructor(runId: string) {
+    super(`Run ${runId} was cancelled.`);
+    this.name = "RunCancelledError";
+  }
+}
+
+function checkCancelled(runId: string) {
+  if (cancelledRuns.has(runId)) {
+    throw new RunCancelledError(runId);
+  }
+}
 
 interface PersistedRunTarget {
   id: string;
@@ -125,8 +139,10 @@ async function processRun(runId: string) {
   });
 
   const input = buildIntakeRun(run);
+  checkCancelled(runId);
   await addRunEvent(runId, { level: "info", stage: "crawl", message: `Starting crawl and enrichment for ${input.targets.length} target(s)...` });
   const prepared = await orchestrator.prepareRun(input);
+  checkCancelled(runId);
   await addRunEvent(runId, { level: "info", stage: "company_brief", message: `Crawl and enrichment complete. ${prepared.preparedCompanies.length} target(s) ready, ${prepared.failedCompanies.length} failed.` });
   await updateRun(runId, { sellerBriefJson: prepared.sellerBrief });
   await addArtifact(runId, { artifactType: "run_plan", artifactJson: buildRunPlan(input) });
@@ -156,6 +172,7 @@ async function processRun(runId: string) {
 
   // Process targets sequentially — SQLite cannot handle concurrent writes
   for (const preparedCompany of prepared.preparedCompanies) {
+    checkCancelled(runId);
     const targetRow = persistedTargets.find(
       (target) => target.website_url === preparedCompany.target.websiteUrl,
     );
@@ -285,19 +302,52 @@ export function launchRunProcessing(runId: string) {
   activeRuns.add(runId);
   void processRun(runId)
     .catch(async (error) => {
-      await updateRun(runId, {
-        status: "failed",
-        lastError: error instanceof Error ? error.message : "Unknown run failure.",
-      });
-      await addRunEvent(runId, {
-        level: "error",
-        stage: "run_failed",
-        message: error instanceof Error ? error.message : "Unknown run failure.",
-      });
+      if (error instanceof RunCancelledError) {
+        await updateRun(runId, {
+          status: "cancelled",
+          lastError: "Run was cancelled by user.",
+        });
+        await addRunEvent(runId, {
+          level: "warning",
+          stage: "run_cancelled",
+          message: "Run was cancelled by user.",
+        });
+      } else {
+        await updateRun(runId, {
+          status: "failed",
+          lastError: error instanceof Error ? error.message : "Unknown run failure.",
+        });
+        await addRunEvent(runId, {
+          level: "error",
+          stage: "run_failed",
+          message: error instanceof Error ? error.message : "Unknown run failure.",
+        });
+      }
     })
     .finally(() => {
       activeRuns.delete(runId);
+      cancelledRuns.delete(runId);
     });
 
+  return true;
+}
+
+export async function cancelRunProcessing(runId: string) {
+  if (activeRuns.has(runId)) {
+    // Run is in-flight — mark for cooperative cancellation
+    cancelledRuns.add(runId);
+    return true;
+  }
+
+  // Run is not actively processing — just update status directly
+  await updateRun(runId, {
+    status: "cancelled",
+    lastError: "Run was cancelled by user.",
+  });
+  await addRunEvent(runId, {
+    level: "warning",
+    stage: "run_cancelled",
+    message: "Run was cancelled by user.",
+  });
   return true;
 }

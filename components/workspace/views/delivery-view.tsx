@@ -4,6 +4,7 @@ import * as React from "react";
 import {
   AlertCircle,
   CheckCircle2,
+  CheckSquare,
   ChevronRight,
   Download,
   ExternalLink,
@@ -12,9 +13,12 @@ import {
   LoaderCircle,
   RefreshCcw,
   Search,
+  Send,
+  Square,
   Star,
   X,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,6 +63,7 @@ export function DeliveryView() {
   >("all");
   const [previewDeck, setPreviewDeck] = React.useState<DeckCard | null>(null);
   const [scoreDetailDeck, setScoreDetailDeck] = React.useState<DeckCard | null>(null);
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
 
   React.useEffect(() => {
     fetchAllDecks();
@@ -134,6 +139,60 @@ export function DeliveryView() {
     return true;
   });
 
+  // Selection helpers
+  const selectableDecks = filteredDecks.filter(
+    (d) => d.status === "completed" || d.status === "delivered",
+  );
+  const allSelected =
+    selectableDecks.length > 0 &&
+    selectableDecks.every((d) => selectedIds.has(d.targetId));
+
+  function toggleSelect(targetId: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(targetId)) next.delete(targetId);
+      else next.add(targetId);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(selectableDecks.map((d) => d.targetId)));
+    }
+  }
+
+  function handleBatchExport() {
+    const selected = selectableDecks.filter((d) => selectedIds.has(d.targetId));
+    // Open download/view URLs for each selected deck
+    let downloadCount = 0;
+    for (const deck of selected) {
+      const downloadUrl = deck.artifacts.find(
+        (a) => typeof a.artifact_json?.download_url === "string",
+      )?.artifact_json?.download_url as string | undefined;
+      const viewUrl = deck.artifacts.find(
+        (a) => typeof a.artifact_json?.url === "string",
+      )?.artifact_json?.url as string | undefined;
+      const url = downloadUrl ?? viewUrl;
+      if (url) {
+        window.open(url, "_blank");
+        downloadCount++;
+      }
+    }
+    if (downloadCount > 0) {
+      toast.success(`Opened ${downloadCount} deck${downloadCount > 1 ? "s" : ""} for download.`);
+    } else {
+      toast.error("No downloadable decks found in selection.");
+    }
+  }
+
+  function handleBatchSend() {
+    const selected = selectableDecks.filter((d) => selectedIds.has(d.targetId));
+    toast.info(`Send ${selected.length} deck${selected.length > 1 ? "s" : ""} — coming soon! This will email decks directly to your contacts.`);
+  }
+
   const completedCount = deckCards.filter((d) => d.status === "completed").length;
   const totalCount = deckCards.length;
   const scoredDecks = deckCards.filter((d) => d.score);
@@ -193,6 +252,50 @@ export function DeliveryView() {
         </div>
       </div>
 
+      {/* Selection bar */}
+      {selectableDecks.length > 0 && (
+        <div className="flex items-center justify-between rounded-lg border border-border/50 bg-card px-4 py-2.5">
+          <button
+            type="button"
+            onClick={toggleSelectAll}
+            className="flex items-center gap-2 text-[13px] font-medium text-foreground hover:text-primary transition-colors"
+          >
+            {allSelected ? (
+              <CheckSquare className="size-4 text-primary" />
+            ) : selectedIds.size > 0 ? (
+              <CheckSquare className="size-4 text-primary/60" />
+            ) : (
+              <Square className="size-4 text-muted-foreground" />
+            )}
+            {selectedIds.size > 0
+              ? `${selectedIds.size} selected`
+              : `Select all (${selectableDecks.length})`}
+          </button>
+
+          {selectedIds.size > 0 && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 gap-1.5 text-xs"
+                onClick={handleBatchExport}
+              >
+                <Download className="size-3" />
+                Export ({selectedIds.size})
+              </Button>
+              <Button
+                size="sm"
+                className="h-7 gap-1.5 text-xs"
+                onClick={handleBatchSend}
+              >
+                <Send className="size-3" />
+                Send ({selectedIds.size})
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Deck gallery grid */}
       {loading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -225,6 +328,8 @@ export function DeliveryView() {
             <DeckCardItem
               key={`${deck.runId}-${deck.targetId}`}
               deck={deck}
+              selected={selectedIds.has(deck.targetId)}
+              onToggleSelect={() => toggleSelect(deck.targetId)}
               onPreview={() => setPreviewDeck(deck)}
               onScoreClick={() => setScoreDetailDeck(deck)}
             />
@@ -257,10 +362,14 @@ export function DeliveryView() {
 
 function DeckCardItem({
   deck,
+  selected,
+  onToggleSelect,
   onPreview,
   onScoreClick,
 }: {
   deck: DeckCard;
+  selected: boolean;
+  onToggleSelect: () => void;
   onPreview: () => void;
   onScoreClick: () => void;
 }) {
@@ -271,24 +380,45 @@ function DeckCardItem({
     displayName = deck.websiteUrl;
   }
 
+  const isSelectable = deck.status === "completed" || deck.status === "delivered";
+
   return (
-    <div className="card-elevated group rounded-xl border border-border/50 bg-card transition-all hover:border-border hover:shadow-md">
+    <div className={cn(
+      "card-elevated group rounded-xl border bg-card transition-all hover:border-border hover:shadow-md",
+      selected ? "border-primary/40 bg-primary/[0.02] ring-1 ring-primary/20" : "border-border/50",
+    )}>
       <div className="flex items-start justify-between p-4 pb-3">
         <div className="flex items-center gap-3">
-          <div
-            className={cn(
-              "flex size-9 items-center justify-center rounded-lg",
-              deck.status === "completed" ? "bg-emerald-500/10" : deck.status === "failed" ? "bg-red-500/10" : "bg-muted",
-            )}
-          >
-            {deck.status === "completed" ? (
-              <CheckCircle2 className="size-4 text-emerald-500" />
-            ) : deck.status === "failed" ? (
-              <AlertCircle className="size-4 text-red-500" />
-            ) : (
-              <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
-            )}
-          </div>
+          {/* Checkbox */}
+          {isSelectable ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleSelect();
+              }}
+              className="flex size-9 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-muted"
+            >
+              {selected ? (
+                <CheckSquare className="size-5 text-primary" />
+              ) : (
+                <Square className="size-5 text-muted-foreground/50 group-hover:text-muted-foreground" />
+              )}
+            </button>
+          ) : (
+            <div
+              className={cn(
+                "flex size-9 items-center justify-center rounded-lg",
+                deck.status === "failed" ? "bg-red-500/10" : "bg-muted",
+              )}
+            >
+              {deck.status === "failed" ? (
+                <AlertCircle className="size-4 text-red-500" />
+              ) : (
+                <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
+              )}
+            </div>
+          )}
           <div className="min-w-0">
             <p className="truncate text-[13px] font-semibold text-foreground">{displayName}</p>
             <p className="truncate text-[11px] text-muted-foreground">{deck.websiteUrl}</p>

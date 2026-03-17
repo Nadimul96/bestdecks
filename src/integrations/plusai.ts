@@ -8,6 +8,12 @@ import type {
   PresentonResult,
 } from "./providers";
 
+/** Optional pre-built prompt from the slide planner — bypasses the old generic prompt builder */
+export interface PlusAiCreateOptions {
+  /** If provided, this structured prompt is used instead of buildDeckInputText */
+  slidePlanPrompt?: string;
+}
+
 interface PlusAiCreateResponse {
   pollingUrl: string;
   status: string;
@@ -78,19 +84,40 @@ export class PlusAiDeckProvider implements DeckProvider {
     this.apiKey = options.apiKey;
   }
 
-  public async createDeck(input: DeckGenerationInput, imageUrls: string[] = []): Promise<PresentonResult> {
-    const prompt = buildDeckInputText(input, imageUrls);
-    const instructions = buildPresentationAdditionalInstructions({
-      archetype: input.archetype,
-      tone: input.tone,
-      visualStyle: input.visualStyle,
-      imagePolicy: input.imagePolicy,
-      cardCount: input.cardCount,
-    });
+  /** Accepts an optional slidePlanPrompt to bypass the generic prompt builder */
+  public async createDeck(
+    input: DeckGenerationInput,
+    imageUrls: string[] = [],
+    options?: PlusAiCreateOptions,
+  ): Promise<PresentonResult> {
+    let fullPrompt: string;
 
-    const fullPrompt = truncatePrompt(
-      `${prompt}\n\n---\nAdditional instructions: ${instructions}`,
-    );
+    if (options?.slidePlanPrompt) {
+      // Use the pre-built slide plan prompt from our AI planner
+      const instructions = buildPresentationAdditionalInstructions({
+        archetype: input.archetype,
+        tone: input.tone,
+        visualStyle: input.visualStyle,
+        imagePolicy: input.imagePolicy,
+        cardCount: input.cardCount,
+      });
+      fullPrompt = truncatePrompt(
+        `${options.slidePlanPrompt}\n\n---\nStyle instructions: ${instructions}`,
+      );
+    } else {
+      // Fallback to original generic prompt
+      const prompt = buildDeckInputText(input, imageUrls);
+      const instructions = buildPresentationAdditionalInstructions({
+        archetype: input.archetype,
+        tone: input.tone,
+        visualStyle: input.visualStyle,
+        imagePolicy: input.imagePolicy,
+        cardCount: input.cardCount,
+      });
+      fullPrompt = truncatePrompt(
+        `${prompt}\n\n---\nAdditional instructions: ${instructions}`,
+      );
+    }
 
     console.log(`[plusai] Prompt length: ${fullPrompt.length} chars`);
 

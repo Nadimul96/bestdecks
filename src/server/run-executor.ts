@@ -12,7 +12,9 @@ import {
   type DeckGenerationInput,
   type DeckProvider,
 } from "@/src/integrations/providers";
+import { AiBriefBuilder } from "@/src/server/ai-brief-builder";
 import { LocalCompanyBriefBuilder, LocalSellerBriefBuilder } from "@/src/server/builders";
+import { SlidePlanner } from "@/src/server/slide-planner";
 import {
   addArtifact,
   addRunEvent,
@@ -118,6 +120,17 @@ async function processRun(runId: string) {
   const imageProvider = settings.geminiApiKey
     ? new GeminiImageProvider(settings.geminiApiKey)
     : undefined;
+
+  // Use AI-powered brief builder when Gemini is available, else fallback
+  const companyBriefBuilder = settings.geminiApiKey
+    ? new AiBriefBuilder(settings.geminiApiKey)
+    : new LocalCompanyBriefBuilder();
+
+  // Slide planner for structured deck content (requires Gemini)
+  const slidePlanner = settings.geminiApiKey
+    ? new SlidePlanner(settings.geminiApiKey)
+    : undefined;
+
   // Resolve deck provider: Plus AI (primary) → Presenton (fallback)
   let deckProvider: DeckProvider | undefined;
   const presentonProvider = settings.presentonBaseUrl
@@ -130,7 +143,7 @@ async function processRun(runId: string) {
 
   if (settings.plusaiApiKey) {
     deckProvider = new PlusAiDeckProvider({ apiKey: settings.plusaiApiKey });
-    await addRunEvent(runId, { level: "info", stage: "preflight", message: `Using Plus AI for deck generation.` });
+    await addRunEvent(runId, { level: "info", stage: "preflight", message: "Deck generation service connected." });
   } else if (presentonProvider) {
     // Presenton fallback — with pre-flight check
     try {
@@ -148,7 +161,7 @@ async function processRun(runId: string) {
       );
     }
     deckProvider = presentonProvider;
-    await addRunEvent(runId, { level: "info", stage: "preflight", message: `Using Presenton at ${settings.presentonBaseUrl}.` });
+    await addRunEvent(runId, { level: "info", stage: "preflight", message: "Deck generation service connected." });
   }
 
   if (!deckProvider) {
@@ -162,13 +175,22 @@ async function processRun(runId: string) {
     imageProvider,
     presentonProvider: deckProvider,
     sellerBriefBuilder: new LocalSellerBriefBuilder(),
-    companyBriefBuilder: new LocalCompanyBriefBuilder(),
+    companyBriefBuilder,
   });
 
   const input = buildIntakeRun(run);
   checkCancelled(runId);
 
-  await addRunEvent(runId, { level: "info", stage: "seller_brief", message: `Analyzing your business positioning...` });
+  // Extract seller contact info for the closing slide
+  const sellerContactInfo = {
+    companyName: run.sellerContext.companyName,
+    email: undefined as string | undefined,   // TODO: pull from user profile
+    phone: undefined as string | undefined,
+    website: run.sellerContext.websiteUrl,
+    logoUrl: undefined as string | undefined,
+  };
+
+  await addRunEvent(runId, { level: "info", stage: "seller_brief", message: "Analyzing your business positioning..." });
   await addRunEvent(runId, { level: "info", stage: "crawl", message: `Starting crawl and enrichment for ${input.targets.length} target(s)...` });
   const prepared = await orchestrator.prepareRun(input);
   checkCancelled(runId);
@@ -231,11 +253,13 @@ async function processRun(runId: string) {
         artifactType: "company_brief",
         artifactJson: preparedCompany.companyBrief,
       });
+
+      const targetName = preparedCompany.companyBrief.companyName ?? preparedCompany.target.websiteUrl;
       await addRunEvent(runId, {
         targetId: targetRow.id,
         level: "info",
         stage: "company_brief",
-        message: `Prepared brief for ${preparedCompany.target.websiteUrl} using ${preparedCompany.crawlResult.provider}.`,
+        message: `Built detailed profile for ${targetName}.`,
       });
 
       const deckInput = buildDeckInput(
@@ -250,7 +274,7 @@ async function processRun(runId: string) {
           targetId: targetRow.id,
           level: "info",
           stage: "image_strategy",
-          message: `Generating supporting visuals for ${preparedCompany.target.websiteUrl}...`,
+          message: `Generating supporting visuals for ${targetName}...`,
         });
         try {
           const imageResult = await imageProvider.generateSupportingAssets({
@@ -278,18 +302,70 @@ async function processRun(runId: string) {
         }
       }
 
+      // ── Slide Planning Step ──────────────────────────────────
+      let slidePlanPrompt: string | undefined;
+
+      if (slidePlanner) {
+        await addRunEvent(runId, {
+          targetId: targetRow.id,
+          level: "info",
+          stage: "slide_planning",
+          message: `Planning slide content for ${targetName}...`,
+        });
+
+        try {
+          const slidePlan = await slidePlanner.planSlides({
+            companyBrief: preparedCompany.companyBrief,
+            sellerBrief: prepared.sellerBrief,
+            deckInput,
+            sellerContactInfo,
+          });
+
+          slidePlanPrompt = slidePlanner.formatPlanAsPrompt(slidePlan, sellerContactInfo);
+
+          await addArtifact(runId, {
+            targetId: targetRow.id,
+            artifactType: "slide_plan",
+            artifactJson: slidePlan as unknown as Record<string, unknown>,
+          });
+
+          await addRunEvent(runId, {
+            targetId: targetRow.id,
+            level: "info",
+            stage: "slide_planning",
+            message: `Content plan ready: ${slidePlan.slides.length} slides structured.`,
+          });
+        } catch (error) {
+          console.error("[run-executor] Slide planning failed, continuing without plan:", error);
+          await addRunEvent(runId, {
+            targetId: targetRow.id,
+            level: "warning",
+            stage: "slide_planning",
+            message: "Slide planning skipped — using direct generation.",
+          });
+        }
+      }
+
+      // ── Deck Generation ──────────────────────────────────────
       await addRunEvent(runId, {
         targetId: targetRow.id,
         level: "info",
         stage: "delivery",
-        message: `Generating deck for ${preparedCompany.target.websiteUrl} via ${deckProvider.name}...`,
+        message: `Generating personalized deck for ${targetName}...`,
       });
-      const delivery = await deckProvider.createDeck(deckInput, imageUrls);
+
+      // If using Plus AI with a slide plan, pass the structured prompt
+      let delivery;
+      if (deckProvider instanceof PlusAiDeckProvider && slidePlanPrompt) {
+        delivery = await deckProvider.createDeck(deckInput, imageUrls, { slidePlanPrompt });
+      } else {
+        delivery = await deckProvider.createDeck(deckInput, imageUrls);
+      }
+
       // Normalize artifact fields so the delivery view can find download/view URLs
       const artifactJson = {
         ...delivery,
         provider: deckProvider.name,
-        // delivery view looks for `download_url` and `url`
         download_url: delivery.exportUrl ?? undefined,
         url: delivery.editorUrl ?? delivery.exportUrl ?? undefined,
       };
@@ -300,15 +376,15 @@ async function processRun(runId: string) {
       });
       await updateRunTarget(targetRow.id, { status: "delivered", lastError: null });
       const deliveryMsg = delivery.editorUrl
-        ? `Editor: ${delivery.editorUrl}`
+        ? `View in editor`
         : delivery.exportUrl
-          ? `Download: ${delivery.exportUrl}`
+          ? `Ready for download`
           : "";
       await addRunEvent(runId, {
         targetId: targetRow.id,
         level: "info",
         stage: "delivery",
-        message: `Deck delivered for ${preparedCompany.target.websiteUrl} via ${deckProvider.name}. ${deliveryMsg}`,
+        message: `Deck delivered for ${targetName}. ${deliveryMsg}`,
       });
     } catch (error) {
       const message =
@@ -388,12 +464,10 @@ export function launchRunProcessing(runId: string) {
 
 export async function cancelRunProcessing(runId: string) {
   if (activeRuns.has(runId)) {
-    // Run is in-flight — mark for cooperative cancellation
     cancelledRuns.add(runId);
     return true;
   }
 
-  // Run is not actively processing — just update status directly
   await updateRun(runId, {
     status: "cancelled",
     lastError: "Run was cancelled by user.",

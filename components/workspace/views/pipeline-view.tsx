@@ -159,7 +159,8 @@ function computeProgress(run: RunDetail): { percent: number; stage: string } {
     crawl_or_enrichment: 0.3,
     enrichment: 0.5,
     company_brief: 0.6,
-    image_strategy: 0.75,
+    image_strategy: 0.7,
+    slide_planning: 0.8,
     delivery: 0.9,
     run_finished: 1,
   };
@@ -184,6 +185,7 @@ function computeProgress(run: RunDetail): { percent: number; stage: string } {
     enrichment: "Enriching with market research...",
     company_brief: "Building target company profile...",
     image_strategy: "Generating supporting visuals...",
+    slide_planning: "Planning slide content and structure...",
     delivery: "Assembling personalized deck...",
     target_failed: "Target processing encountered an error",
   };
@@ -464,9 +466,8 @@ export function PipelineView() {
                         {formatRunName(run)}
                       </p>
                       <p className="text-[11px] text-muted-foreground">
-                        {run.target_count} target
-                        {run.target_count !== 1 ? "s" : ""} ·{" "}
-                        {run.delivery_format}
+                        {run.target_count} Target
+                        {run.target_count !== 1 ? "s" : ""}
                       </p>
                     </div>
                   </div>
@@ -515,7 +516,7 @@ export function PipelineView() {
       {selectedRun && (
         <SectionCard
           title={formatRunDetailName(selectedRun)}
-          description={`${selectedRun.targets.length} target${selectedRun.targets.length !== 1 ? "s" : ""} · ${selectedRun.deliveryFormat}`}
+          description={`${selectedRun.targets.length} Target${selectedRun.targets.length !== 1 ? "s" : ""} · ${selectedRun.sellerContext?.companyName || "Your Business"}`}
         >
           {detailLoading ? (
             <div className="space-y-3">
@@ -525,7 +526,7 @@ export function PipelineView() {
               ))}
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-4 max-h-[600px] overflow-y-auto">
               {/* Progress bar for running runs */}
               {(selectedRun.status === "running" || selectedRun.status === "queued") && (
                 <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-3">

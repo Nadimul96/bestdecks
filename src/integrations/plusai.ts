@@ -47,6 +47,22 @@ const POLL_TIMEOUT_MS = 300_000; // 5 min max wait
 const CREATE_RETRY_DELAY_MS = 5000;
 
 /**
+ * Plus AI has a request body size limit (~100 KB).  Our crawled company data +
+ * seller positioning summary can easily exceed that.  We cap the prompt at a
+ * safe character limit and truncate gracefully if needed.
+ */
+const MAX_PROMPT_CHARS = 30_000; // ~30 KB — well under the 413 threshold
+
+function truncatePrompt(prompt: string): string {
+  if (prompt.length <= MAX_PROMPT_CHARS) return prompt;
+  const truncated = prompt.slice(0, MAX_PROMPT_CHARS);
+  // Try to break at the last paragraph boundary so we don't cut mid-sentence
+  const lastBreak = truncated.lastIndexOf("\n\n");
+  const cutPoint = lastBreak > MAX_PROMPT_CHARS * 0.7 ? lastBreak : MAX_PROMPT_CHARS;
+  return truncated.slice(0, cutPoint) + "\n\n[Content truncated for brevity]";
+}
+
+/**
  * Plus AI deck provider — generates presentations via the Plus AI REST API.
  *
  * Flow:
@@ -72,7 +88,11 @@ export class PlusAiDeckProvider implements DeckProvider {
       cardCount: input.cardCount,
     });
 
-    const fullPrompt = `${prompt}\n\n---\nAdditional instructions: ${instructions}`;
+    const fullPrompt = truncatePrompt(
+      `${prompt}\n\n---\nAdditional instructions: ${instructions}`,
+    );
+
+    console.log(`[plusai] Prompt length: ${fullPrompt.length} chars`);
 
     // Step 1: Create presentation (with retries for rate limiting)
     const createResponse = await this.createPresentation({
@@ -127,6 +147,12 @@ export class PlusAiDeckProvider implements DeckProvider {
         lastError = new Error(
           `Plus AI create failed: HTTP ${response.status}: ${text.slice(0, 500)}`,
         );
+
+        // Don't retry on client errors that won't resolve (413, 400, 401, 403)
+        if (response.status >= 400 && response.status < 500 && response.status !== 429) {
+          throw lastError;
+        }
+
         if (attempt < MAX_RETRIES) {
           const delay = CREATE_RETRY_DELAY_MS * (attempt + 1);
           console.error(`[plusai] Create attempt ${attempt + 1} failed: ${lastError.message}. Retrying in ${delay}ms...`);

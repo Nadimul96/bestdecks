@@ -262,17 +262,14 @@ export function TargetIntakeView() {
       });
 
       if (res.ok) {
-        setNotice({
-          type: "success",
-          message: `Run created with ${websiteCount} target${websiteCount > 1 ? "s" : ""}. `,
-          link: { label: "View it in Pipeline →", hash: "#pipeline" },
-        });
         toast.success(
           `Run launched with ${websiteCount} target${websiteCount > 1 ? "s" : ""}.`,
         );
         setWebsitesText("");
         setContactsCsvText("");
         removeFile();
+        // Auto-navigate to pipeline page so user can see progress
+        window.location.hash = "pipeline";
       } else {
         const err = await res.json().catch(() => ({}));
         setNotice({

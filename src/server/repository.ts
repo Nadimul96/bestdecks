@@ -365,18 +365,21 @@ export async function getRun(runId: string) {
     return null;
   }
 
-  const targets = await db.executeAll(
-    "SELECT * FROM run_targets WHERE run_id = ? ORDER BY created_at ASC",
-    [runId],
-  );
-  const artifacts = await db.executeAll(
-    "SELECT * FROM run_artifacts WHERE run_id = ? ORDER BY created_at ASC",
-    [runId],
-  );
-  const events = await db.executeAll(
-    "SELECT * FROM run_events WHERE run_id = ? ORDER BY created_at ASC",
-    [runId],
-  );
+  // Fetch targets, artifacts, and events in parallel for faster loading
+  const [targets, artifacts, events] = await Promise.all([
+    db.executeAll(
+      "SELECT * FROM run_targets WHERE run_id = ? ORDER BY created_at ASC",
+      [runId],
+    ),
+    db.executeAll(
+      "SELECT * FROM run_artifacts WHERE run_id = ? ORDER BY created_at ASC",
+      [runId],
+    ),
+    db.executeAll(
+      "SELECT * FROM run_events WHERE run_id = ? ORDER BY created_at ASC",
+      [runId],
+    ),
+  ]);
 
   return {
     id: run.id,

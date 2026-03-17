@@ -482,18 +482,14 @@ export const outputFormatOptions: Array<{
   value: DeliveryFormat;
   label: string;
   description: string;
+  badge?: string;
 }> = [
   {
-    value: "bestdecks_editor",
-    label: "Bestdecks editor",
+    value: "pptx",
+    label: "PowerPoint (PPTX)",
     description:
-      "Edit and present directly in our native editor with live collaboration.",
-  },
-  {
-    value: "bestdecks_link",
-    label: "Shareable link",
-    description:
-      "Send a bestdecks.co link — recipients view a polished, responsive deck instantly.",
+      "Export as a .pptx file. Open in PowerPoint, Keynote, or Google Slides.",
+    badge: "Recommended",
   },
   {
     value: "pdf",
@@ -502,16 +498,25 @@ export const outputFormatOptions: Array<{
       "Download as a portable PDF. Great for email attachments and offline viewing.",
   },
   {
-    value: "pptx",
-    label: "PowerPoint (PPTX)",
+    value: "bestdecks_editor",
+    label: "Bestdecks editor",
     description:
-      "Export as a .pptx file. Open in PowerPoint, Keynote, or Google Slides.",
+      "Edit and present directly in our native editor with live collaboration.",
+    badge: "Coming soon",
+  },
+  {
+    value: "bestdecks_link",
+    label: "Shareable link",
+    description:
+      "Send a bestdecks.co link — recipients view a polished, responsive deck instantly.",
+    badge: "Coming soon",
   },
   {
     value: "google_slides",
     label: "Google Slides",
     description:
       "Push directly to Google Slides for easy sharing and team editing.",
+    badge: "Coming soon",
   },
 ];
 
@@ -614,7 +619,7 @@ export function defaultQuestionnaire(): QuestionnaireForm {
     successMetric: "",
     callToAction: "",
     ctaUrgency: "",
-    outputFormat: "bestdecks_editor",
+    outputFormat: "pptx",
     desiredCardCount: "8",
     tone: "consultative",
     customTone: "",

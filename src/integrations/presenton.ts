@@ -63,6 +63,7 @@ function mapVerbosity(cardCount: number) {
 
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 3000;
+const GENERATE_TIMEOUT_MS = 120_000; // 2 min per attempt
 
 async function retryableRequestJson<T>(
   url: string,
@@ -72,7 +73,13 @@ async function retryableRequestJson<T>(
   let lastError: Error | undefined;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
-      return await requestJson<T>(url, options);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), GENERATE_TIMEOUT_MS);
+      try {
+        return await requestJson<T>(url, { ...options, signal: controller.signal });
+      } finally {
+        clearTimeout(timeout);
+      }
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
       if (attempt < MAX_RETRIES) {

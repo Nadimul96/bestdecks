@@ -131,7 +131,9 @@ export function DeliveryView() {
   }
 
   const filteredDecks = deckCards.filter((deck) => {
-    if (filterStatus !== "all" && deck.status !== filterStatus) return false;
+    if (filterStatus === "completed" && deck.status !== "completed" && deck.status !== "delivered") return false;
+    if (filterStatus === "failed" && deck.status !== "failed") return false;
+    if (filterStatus === "pending" && deck.status !== "pending" && deck.status !== "brief_ready") return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       return deck.companyName.toLowerCase().includes(q) || deck.websiteUrl.toLowerCase().includes(q);
@@ -237,7 +239,11 @@ export function DeliveryView() {
             >
               {status === "all"
                 ? `All (${deckCards.length})`
-                : `${status.charAt(0).toUpperCase() + status.slice(1)} (${deckCards.filter((d) => d.status === status).length})`}
+                : `${status.charAt(0).toUpperCase() + status.slice(1)} (${
+                    status === "completed"
+                      ? deckCards.filter((d) => d.status === "completed" || d.status === "delivered").length
+                      : deckCards.filter((d) => d.status === status).length
+                  })`}
             </button>
           ))}
         </div>
@@ -433,13 +439,13 @@ function DeckCardItem({
         <span>{new Date(deck.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
         <span>&middot;</span>
         <StatusPill
-          status={deck.status === "completed" ? "ready" : deck.status === "failed" ? "error" : "running"}
-          label={deck.status}
+          status={deck.status === "completed" || deck.status === "delivered" ? "ready" : deck.status === "failed" ? "error" : "running"}
+          label={deck.status === "delivered" ? "completed" : deck.status}
         />
       </div>
 
       <div className="flex items-center gap-1.5 border-t border-border/30 px-3 py-2.5">
-        {deck.status === "completed" && (
+        {(deck.status === "completed" || deck.status === "delivered") && (
           <>
             <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs flex-1" onClick={onPreview}>
               <Eye className="size-3" />
@@ -472,7 +478,7 @@ function DeckCardItem({
         {deck.status === "failed" && (
           <p className="px-1 text-[11px] text-destructive">Generation failed — try again from Pipeline</p>
         )}
-        {deck.status !== "completed" && deck.status !== "failed" && (
+        {deck.status !== "completed" && deck.status !== "delivered" && deck.status !== "failed" && (
           <p className="px-1 text-[11px] text-muted-foreground">Generation in progress…</p>
         )}
       </div>

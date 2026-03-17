@@ -142,13 +142,18 @@ export interface PresentonResult {
   rawPath?: string;
 }
 
-export interface PresentonProvider {
-  name: "presenton";
+export type DeckProviderName = "presenton" | "plusai";
+
+export interface DeckProvider {
+  name: DeckProviderName;
   createDeck(
     input: DeckGenerationInput,
     imageUrls?: string[],
   ): Promise<PresentonResult>;
 }
+
+/** @deprecated Use DeckProvider instead */
+export type PresentonProvider = DeckProvider;
 
 export class UnconfiguredCloudflareCrawler implements CrawlProvider {
   public readonly name = "cloudflare" as const;

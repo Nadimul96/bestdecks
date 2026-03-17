@@ -28,7 +28,7 @@ import {
   visualDensityOptions,
   type QuestionnaireForm,
 } from "@/lib/workspace-types";
-import type { VisualContentType } from "@/src/domain/schemas";
+import type { DeliveryFormat, VisualContentType } from "@/src/domain/schemas";
 import { cn } from "@/lib/utils";
 
 const meta = viewMeta["run-settings"];
@@ -39,11 +39,13 @@ function OptionGrid<T extends string>({
   value,
   onChange,
   columns = 3,
+  disabledValues = [],
 }: {
-  options: Array<{ value: T; label: string; description?: string }>;
+  options: Array<{ value: T; label: string; description?: string; badge?: string }>;
   value: T;
   onChange: (v: T) => void;
   columns?: number;
+  disabledValues?: T[];
 }) {
   return (
     <div
@@ -53,26 +55,42 @@ function OptionGrid<T extends string>({
         "sm:grid-cols-5": columns === 5,
       })}
     >
-      {options.map((opt) => (
-        <button
-          key={opt.value}
-          type="button"
-          onClick={() => onChange(opt.value)}
-          className={cn(
-            "rounded-xl border p-4 text-left transition-all",
-            value === opt.value
-              ? "border-primary bg-primary/5 ring-1 ring-primary/20"
-              : "border-border/50 bg-card hover:border-border",
-          )}
-        >
-          <p className="text-[13px] font-medium text-foreground">{opt.label}</p>
-          {opt.description && (
-            <p className="mt-0.5 text-[12px] text-muted-foreground">
-              {opt.description}
-            </p>
-          )}
-        </button>
-      ))}
+      {options.map((opt) => {
+        const isDisabled = disabledValues.includes(opt.value);
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => !isDisabled && onChange(opt.value)}
+            disabled={isDisabled}
+            className={cn(
+              "rounded-xl border p-4 text-left transition-all relative",
+              isDisabled
+                ? "border-border/30 bg-muted/30 opacity-60 cursor-not-allowed"
+                : value === opt.value
+                  ? "border-primary bg-primary/5 ring-1 ring-primary/20"
+                  : "border-border/50 bg-card hover:border-border",
+            )}
+          >
+            {opt.badge && (
+              <span className={cn(
+                "absolute right-2.5 top-2.5 rounded-full px-2 py-0.5 text-[10px] font-medium",
+                opt.badge === "Coming soon"
+                  ? "bg-muted text-muted-foreground"
+                  : "bg-primary/10 text-primary",
+              )}>
+                {opt.badge}
+              </span>
+            )}
+            <p className="text-[13px] font-medium text-foreground">{opt.label}</p>
+            {opt.description && (
+              <p className="mt-0.5 text-[12px] text-muted-foreground pr-16">
+                {opt.description}
+              </p>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -548,6 +566,7 @@ export function RunSettingsView() {
                 value={form.outputFormat}
                 onChange={(v) => update("outputFormat", v)}
                 columns={3}
+                disabledValues={["bestdecks_editor", "bestdecks_link", "google_slides"] as DeliveryFormat[]}
               />
             </FieldGroup>
 

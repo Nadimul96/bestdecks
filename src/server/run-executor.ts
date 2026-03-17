@@ -5,10 +5,12 @@ import { DeepcrawlCrawler } from "@/src/integrations/deepcrawl";
 import { CloudflareCrawler } from "@/src/integrations/cloudflare";
 import { GeminiImageProvider } from "@/src/integrations/gemini";
 import { PerplexityEnrichmentProvider } from "@/src/integrations/perplexity";
+import { PlusAiDeckProvider } from "@/src/integrations/plusai";
 import { PresentonDeckProvider } from "@/src/integrations/presenton";
 import {
   UnconfiguredDeepcrawlCrawler,
   type DeckGenerationInput,
+  type DeckProvider,
 } from "@/src/integrations/providers";
 import { LocalCompanyBriefBuilder, LocalSellerBriefBuilder } from "@/src/server/builders";
 import {
@@ -116,6 +118,8 @@ async function processRun(runId: string) {
   const imageProvider = settings.geminiApiKey
     ? new GeminiImageProvider(settings.geminiApiKey)
     : undefined;
+  // Resolve deck provider: Plus AI (primary) → Presenton (fallback)
+  let deckProvider: DeckProvider | undefined;
   const presentonProvider = settings.presentonBaseUrl
     ? new PresentonDeckProvider({
         baseUrl: settings.presentonBaseUrl,
@@ -124,41 +128,47 @@ async function processRun(runId: string) {
       })
     : undefined;
 
-  if (!presentonProvider) {
-    throw new Error("Presenton configuration is missing. Set PRESENTON_BASE_URL to your deployed Presenton service URL.");
+  if (settings.plusaiApiKey) {
+    deckProvider = new PlusAiDeckProvider({ apiKey: settings.plusaiApiKey });
+    await addRunEvent(runId, { level: "info", stage: "preflight", message: `Using Plus AI for deck generation.` });
+  } else if (presentonProvider) {
+    // Presenton fallback — with pre-flight check
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 45_000);
+      const pingResponse = await fetch(settings.presentonBaseUrl!, { signal: controller.signal });
+      clearTimeout(timeout);
+      if (pingResponse.status >= 500) {
+        throw new Error(`Presenton returned HTTP ${pingResponse.status}`);
+      }
+    } catch (error) {
+      const cause = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `Presenton is unreachable at ${settings.presentonBaseUrl}. Error: ${cause}`
+      );
+    }
+    deckProvider = presentonProvider;
+    await addRunEvent(runId, { level: "info", stage: "preflight", message: `Using Presenton at ${settings.presentonBaseUrl}.` });
   }
 
-  // Pre-flight check: verify Presenton is reachable before doing expensive crawl/enrichment work
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 45_000);
-    const pingResponse = await fetch(settings.presentonBaseUrl!, { signal: controller.signal });
-    clearTimeout(timeout);
-    if (pingResponse.status >= 500) {
-      throw new Error(`Presenton returned HTTP ${pingResponse.status}`);
-    }
-  } catch (error) {
-    const cause = error instanceof Error ? error.message : String(error);
-    throw new Error(
-      `Presenton is unreachable at ${settings.presentonBaseUrl}. ` +
-      `If running on Vercel, PRESENTON_BASE_URL must point to a publicly deployed Presenton instance (not localhost). ` +
-      `Error: ${cause}`
-    );
+  if (!deckProvider) {
+    throw new Error("No deck provider configured. Set PLUSAI_API_KEY or PRESENTON_BASE_URL.");
   }
-  await addRunEvent(runId, { level: "info", stage: "preflight", message: `Presenton connectivity verified at ${settings.presentonBaseUrl}.` });
 
   const orchestrator = new ProposalOrchestrator({
     primaryCrawler,
     fallbackCrawler,
     enrichmentProvider,
     imageProvider,
-    presentonProvider,
+    presentonProvider: deckProvider,
     sellerBriefBuilder: new LocalSellerBriefBuilder(),
     companyBriefBuilder: new LocalCompanyBriefBuilder(),
   });
 
   const input = buildIntakeRun(run);
   checkCancelled(runId);
+
+  await addRunEvent(runId, { level: "info", stage: "seller_brief", message: `Analyzing your business positioning...` });
   await addRunEvent(runId, { level: "info", stage: "crawl", message: `Starting crawl and enrichment for ${input.targets.length} target(s)...` });
   const prepared = await orchestrator.prepareRun(input);
   checkCancelled(runId);
@@ -236,6 +246,12 @@ async function processRun(runId: string) {
       let imageUrls: string[] = [];
 
       if (deckInput.imagePolicy !== "never" && imageProvider) {
+        await addRunEvent(runId, {
+          targetId: targetRow.id,
+          level: "info",
+          stage: "image_strategy",
+          message: `Generating supporting visuals for ${preparedCompany.target.websiteUrl}...`,
+        });
         try {
           const imageResult = await imageProvider.generateSupportingAssets({
             companyBrief: preparedCompany.companyBrief,
@@ -266,20 +282,33 @@ async function processRun(runId: string) {
         targetId: targetRow.id,
         level: "info",
         stage: "delivery",
-        message: `Generating deck for ${preparedCompany.target.websiteUrl}...`,
+        message: `Generating deck for ${preparedCompany.target.websiteUrl} via ${deckProvider.name}...`,
       });
-      const delivery = await presentonProvider.createDeck(deckInput, imageUrls);
+      const delivery = await deckProvider.createDeck(deckInput, imageUrls);
+      // Normalize artifact fields so the delivery view can find download/view URLs
+      const artifactJson = {
+        ...delivery,
+        provider: deckProvider.name,
+        // delivery view looks for `download_url` and `url`
+        download_url: delivery.exportUrl ?? undefined,
+        url: delivery.editorUrl ?? delivery.exportUrl ?? undefined,
+      };
       await addArtifact(runId, {
         targetId: targetRow.id,
         artifactType: "presentation_delivery",
-        artifactJson: delivery,
+        artifactJson,
       });
       await updateRunTarget(targetRow.id, { status: "delivered", lastError: null });
+      const deliveryMsg = delivery.editorUrl
+        ? `Editor: ${delivery.editorUrl}`
+        : delivery.exportUrl
+          ? `Download: ${delivery.exportUrl}`
+          : "";
       await addRunEvent(runId, {
         targetId: targetRow.id,
         level: "info",
         stage: "delivery",
-        message: `Deck delivered for ${preparedCompany.target.websiteUrl}. ${delivery.editorUrl ? "Editor: " + delivery.editorUrl : ""}`,
+        message: `Deck delivered for ${preparedCompany.target.websiteUrl} via ${deckProvider.name}. ${deliveryMsg}`,
       });
     } catch (error) {
       const message =

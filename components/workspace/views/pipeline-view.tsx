@@ -176,14 +176,16 @@ function computeProgress(run: RunDetail): { percent: number; stage: string } {
   // Friendly stage label
   const stageLabels: Record<string, string> = {
     run_started: "Starting pipeline...",
-    seller_brief: "Analyzing your business...",
-    crawl: "Crawling target website...",
-    target_crawl: "Crawling target website...",
-    crawl_or_enrichment: "Gathering intelligence...",
-    enrichment: "Enriching with research...",
-    company_brief: "Synthesizing insights...",
-    image_strategy: "Generating visuals...",
-    delivery: "Assembling deck...",
+    preflight: "Verifying service connections...",
+    seller_brief: "Analyzing your business positioning...",
+    crawl: "Crawling target website and gathering data...",
+    target_crawl: "Crawling target website and gathering data...",
+    crawl_or_enrichment: "Gathering market intelligence...",
+    enrichment: "Enriching with market research...",
+    company_brief: "Building target company profile...",
+    image_strategy: "Generating supporting visuals...",
+    delivery: "Assembling personalized deck...",
+    target_failed: "Target processing encountered an error",
   };
 
   const stageName = lastStage?.stage
@@ -193,27 +195,106 @@ function computeProgress(run: RunDetail): { percent: number; stage: string } {
   return { percent, stage: stageName };
 }
 
+/* ─── Activity Log ─── */
+function ActivityLog({ events, isRunning }: { events: RunDetail["events"]; isRunning: boolean }) {
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom when new events arrive or when running
+  React.useEffect(() => {
+    const el = scrollRef.current;
+    if (el) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [events.length]);
+
+  return (
+    <div
+      ref={scrollRef}
+      className="h-[240px] overflow-y-auto rounded-lg border border-border/30 bg-muted/10 scroll-smooth"
+    >
+      <div className="divide-y divide-border/20">
+        {events.map((event) => (
+          <div
+            key={event.id}
+            className={cn(
+              "flex items-start gap-2.5 px-4 py-2.5 text-xs transition-colors",
+              event.level === "error" && "bg-destructive/5",
+            )}
+          >
+            <span
+              className={cn(
+                "mt-1 size-2 shrink-0 rounded-full",
+                event.level === "error"
+                  ? "bg-destructive"
+                  : event.level === "warning"
+                    ? "bg-amber-500"
+                    : "bg-emerald-500/60",
+              )}
+            />
+            <span
+              className={cn(
+                "min-w-0 flex-1 break-words leading-relaxed",
+                event.level === "error"
+                  ? "text-destructive font-medium"
+                  : event.level === "warning"
+                    ? "text-amber-600 dark:text-amber-400"
+                    : "text-muted-foreground",
+              )}
+            >
+              {event.message}
+            </span>
+            <span className="ml-auto shrink-0 tabular-nums text-[10px] text-muted-foreground/50">
+              {new Date(event.created_at).toLocaleTimeString()}
+            </span>
+          </div>
+        ))}
+        {isRunning && (
+          <div className="flex items-center gap-2.5 px-4 py-2.5 text-xs">
+            <LoaderCircle className="size-3 animate-spin text-primary" />
+            <span className="text-muted-foreground/60 italic">Processing…</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function PipelineView() {
   const [runs, setRuns] = React.useState<RunSummary[]>([]);
   const [selectedRun, setSelectedRun] = React.useState<RunDetail | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [detailLoading, setDetailLoading] = React.useState(false);
 
+  const initialLoadDone = React.useRef(false);
+
   React.useEffect(() => {
     fetchRuns();
   }, []);
 
-  // Auto-refresh running runs every 4 seconds
+  // Auto-select the newest running/queued run on initial load (e.g. after launching from targets page)
+  React.useEffect(() => {
+    if (initialLoadDone.current || loading || runs.length === 0) return;
+    initialLoadDone.current = true;
+    const runningRun = runs.find((r) => r.status === "running" || r.status === "queued");
+    if (runningRun && !selectedRun) {
+      selectRun(runningRun.id);
+    }
+  }, [runs, loading]);
+
+  // Auto-refresh running runs every 3 seconds
   React.useEffect(() => {
     const hasRunning = runs.some((r) => r.status === "running" || r.status === "queued");
-    if (!hasRunning && !(selectedRun && (selectedRun.status === "running" || selectedRun.status === "queued"))) return;
+    const selectedRunActive = selectedRun && (selectedRun.status === "running" || selectedRun.status === "queued");
+    if (!hasRunning && !selectedRunActive) return;
 
     const interval = setInterval(() => {
-      fetchRuns();
-      if (selectedRun && (selectedRun.status === "running" || selectedRun.status === "queued")) {
-        selectRun(selectedRun.id, true);
+      // Fetch runs list and detail in parallel for faster updates
+      const promises: Promise<void>[] = [fetchRuns()];
+      if (selectedRunActive) {
+        promises.push(selectRun(selectedRun.id, true));
       }
-    }, 4000);
+      Promise.all(promises);
+    }, 3000);
 
     return () => clearInterval(interval);
   }, [runs, selectedRun]);
@@ -231,6 +312,26 @@ export function PipelineView() {
   }
 
   const [cancelling, setCancelling] = React.useState<string | null>(null);
+  const [retrying, setRetrying] = React.useState<string | null>(null);
+
+  async function retryRun(runId: string) {
+    setRetrying(runId);
+    try {
+      const res = await fetch(`/api/runs/${runId}/launch`, { method: "POST" });
+      if (res.ok) {
+        toast.success("Retrying run...");
+        await fetchRuns();
+        await selectRun(runId, true);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error ?? "Failed to retry run.");
+      }
+    } catch {
+      toast.error("Network error.");
+    } finally {
+      setRetrying(null);
+    }
+  }
 
   async function cancelRun(runId: string) {
     setCancelling(runId);
@@ -378,7 +479,9 @@ export function PipelineView() {
                             ? "error"
                             : run.status === "running"
                               ? "running"
-                              : "incomplete"
+                              : run.status === "partially_completed"
+                                ? "incomplete"
+                                : "incomplete"
                       }
                       label={run.status}
                     />
@@ -483,11 +586,63 @@ export function PipelineView() {
               {/* Failed banner */}
               {selectedRun.status === "failed" && (
                 <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4">
-                  <div className="flex items-center gap-2">
-                    <AlertCircle className="size-4 text-destructive" />
-                    <span className="text-[13px] font-medium text-destructive">
-                      {selectedRun.lastError ?? "Run failed. Check the activity log for details."}
-                    </span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="size-4 text-destructive" />
+                      <span className="text-[13px] font-medium text-destructive">
+                        {selectedRun.lastError ?? "Run failed. Check the activity log for details."}
+                      </span>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5 shrink-0"
+                      onClick={() => retryRun(selectedRun.id)}
+                      disabled={retrying === selectedRun.id}
+                    >
+                      {retrying === selectedRun.id ? (
+                        <LoaderCircle className="size-3 animate-spin" />
+                      ) : (
+                        <RefreshCcw className="size-3" />
+                      )}
+                      Retry
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Partially completed banner */}
+              {selectedRun.status === "partially_completed" && (
+                <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="size-4 text-amber-600 dark:text-amber-400" />
+                      <span className="text-[13px] font-medium text-amber-600 dark:text-amber-400">
+                        {selectedRun.lastError ?? "Some targets failed. Check the activity log for details."}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5"
+                        onClick={() => retryRun(selectedRun.id)}
+                        disabled={retrying === selectedRun.id}
+                      >
+                        {retrying === selectedRun.id ? (
+                          <LoaderCircle className="size-3 animate-spin" />
+                        ) : (
+                          <RefreshCcw className="size-3" />
+                        )}
+                        Retry failed
+                      </Button>
+                      <Button asChild variant="outline" size="sm" className="gap-1.5">
+                        <a href="#delivery">
+                          <FileText className="size-3.5" />
+                          View decks
+                        </a>
+                      </Button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -547,36 +702,15 @@ export function PipelineView() {
               {/* Events log */}
               {selectedRun.events.length > 0 && (
                 <div className="space-y-2">
-                  <h3 className="text-[13px] font-medium text-foreground">
-                    Activity log
-                  </h3>
-                  <ScrollArea className="max-h-[200px]">
-                    <div className="space-y-1">
-                      {selectedRun.events.map((event) => (
-                        <div
-                          key={event.id}
-                          className="flex items-start gap-2 px-2 py-1 text-xs"
-                        >
-                          <span
-                            className={cn(
-                              "mt-0.5 size-1.5 shrink-0 rounded-full",
-                              event.level === "error"
-                                ? "bg-destructive"
-                                : event.level === "warning"
-                                  ? "bg-amber-500"
-                                  : "bg-muted-foreground/40",
-                            )}
-                          />
-                          <span className="text-muted-foreground">
-                            {event.message}
-                          </span>
-                          <span className="ml-auto shrink-0 text-muted-foreground/50">
-                            {new Date(event.created_at).toLocaleTimeString()}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </ScrollArea>
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-[13px] font-medium text-foreground">
+                      Activity log
+                    </h3>
+                    <span className="text-[11px] text-muted-foreground">
+                      {selectedRun.events.length} event{selectedRun.events.length !== 1 ? "s" : ""}
+                    </span>
+                  </div>
+                  <ActivityLog events={selectedRun.events} isRunning={selectedRun.status === "running" || selectedRun.status === "queued"} />
                 </div>
               )}
             </div>

@@ -1,10 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 
 import { getRun } from "@/src/server/repository";
 import { launchRunProcessing } from "@/src/server/run-executor";
 import { getAdminSession } from "@/src/server/auth";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 300; // 5 min — runs need time for full pipeline
 
 export async function POST(
   _request: Request,
@@ -22,6 +23,10 @@ export async function POST(
     return NextResponse.json({ error: "Run not found." }, { status: 404 });
   }
 
-  const launched = launchRunProcessing(runId);
-  return NextResponse.json({ ok: true, launched });
+  // Use after() to keep the serverless function alive while processing
+  after(() => {
+    launchRunProcessing(runId);
+  });
+
+  return NextResponse.json({ ok: true, launched: true });
 }

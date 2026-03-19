@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { after } from "next/server";
 
 import { createRun, listRuns, getOnboarding } from "@/src/server/repository";
 import { launchRunProcessing } from "@/src/server/run-executor";
@@ -6,6 +7,7 @@ import { getAdminSession } from "@/src/server/auth";
 import type { IntakeRun } from "@/src/domain/schemas";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 300; // 5 min — runs need time for crawl + enrich + plan + generate
 
 export async function GET() {
   const session = await getAdminSession();
@@ -163,7 +165,11 @@ export async function POST(request: Request) {
     const runId = await createRun(intakeRun);
     const shouldLaunch = body.autoLaunch !== false; // Default to auto-launch
     if (shouldLaunch) {
-      launchRunProcessing(runId);
+      // Use Next.js after() to keep the serverless function alive
+      // while processing runs in the background after sending the response
+      after(() => {
+        launchRunProcessing(runId);
+      });
     }
 
     return NextResponse.json({

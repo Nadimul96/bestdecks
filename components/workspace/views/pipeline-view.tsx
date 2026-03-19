@@ -418,6 +418,9 @@ export function PipelineView() {
         </div>
       </div>
 
+      {/* Pipeline content — runs list + detail side by side */}
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,380px)_1fr] gap-4">
+
       {/* Run list */}
       <SectionCard
         title="Runs"
@@ -443,7 +446,7 @@ export function PipelineView() {
             </Button>
           </div>
         ) : (
-          <ScrollArea className="max-h-[400px]">
+          <ScrollArea className="max-h-[60vh]">
             <div className="space-y-2">
               {runs.map((run) => (
                 <button
@@ -526,7 +529,7 @@ export function PipelineView() {
               ))}
             </div>
           ) : (
-            <div className="space-y-4 max-h-[600px] overflow-y-auto">
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto">
               {/* Progress bar for running runs */}
               {(selectedRun.status === "running" || selectedRun.status === "queued") && (
                 <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-3">
@@ -718,6 +721,14 @@ export function PipelineView() {
           )}
         </SectionCard>
       )}
+
+      {/* Close the grid wrapper — show placeholder if no run selected */}
+      {!selectedRun && runs.length > 0 && (
+        <div className="hidden lg:flex items-center justify-center rounded-xl border border-dashed border-border/50 bg-muted/10 p-8">
+          <p className="text-[13px] text-muted-foreground">Select a run to view details</p>
+        </div>
+      )}
+      </div>
     </ViewLayout>
   );
 }

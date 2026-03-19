@@ -14,6 +14,7 @@ import {
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -170,6 +171,14 @@ export function StructureView() {
     );
   }
 
+  function updateTitle(slideId: string, title: string) {
+    setSlides((prev) =>
+      prev.map((s) =>
+        s.id === slideId ? { ...s, title } : s,
+      ),
+    );
+  }
+
   function updateDescription(slideId: string, description: string) {
     setSlides((prev) =>
       prev.map((s) =>
@@ -289,9 +298,18 @@ export function StructureView() {
                   {/* Content */}
                   <div className="flex-1 min-w-0 space-y-2">
                     <div className="flex items-center gap-2">
-                      <h3 className="text-[14px] font-semibold text-foreground">
-                        {slide.title}
-                      </h3>
+                      {slide.locked ? (
+                        <h3 className="text-[14px] font-semibold text-foreground">
+                          {slide.title}
+                        </h3>
+                      ) : (
+                        <Input
+                          value={slide.title}
+                          onChange={(e) => updateTitle(slide.id, e.target.value)}
+                          className="h-8 text-[14px] font-semibold border-transparent bg-transparent px-0 hover:border-border focus:border-border focus:bg-background transition-colors"
+                          placeholder="Slide title..."
+                        />
+                      )}
                       {slide.locked && (
                         <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
                           Required
@@ -306,7 +324,8 @@ export function StructureView() {
                       <Textarea
                         value={slide.description}
                         onChange={(e) => updateDescription(slide.id, e.target.value)}
-                        className="min-h-[48px] resize-none text-[12px] leading-relaxed"
+                        className="min-h-[48px] resize-none text-[12px] leading-relaxed border-transparent bg-transparent hover:border-border focus:border-border focus:bg-background transition-colors"
+                        placeholder="Describe what this slide should contain. This acts as a prompt for the AI — be specific about what info you want here."
                         rows={2}
                       />
                     )}

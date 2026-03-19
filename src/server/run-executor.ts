@@ -319,6 +319,7 @@ async function processRun(runId: string) {
             sellerBrief: prepared.sellerBrief,
             deckInput,
             sellerContactInfo,
+            slideStructure: run?.questionnaire.extraInstructions,
           });
 
           slidePlanPrompt = slidePlanner.formatPlanAsPrompt(slidePlan, sellerContactInfo);

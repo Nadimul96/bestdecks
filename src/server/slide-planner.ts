@@ -45,6 +45,8 @@ interface SlidePlannerInput {
     website?: string;
     logoUrl?: string;
   };
+  /** User-defined slide structure from the Structure page (e.g. "SLIDE STRUCTURE:\nSlide 1: Title — Description") */
+  slideStructure?: string;
 }
 
 const PLANNER_SYSTEM_PROMPT = `You are an expert presentation strategist who creates detailed slide-by-slide plans for personalized B2B sales decks.
@@ -141,6 +143,19 @@ export class SlidePlanner {
       sellerContactInfo?.email ? `- Email: ${sellerContactInfo.email}` : "",
       sellerContactInfo?.phone ? `- Phone: ${sellerContactInfo.phone}` : "",
       sellerContactInfo?.website ? `- Website: ${sellerContactInfo.website}` : "",
+      "",
+      // Include user-defined slide structure if they customized it
+      ...(input.slideStructure
+        ? [
+            "",
+            `## User-Defined Slide Structure (FOLLOW THIS CLOSELY)`,
+            `The user has defined the following slide structure. Use these titles and descriptions as the basis for each slide.`,
+            `Each slide description acts as a content prompt — generate the bullet points that fulfill what the user described.`,
+            `You may adjust wording for the headline to be punchier, but RESPECT the user's intent for each slide.`,
+            "",
+            input.slideStructure,
+          ]
+        : []),
       "",
       `Now create a ${deckInput.cardCount}-slide plan.`,
     ]

@@ -283,18 +283,19 @@ export async function getOnboarding() {
   };
 }
 
-export async function createRun(input: IntakeRun) {
+export async function createRun(input: IntakeRun, userId?: string) {
   const parsed = intakeRunSchema.parse(input);
   const db = await getDb();
   const runId = randomUUID();
   const timestamp = now();
+  const creditsCharged = parsed.targets.length; // 1 credit per target
 
   await db.run(
     `
       INSERT INTO runs (
         id, status, seller_context_json, questionnaire_json, target_count, delivery_format,
-        review_gate_enabled, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        review_gate_enabled, user_id, credits_charged, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     [
       runId,
@@ -304,6 +305,8 @@ export async function createRun(input: IntakeRun) {
       parsed.targets.length,
       parsed.questionnaire.outputFormat,
       parsed.questionnaire.optionalReview ? 1 : 0,
+      userId ?? null,
+      creditsCharged,
       timestamp,
       timestamp,
     ],
@@ -525,4 +528,57 @@ export async function addRunEvent(runId: string, input: {
       now(),
     ],
   );
+}
+
+/* ─────────────────────────────────────────────
+   Credit operations
+   ───────────────────────────────────────────── */
+
+/** Deduct credits from a user. Returns false if insufficient balance. */
+export async function deductCredits(userId: string, amount: number): Promise<boolean> {
+  const db = await getDb();
+
+  // Check balance first
+  const row = await db.execute(
+    'SELECT "balance" FROM "user_credits" WHERE "user_id" = ?',
+    [userId],
+  ) as { balance: number } | undefined;
+
+  if (!row || row.balance < amount) {
+    return false;
+  }
+
+  await db.run(
+    `UPDATE "user_credits"
+     SET "balance" = "balance" - ?, "updated_at" = datetime('now')
+     WHERE "user_id" = ?`,
+    [amount, userId],
+  );
+
+  return true;
+}
+
+/** Refund credits to a user (e.g. when targets fail). */
+export async function refundCredits(userId: string, amount: number): Promise<void> {
+  const db = await getDb();
+  await db.run(
+    `UPDATE "user_credits"
+     SET "balance" = "balance" + ?, "updated_at" = datetime('now')
+     WHERE "user_id" = ?`,
+    [amount, userId],
+  );
+}
+
+/** Get the user_id and credits_charged for a run. */
+export async function getRunOwner(runId: string): Promise<{ userId: string | null; creditsCharged: number }> {
+  const db = await getDb();
+  const row = await db.execute(
+    'SELECT "user_id", "credits_charged" FROM "runs" WHERE "id" = ?',
+    [runId],
+  ) as { user_id: string | null; credits_charged: number } | undefined;
+
+  return {
+    userId: row?.user_id ?? null,
+    creditsCharged: row?.credits_charged ?? 0,
+  };
 }

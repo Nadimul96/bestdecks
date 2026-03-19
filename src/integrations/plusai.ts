@@ -33,8 +33,11 @@ export interface PlusAiProviderOptions {
   apiKey: string;
 }
 
-/** Map our visual style to the closest Plus AI built-in template */
-function pickTemplate(visualStyle: string): string {
+/** Map our visual style to the closest Plus AI built-in template.
+ *  Returns undefined for "auto" — Plus AI picks the best template itself. */
+function pickTemplate(visualStyle: string): string | undefined {
+  if (visualStyle === "auto") return undefined; // Let Plus AI choose
+
   const styleToTemplate: Record<string, string> = {
     // Schema values (from visualStyleSchema)
     minimal: "XFzedsfTQ3ccCtO09ZWSav",           // Corporate Blue — clean, minimal
@@ -122,14 +125,14 @@ export class PlusAiDeckProvider implements DeckProvider {
     console.log(`[plusai] Prompt length: ${fullPrompt.length} chars, mode: ${options?.slidePlanPrompt ? "slide-plan" : "generic"}`);
 
     // Step 1: Create presentation (with retries for rate limiting)
-    // Use REWRITE when we have a structured slide plan — lets Plus AI adapt text to the template layout
-    // Use PRESERVE only for generic fallback to keep our detailed text intact
+    // Don't send textHandling — let Plus AI use its default behavior.
+    // The old REWRITE/PRESERVE values were invalid enum members and caused HTTP 400.
+    const templateId = pickTemplate(input.visualStyle);
     const createResponse = await this.createPresentation({
       prompt: fullPrompt,
       numberOfSlides: Math.min(input.cardCount, 30),
       language: "en",
-      templateId: pickTemplate(input.visualStyle),
-      textHandling: options?.slidePlanPrompt ? "REWRITE" : "PRESERVE",
+      ...(templateId && { templateId }),
     });
 
     // Step 2: Poll until complete
@@ -147,8 +150,7 @@ export class PlusAiDeckProvider implements DeckProvider {
     prompt: string;
     numberOfSlides: number;
     language: string;
-    templateId: string;
-    textHandling: string;
+    templateId?: string;
   }): Promise<PlusAiCreateResponse> {
     let lastError: Error | undefined;
 

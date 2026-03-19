@@ -309,11 +309,24 @@ export function TargetIntakeView() {
         window.location.hash = "pipeline";
       } else {
         const err = await res.json().catch(() => ({}));
+        const errorMsg = err.error ?? "Failed to create run.";
         setNotice({
           type: "error",
-          message: err.error ?? "Failed to create run.",
+          message: errorMsg,
         });
-        toast.error(err.error ?? "Failed to create run.");
+
+        // Special handling for insufficient credits
+        if (err.insufficientCredits || res.status === 402) {
+          toast.error(errorMsg, {
+            action: {
+              label: "Upgrade",
+              onClick: () => { window.location.hash = "billing"; },
+            },
+            duration: 8000,
+          });
+        } else {
+          toast.error(errorMsg);
+        }
       }
     } catch {
       setNotice({ type: "error", message: "Network error." });

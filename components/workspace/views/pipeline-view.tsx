@@ -197,6 +197,30 @@ function computeProgress(run: RunDetail): { percent: number; stage: string } {
   return { percent, stage: stageName };
 }
 
+/* ─── Error message humanizer ─── */
+function humanizeError(raw: string): string {
+  // Plus AI errors
+  if (raw.includes("Plus AI create failed")) return "The deck generation service returned an error. This is usually temporary — retry in a moment.";
+  if (raw.includes("Plus AI generation timed out")) return "Deck generation took too long. The service may be overloaded — try again shortly.";
+  if (raw.includes("Plus AI presentation generation failed")) return "The deck generation service encountered an internal error. Please retry.";
+  // Crawler errors
+  if (raw.includes("Cloudflare") && raw.includes("429")) return "The website crawl was rate-limited. Wait a minute and retry.";
+  if (raw.includes("unreachable") || raw.includes("ECONNREFUSED")) return "Could not connect to a required service. Check your API integrations.";
+  if (raw.includes("timed out")) return "The run timed out — the serverless function may have been terminated. Try again.";
+  // Config errors
+  if (raw.includes("configuration is missing")) return "Required API keys are not configured. Check Settings → Integrations.";
+  if (raw.includes("No deck provider configured")) return "No deck generation service is configured. Add a Plus AI API key in Settings.";
+  // Generic
+  if (raw.length > 120) return raw.slice(0, 120) + "…";
+  return raw;
+}
+
+/** Check if the run has credit refund events */
+function getRefundInfo(events: RunDetail["events"]): string | null {
+  const refundEvent = events.find((e) => e.stage === "credit_refund");
+  return refundEvent?.message ?? null;
+}
+
 /* ─── Activity Log ─── */
 function ActivityLog({ events, isRunning }: { events: RunDetail["events"]; isRunning: boolean }) {
   const scrollRef = React.useRef<HTMLDivElement>(null);
@@ -530,42 +554,98 @@ export function PipelineView() {
             </div>
           ) : (
             <div className="space-y-4 max-h-[60vh] overflow-y-auto">
-              {/* Progress bar for running runs */}
-              {(selectedRun.status === "running" || selectedRun.status === "queued") && (
-                <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <LoaderCircle className="size-4 animate-spin text-primary" />
-                      <span className="text-[13px] font-medium text-foreground">
-                        {computeProgress(selectedRun).stage}
+              {/* Progress tracker for running runs */}
+              {(selectedRun.status === "running" || selectedRun.status === "queued") && (() => {
+                const { percent, stage } = computeProgress(selectedRun);
+                // Determine which stages have been reached based on events
+                const completedStages = new Set(
+                  selectedRun.events
+                    .filter((e) => e.level !== "error")
+                    .map((e) => e.stage),
+                );
+                const lastStage = selectedRun.events.length > 0
+                  ? selectedRun.events[selectedRun.events.length - 1]?.stage
+                  : null;
+
+                const stages = [
+                  { key: "seller_brief", icon: Wand2, label: "Seller discovery", color: "text-violet-500" },
+                  { key: "crawl", icon: Cloud, label: "Target crawl", color: "text-blue-500" },
+                  { key: "enrichment", icon: Search, label: "Market research", color: "text-amber-500" },
+                  { key: "company_brief", icon: Layers3, label: "Company profile", color: "text-orange-500" },
+                  { key: "image_strategy", icon: ImageIcon, label: "Visual strategy", color: "text-pink-500" },
+                  { key: "slide_planning", icon: Layers3, label: "Slide planning", color: "text-cyan-500" },
+                  { key: "delivery", icon: FileText, label: "Deck assembly", color: "text-emerald-500" },
+                ] as const;
+
+                // Order-aware: stage is "done" if a later stage has been started
+                const stageOrder = stages.map((s) => s.key);
+                const lastStageIdx = stageOrder.findIndex((k) => k === lastStage);
+
+                return (
+                  <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-4">
+                    {/* Header with progress */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <LoaderCircle className="size-4 animate-spin text-primary" />
+                        <span className="text-[13px] font-medium text-foreground">
+                          {stage}
+                        </span>
+                      </div>
+                      <span className="text-[13px] font-semibold text-primary">
+                        {percent}%
                       </span>
                     </div>
-                    <span className="text-[13px] font-semibold text-primary">
-                      {computeProgress(selectedRun).percent}%
-                    </span>
+                    <Progress value={percent} className="h-2" />
+
+                    {/* Stage checklist */}
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                      {stages.map((s, i) => {
+                        const isDone = i < lastStageIdx || (completedStages.has(s.key) && s.key !== lastStage);
+                        const isCurrent = s.key === lastStage;
+                        const isPending = !isDone && !isCurrent;
+
+                        return (
+                          <div key={s.key} className="flex items-center gap-2 py-0.5">
+                            {isDone ? (
+                              <CheckCircle2 className="size-3.5 text-emerald-500" />
+                            ) : isCurrent ? (
+                              <LoaderCircle className={cn("size-3.5 animate-spin", s.color)} />
+                            ) : (
+                              <div className="size-3.5 rounded-full border border-border/60" />
+                            )}
+                            <span className={cn(
+                              "text-[11px]",
+                              isDone ? "text-muted-foreground line-through" : isCurrent ? "text-foreground font-medium" : "text-muted-foreground/50",
+                            )}>
+                              {s.label}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1 border-t border-primary/10">
+                      <p className="text-[11px] text-muted-foreground">
+                        Typically completes in 1-2 minutes per target.
+                      </p>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 gap-1 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => cancelRun(selectedRun.id)}
+                        disabled={cancelling === selectedRun.id}
+                      >
+                        {cancelling === selectedRun.id ? (
+                          <LoaderCircle className="size-3 animate-spin" />
+                        ) : (
+                          <Ban className="size-3" />
+                        )}
+                        Cancel run
+                      </Button>
+                    </div>
                   </div>
-                  <Progress value={computeProgress(selectedRun).percent} className="h-2" />
-                  <div className="flex items-center justify-between">
-                    <p className="text-[11px] text-muted-foreground">
-                      Typically completes in 1-2 minutes per target.
-                    </p>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 gap-1 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
-                      onClick={() => cancelRun(selectedRun.id)}
-                      disabled={cancelling === selectedRun.id}
-                    >
-                      {cancelling === selectedRun.id ? (
-                        <LoaderCircle className="size-3 animate-spin" />
-                      ) : (
-                        <Ban className="size-3" />
-                      )}
-                      Cancel run
-                    </Button>
-                  </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Completed banner */}
               {selectedRun.status === "completed" && (
@@ -588,48 +668,21 @@ export function PipelineView() {
               )}
 
               {/* Failed banner */}
-              {selectedRun.status === "failed" && (
-                <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <AlertCircle className="size-4 text-destructive" />
-                      <span className="text-[13px] font-medium text-destructive">
-                        {selectedRun.lastError ?? "Run failed. Check the activity log for details."}
-                      </span>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-1.5 shrink-0"
-                      onClick={() => retryRun(selectedRun.id)}
-                      disabled={retrying === selectedRun.id}
-                    >
-                      {retrying === selectedRun.id ? (
-                        <LoaderCircle className="size-3 animate-spin" />
-                      ) : (
-                        <RefreshCcw className="size-3" />
-                      )}
-                      Retry
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {/* Partially completed banner */}
-              {selectedRun.status === "partially_completed" && (
-                <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <AlertCircle className="size-4 text-amber-600 dark:text-amber-400" />
-                      <span className="text-[13px] font-medium text-amber-600 dark:text-amber-400">
-                        {selectedRun.lastError ?? "Some targets failed. Check the activity log for details."}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
+              {selectedRun.status === "failed" && (() => {
+                const refund = getRefundInfo(selectedRun.events);
+                return (
+                  <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <AlertCircle className="size-4 shrink-0 text-destructive" />
+                        <span className="text-[13px] font-medium text-destructive">
+                          {humanizeError(selectedRun.lastError ?? "Run failed. Check the activity log for details.")}
+                        </span>
+                      </div>
                       <Button
                         variant="outline"
                         size="sm"
-                        className="gap-1.5"
+                        className="gap-1.5 shrink-0 ml-3"
                         onClick={() => retryRun(selectedRun.id)}
                         disabled={retrying === selectedRun.id}
                       >
@@ -638,30 +691,84 @@ export function PipelineView() {
                         ) : (
                           <RefreshCcw className="size-3" />
                         )}
-                        Retry failed
-                      </Button>
-                      <Button asChild variant="outline" size="sm" className="gap-1.5">
-                        <a href="#delivery">
-                          <FileText className="size-3.5" />
-                          View decks
-                        </a>
+                        Retry
                       </Button>
                     </div>
+                    {refund && (
+                      <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+                        <CheckCircle2 className="size-3 text-emerald-500" />
+                        {refund}
+                      </p>
+                    )}
                   </div>
-                </div>
-              )}
+                );
+              })()}
+
+              {/* Partially completed banner */}
+              {selectedRun.status === "partially_completed" && (() => {
+                const refund = getRefundInfo(selectedRun.events);
+                return (
+                  <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <AlertCircle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                        <span className="text-[13px] font-medium text-amber-600 dark:text-amber-400">
+                          {humanizeError(selectedRun.lastError ?? "Some targets failed.")}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0 ml-3">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5"
+                          onClick={() => retryRun(selectedRun.id)}
+                          disabled={retrying === selectedRun.id}
+                        >
+                          {retrying === selectedRun.id ? (
+                            <LoaderCircle className="size-3 animate-spin" />
+                          ) : (
+                            <RefreshCcw className="size-3" />
+                          )}
+                          Retry failed
+                        </Button>
+                        <Button asChild variant="outline" size="sm" className="gap-1.5">
+                          <a href="#delivery">
+                            <FileText className="size-3.5" />
+                            View decks
+                          </a>
+                        </Button>
+                      </div>
+                    </div>
+                    {refund && (
+                      <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+                        <CheckCircle2 className="size-3 text-emerald-500" />
+                        {refund}
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Cancelled banner */}
-              {selectedRun.status === "cancelled" && (
-                <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
-                  <div className="flex items-center gap-2">
-                    <Ban className="size-4 text-amber-600 dark:text-amber-400" />
-                    <span className="text-[13px] font-medium text-amber-600 dark:text-amber-400">
-                      Run was cancelled.
-                    </span>
+              {selectedRun.status === "cancelled" && (() => {
+                const refund = getRefundInfo(selectedRun.events);
+                return (
+                  <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Ban className="size-4 text-amber-600 dark:text-amber-400" />
+                      <span className="text-[13px] font-medium text-amber-600 dark:text-amber-400">
+                        Run was cancelled.
+                      </span>
+                    </div>
+                    {refund && (
+                      <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+                        <CheckCircle2 className="size-3 text-emerald-500" />
+                        {refund}
+                      </p>
+                    )}
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Target statuses */}
               <div className="space-y-2">
@@ -672,32 +779,39 @@ export function PipelineView() {
                   {selectedRun.targets.map((target) => (
                     <div
                       key={target.id}
-                      className="flex items-center justify-between rounded-lg border border-border/40 bg-muted/30 px-3.5 py-2.5"
+                      className="rounded-lg border border-border/40 bg-muted/30 px-3.5 py-2.5"
                     >
-                      <div className="flex items-center gap-2.5">
-                        {target.status === "completed" || target.status === "delivered" ? (
-                          <CheckCircle2 className="size-3.5 text-emerald-500" />
-                        ) : target.status === "failed" ? (
-                          <AlertCircle className="size-3.5 text-destructive" />
-                        ) : target.status === "queued" ? (
-                          <Clock3 className="size-3.5 text-muted-foreground" />
-                        ) : (
-                          <LoaderCircle className="size-3.5 animate-spin text-primary" />
-                        )}
-                        <span className="font-mono text-[11px]">
-                          {target.website_url}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                          {target.status === "completed" || target.status === "delivered" ? (
+                            <CheckCircle2 className="size-3.5 text-emerald-500" />
+                          ) : target.status === "failed" ? (
+                            <AlertCircle className="size-3.5 text-destructive" />
+                          ) : target.status === "queued" ? (
+                            <Clock3 className="size-3.5 text-muted-foreground" />
+                          ) : (
+                            <LoaderCircle className="size-3.5 animate-spin text-primary" />
+                          )}
+                          <span className="font-mono text-[11px]">
+                            {target.website_url}
+                          </span>
+                        </div>
+                        <span className={cn(
+                          "text-[11px] capitalize",
+                          target.status === "delivered" || target.status === "completed"
+                            ? "text-emerald-500 font-medium"
+                            : target.status === "failed"
+                              ? "text-destructive font-medium"
+                              : "text-muted-foreground",
+                        )}>
+                          {target.status === "delivered" ? "completed" : target.status}
                         </span>
                       </div>
-                      <span className={cn(
-                        "text-[11px] capitalize",
-                        target.status === "delivered" || target.status === "completed"
-                          ? "text-emerald-500 font-medium"
-                          : target.status === "failed"
-                            ? "text-destructive font-medium"
-                            : "text-muted-foreground",
-                      )}>
-                        {target.status === "delivered" ? "completed" : target.status}
-                      </span>
+                      {target.status === "failed" && target.last_error && (
+                        <p className="mt-1.5 pl-6 text-[11px] text-destructive/80 leading-relaxed">
+                          {humanizeError(target.last_error)}
+                        </p>
+                      )}
                     </div>
                   ))}
                 </div>

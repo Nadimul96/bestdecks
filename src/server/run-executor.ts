@@ -19,6 +19,8 @@ import {
   addArtifact,
   addRunEvent,
   getRun,
+  getRunOwner,
+  refundCredits,
   updateRun,
   updateRunTarget,
 } from "@/src/server/repository";
@@ -411,6 +413,20 @@ async function processRun(runId: string) {
   const failedTargets = (refreshedRun.targets as unknown as PersistedRunTarget[]).filter(
     (target) => target.status === "failed",
   );
+
+  // Refund credits for failed targets
+  if (failedTargets.length > 0) {
+    const { userId } = await getRunOwner(runId);
+    if (userId) {
+      await refundCredits(userId, failedTargets.length);
+      await addRunEvent(runId, {
+        level: "info",
+        stage: "credit_refund",
+        message: `${failedTargets.length} credit${failedTargets.length !== 1 ? "s" : ""} refunded for failed target${failedTargets.length !== 1 ? "s" : ""}.`,
+      });
+    }
+  }
+
   await updateRun(runId, {
     status: failedTargets.length > 0 ? "partially_completed" : "completed",
     lastError: failedTargets.length > 0 ? "One or more targets failed." : null,
@@ -433,6 +449,21 @@ export function launchRunProcessing(runId: string) {
   activeRuns.add(runId);
   void processRun(runId)
     .catch(async (error) => {
+      // Refund all credits when the entire run fails or is cancelled
+      try {
+        const { userId, creditsCharged } = await getRunOwner(runId);
+        if (userId && creditsCharged > 0) {
+          await refundCredits(userId, creditsCharged);
+          await addRunEvent(runId, {
+            level: "info",
+            stage: "credit_refund",
+            message: `${creditsCharged} credit${creditsCharged !== 1 ? "s" : ""} refunded — run did not complete.`,
+          });
+        }
+      } catch (refundErr) {
+        console.error(`[run-executor] Failed to refund credits for run ${runId}:`, refundErr);
+      }
+
       if (error instanceof RunCancelledError) {
         await updateRun(runId, {
           status: "cancelled",

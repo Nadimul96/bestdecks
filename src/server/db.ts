@@ -220,6 +220,10 @@ async function migrate(c: Client) {
   await ensureColumn(c, "workspace_state", "seller_brief_md", "TEXT");
   await ensureColumn(c, "workspace_state", "audience_context_json", "TEXT");
 
+  // Track which user created each run (for credit deduction/refund)
+  await ensureColumn(c, "runs", "user_id", "TEXT");
+  await ensureColumn(c, "runs", "credits_charged", "INTEGER NOT NULL DEFAULT 0");
+
   // Ensure user_credits has all columns (some were added later)
   await ensureColumn(c, "user_credits", "plan_tier", "TEXT NOT NULL DEFAULT 'free'");
   await ensureColumn(c, "user_credits", "monthly_allowance", "INTEGER NOT NULL DEFAULT 0");

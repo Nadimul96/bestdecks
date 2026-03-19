@@ -531,6 +531,7 @@ export const toneOptions: Array<{ value: Tone; label: string; description?: stri
 
 export const visualStyleOptions: Array<{ value: VisualStyle; label: string; description?: string }> =
   [
+    { value: "auto", label: "AI's Choice", description: "Let AI pick the best template for your content" },
     { value: "minimal", label: "Minimal", description: "Clean lines, white space, understated" },
     { value: "editorial", label: "Editorial", description: "Magazine-quality layouts with bold typography" },
     { value: "sales_polished", label: "Sales Polished", description: "Professional with brand-forward polish" },
@@ -623,7 +624,7 @@ export function defaultQuestionnaire(): QuestionnaireForm {
     desiredCardCount: "8",
     tone: "consultative",
     customTone: "",
-    visualStyle: "premium_modern",
+    visualStyle: "auto",
     customVisualStyle: "",
     imagePolicy: "auto",
     visualContentTypes: [],

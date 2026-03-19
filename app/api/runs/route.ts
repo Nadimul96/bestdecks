@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { after } from "next/server";
 
-import { createRun, listRuns, getOnboarding } from "@/src/server/repository";
+import { createRun, listRuns, getOnboarding, deductCredits } from "@/src/server/repository";
 import { launchRunProcessing } from "@/src/server/run-executor";
 import { getAdminSession } from "@/src/server/auth";
 import type { IntakeRun } from "@/src/domain/schemas";
+
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? "nadimul96@gmail.com";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 min — runs need time for crawl + enrich + plan + generate
@@ -141,7 +143,7 @@ export async function POST(request: Request) {
             : (q.outputFormat ?? "bestdecks_editor"),
           desiredCardCount: Number(q.desiredCardCount) || 8,
           tone: q.tone ?? "consultative",
-          visualStyle: q.visualStyle ?? "premium_modern",
+          visualStyle: q.visualStyle ?? "auto",
           imagePolicy: q.imagePolicy ?? "auto",
           mustInclude: Array.isArray(q.mustInclude) ? q.mustInclude : [],
           mustAvoid: Array.isArray(q.mustAvoid) ? q.mustAvoid : [],
@@ -162,7 +164,22 @@ export async function POST(request: Request) {
       );
     }
 
-    const runId = await createRun(intakeRun);
+    // Deduct credits (1 per target) — admins are exempt
+    const isAdmin = session.user.email === ADMIN_EMAIL ||
+      (session.user as Record<string, unknown>).role === "admin";
+    const targetCount = intakeRun.targets.length;
+
+    if (!isAdmin) {
+      const deducted = await deductCredits(session.user.id, targetCount);
+      if (!deducted) {
+        return NextResponse.json(
+          { error: `Insufficient credits. You need ${targetCount} credit${targetCount !== 1 ? "s" : ""} for this run. Please upgrade your plan.`, insufficientCredits: true },
+          { status: 402 },
+        );
+      }
+    }
+
+    const runId = await createRun(intakeRun, session.user.id);
     const shouldLaunch = body.autoLaunch !== false; // Default to auto-launch
     if (shouldLaunch) {
       // Use Next.js after() to keep the serverless function alive
@@ -176,6 +193,7 @@ export async function POST(request: Request) {
       ok: true,
       runId,
       launched: shouldLaunch,
+      creditsUsed: isAdmin ? 0 : targetCount,
     });
   } catch (error) {
     console.error("[runs] Error creating run:", error);

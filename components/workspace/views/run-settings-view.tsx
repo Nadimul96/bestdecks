@@ -621,6 +621,7 @@ export function RunSettingsView() {
                   <div
                     className={cn(
                       "h-20 w-full transition-colors",
+                      opt.value === "auto" && "bg-gradient-to-br from-violet-100 via-blue-100 to-emerald-100 dark:from-violet-950 dark:via-blue-950 dark:to-emerald-950 flex items-center justify-center",
                       opt.value === "minimal" && "bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800",
                       opt.value === "editorial" && "bg-gradient-to-br from-amber-50 via-orange-50 to-rose-50 dark:from-amber-950 dark:via-orange-950 dark:to-rose-950",
                       opt.value === "sales_polished" && "bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-blue-950 dark:to-indigo-900",
@@ -629,6 +630,9 @@ export function RunSettingsView() {
                       opt.value === "custom" && "bg-gradient-to-br from-muted to-muted/50 flex items-center justify-center",
                     )}
                   >
+                    {opt.value === "auto" && (
+                      <span className="text-2xl">✨</span>
+                    )}
                     {opt.value === "custom" && (
                       <span className="text-2xl">🎨</span>
                     )}

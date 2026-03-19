@@ -50,6 +50,7 @@ export const toneSchema = z.enum([
 ]);
 
 export const visualStyleSchema = z.enum([
+  "auto",
   "minimal",
   "editorial",
   "sales_polished",

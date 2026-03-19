@@ -22,6 +22,9 @@
     "validate:example": "tsx src/bin/validate-example.ts"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@libsql/client": "^0.17.0",
     "@libsql/kysely-libsql": "^0.4.1",
     "better-auth": "^1.5.5",

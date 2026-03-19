@@ -18,7 +18,7 @@ export function ViewLayout({
   className,
 }: ViewLayoutProps) {
   return (
-    <div className={cn("stagger-children space-y-8", className)}>
+    <div className={cn("stagger-children space-y-8 min-w-0 overflow-x-hidden", className)}>
       {/* View header */}
       <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-1.5">

@@ -286,6 +286,12 @@ const viewMeta: Record<
     description:
       "Define the archetype, audience, tone, visuals, and export format that shape every deck you generate.",
   },
+  "deck-structure": {
+    eyebrow: "Structure",
+    title: "Slide-by-slide outline",
+    description:
+      "Preview the content structure of your decks. Each slide is customized per target at generation time.",
+  },
   "target-intake": {
     eyebrow: "Target Intake",
     title: "Import websites and contacts",

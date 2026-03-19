@@ -79,10 +79,14 @@ export function buildPresentationAdditionalInstructions(params: {
     `Create a ${params.archetype.replaceAll("_", " ")} presentation.`,
     `Use a ${params.tone} tone.`,
     `Aim for a ${params.visualStyle.replaceAll("_", " ")} visual direction.`,
-    `Target ${params.cardCount} cards.`,
+    `Target ${params.cardCount} slides (not including any duplicates).`,
     params.imagePolicy === "never"
       ? "Do not invent or add images."
-      : "Only use images that are explicitly provided or obviously improve comprehension.",
-    "Keep the deck specific to the target company and avoid generic claims.",
+      : "Use relevant images on at least 3-4 slides. Choose images that relate to the target company's industry, not generic stock photos.",
+    "CRITICAL: Keep ALL text on slides CONCISE. Maximum 4-5 bullet points per slide, each bullet under 15 words.",
+    "Do NOT write paragraph text on slides — use short, punchy bullet points only.",
+    "80% of the content must be about the TARGET company, their challenges, and how the solution helps THEM specifically.",
+    "Avoid generic, filler content. Every bullet must reference specific details about the target.",
+    "Use varied slide layouts — mix 2-column, 3-section, and full-width layouts for visual interest.",
   ].join(" ");
 }

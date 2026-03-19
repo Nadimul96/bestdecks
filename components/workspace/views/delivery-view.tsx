@@ -215,8 +215,28 @@ export function DeliveryView() {
         </Button>
       }
     >
+      {loading ? (
+        <div className="space-y-6">
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} className="h-20 rounded-xl" />
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            {[0, 1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-7 w-20 rounded-full" />
+            ))}
+          </div>
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} className="h-48 rounded-xl" />
+            ))}
+          </div>
+        </div>
+      ) : (
+      <>
       {/* Summary cards */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-3 min-w-0">
         <SummaryCard label="Completed decks" value={completedCount} icon={CheckCircle2} accent="emerald" />
         <SummaryCard label="Total targets" value={totalCount} icon={FileText} accent="primary" />
         <SummaryCard label="Avg. quality score" value={avgScore} icon={Star} accent="amber" suffix="/100" />
@@ -303,13 +323,7 @@ export function DeliveryView() {
       )}
 
       {/* Deck gallery grid */}
-      {loading ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {[0, 1, 2, 3, 4, 5].map((i) => (
-            <Skeleton key={i} className="h-48 rounded-xl" />
-          ))}
-        </div>
-      ) : filteredDecks.length === 0 ? (
+      {filteredDecks.length === 0 ? (
         <div className="flex flex-col items-center py-20 text-center">
           <div className="mb-4 flex size-14 items-center justify-center rounded-xl bg-muted">
             <FileText className="size-6 text-muted-foreground/60" />
@@ -329,7 +343,7 @@ export function DeliveryView() {
           )}
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 min-w-0">
           {filteredDecks.map((deck) => (
             <DeckCardItem
               key={`${deck.runId}-${deck.targetId}`}
@@ -341,6 +355,8 @@ export function DeliveryView() {
             />
           ))}
         </div>
+      )}
+      </>
       )}
 
       {/* Deck preview drawer */}
@@ -507,10 +523,17 @@ function DeckPreviewDrawer({
   const viewUrl = deck.artifacts.find((a) => typeof a.artifact_json?.url === "string")?.artifact_json?.url as string | undefined;
   const downloadUrl = deck.artifacts.find((a) => typeof a.artifact_json?.download_url === "string")?.artifact_json?.download_url as string | undefined;
 
+  // Build a preview URL using Microsoft Office Online viewer (renders PPTX natively)
+  const fileUrl = downloadUrl ?? viewUrl;
+  const previewUrl = fileUrl
+    ? `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileUrl)}`
+    : null;
+
   return (
     <div className="fixed inset-0 z-50 flex">
       <div className="flex-1 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="animate-slide-in-right flex h-full w-full max-w-2xl flex-col border-l border-border bg-background shadow-2xl">
+      <div className="animate-slide-in-right flex h-full w-full max-w-4xl flex-col border-l border-border bg-background shadow-2xl">
+        {/* Header */}
         <div className="flex items-center justify-between border-b border-border/40 px-6 py-4">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon" className="size-8" onClick={onClose}>
@@ -527,13 +550,13 @@ function DeckPreviewDrawer({
               <Button variant="outline" size="sm" className="gap-1.5 text-xs" asChild>
                 <a href={downloadUrl} download>
                   <Download className="size-3" />
-                  Download
+                  Download PPTX
                 </a>
               </Button>
             )}
-            {viewUrl && (
+            {fileUrl && (
               <Button variant="default" size="sm" className="gap-1.5 text-xs" asChild>
-                <a href={viewUrl} target="_blank" rel="noopener noreferrer">
+                <a href={fileUrl} target="_blank" rel="noopener noreferrer">
                   <ExternalLink className="size-3" />
                   Open
                 </a>
@@ -542,43 +565,29 @@ function DeckPreviewDrawer({
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto p-6">
-          {viewUrl ? (
-            <div className="space-y-4">
-              <div className="overflow-hidden rounded-lg border border-border/40 bg-muted/30">
-                <iframe
-                  src={viewUrl}
-                  title={`Preview — ${displayName}`}
-                  className="h-[600px] w-full border-0"
-                  sandbox="allow-scripts allow-same-origin"
-                />
-              </div>
-              <div className="space-y-2">
-                <p className="text-[12px] font-medium text-muted-foreground uppercase tracking-wider">Artifacts</p>
-                {deck.artifacts.map((artifact) => (
-                  <div key={artifact.id} className="flex items-center justify-between rounded-lg border border-border/40 bg-card px-4 py-2.5">
-                    <div className="flex items-center gap-2.5">
-                      <FileText className="size-3.5 text-muted-foreground" />
-                      <span className="text-[12px] font-medium capitalize">{artifact.artifact_type.replace(/_/g, " ")}</span>
-                    </div>
-                    <span className="text-[11px] text-muted-foreground">{new Date(artifact.created_at).toLocaleString()}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+        {/* Preview area */}
+        <div className="flex-1 overflow-auto bg-muted/20">
+          {previewUrl ? (
+            <iframe
+              src={previewUrl}
+              title={`Preview — ${displayName}`}
+              className="h-full w-full border-0"
+              allowFullScreen
+            />
           ) : (
-            <div className="flex flex-col items-center justify-center py-20 text-center">
+            <div className="flex flex-col items-center justify-center h-full py-20 text-center">
               <div className="mb-4 flex size-14 items-center justify-center rounded-xl bg-muted">
                 <Eye className="size-6 text-muted-foreground/60" />
               </div>
               <p className="text-[14px] font-medium">No preview available</p>
               <p className="mt-1 text-[12px] text-muted-foreground">
-                {downloadUrl ? "This deck can be downloaded but doesn\u2019t have an online preview." : "Artifacts are still being generated."}
+                {downloadUrl ? "Download the deck to view it in PowerPoint or Google Slides." : "Artifacts are still being generated."}
               </p>
             </div>
           )}
         </div>
 
+        {/* Footer with score */}
         {deck.score && (
           <div className="border-t border-border/40 px-6 py-3">
             <button

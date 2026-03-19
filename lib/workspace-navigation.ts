@@ -3,6 +3,7 @@ import {
   CreditCard,
   FileText,
   LayoutDashboard,
+  ListTree,
   Rocket,
   SearchCheck,
   Settings2,
@@ -28,6 +29,7 @@ export type WorkspaceViewId =
   | "onboarding"
   | "seller-context"
   | "run-settings"
+  | "deck-structure"
   | "target-intake"
   | "pipeline"
   | "delivery"
@@ -69,6 +71,12 @@ export const workspaceNavGroups: NavGroup[] = [
         url: "#run-settings",
         icon: Settings2,
         description: "Archetype, tone, visuals, and export format",
+      },
+      {
+        title: "Structure",
+        url: "#deck-structure",
+        icon: ListTree,
+        description: "Slide-by-slide content outline",
       },
       {
         title: "Targets",
@@ -115,6 +123,7 @@ const workspaceViewIds = new Set<WorkspaceViewId>([
   "onboarding",
   "seller-context",
   "run-settings",
+  "deck-structure",
   "target-intake",
   "pipeline",
   "delivery",

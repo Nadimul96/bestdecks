@@ -12,6 +12,7 @@ import { OverviewView } from "./views/overview-view";
 import { OnboardingView } from "./views/onboarding-view";
 import { SellerContextView } from "./views/seller-context-view";
 import { RunSettingsView } from "./views/run-settings-view";
+import { StructureView } from "./views/structure-view";
 import { TargetIntakeView } from "./views/target-intake-view";
 import { PipelineView } from "./views/pipeline-view";
 import { DeliveryView } from "./views/delivery-view";
@@ -55,6 +56,7 @@ export function WorkspaceShell({ currentUser }: WorkspaceShellProps) {
       )}
       {activeView === "seller-context" && <SellerContextView />}
       {activeView === "run-settings" && <RunSettingsView />}
+      {activeView === "deck-structure" && <StructureView />}
       {activeView === "target-intake" && <TargetIntakeView />}
       {activeView === "pipeline" && <PipelineView />}
       {activeView === "delivery" && <DeliveryView />}

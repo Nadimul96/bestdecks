@@ -119,15 +119,17 @@ export class PlusAiDeckProvider implements DeckProvider {
       );
     }
 
-    console.log(`[plusai] Prompt length: ${fullPrompt.length} chars`);
+    console.log(`[plusai] Prompt length: ${fullPrompt.length} chars, mode: ${options?.slidePlanPrompt ? "slide-plan" : "generic"}`);
 
     // Step 1: Create presentation (with retries for rate limiting)
+    // Use REWRITE when we have a structured slide plan — lets Plus AI adapt text to the template layout
+    // Use PRESERVE only for generic fallback to keep our detailed text intact
     const createResponse = await this.createPresentation({
       prompt: fullPrompt,
       numberOfSlides: Math.min(input.cardCount, 30),
       language: "en",
       templateId: pickTemplate(input.visualStyle),
-      textHandling: "PRESERVE",
+      textHandling: options?.slidePlanPrompt ? "REWRITE" : "PRESERVE",
     });
 
     // Step 2: Poll until complete

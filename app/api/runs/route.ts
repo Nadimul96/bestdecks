@@ -120,12 +120,12 @@ export async function POST(request: Request) {
       intakeRun = {
         sellerContext: {
           websiteUrl: sellerWebsiteUrl,
-          companyName: sc.companyName,
-          offerSummary: sc.offerSummary ?? "",
-          services: sc.services ?? [],
-          differentiators: sc.differentiators ?? [],
-          targetCustomer: sc.targetCustomer ?? "",
-          desiredOutcome: sc.desiredOutcome ?? "",
+          companyName: sc.companyName || "My Company",
+          offerSummary: sc.offerSummary || "Professional services tailored to your business needs",
+          services: sc.services?.length ? sc.services : ["Consulting"],
+          differentiators: sc.differentiators?.length ? sc.differentiators : ["Personalized approach"],
+          targetCustomer: sc.targetCustomer || "Small and mid-size businesses",
+          desiredOutcome: sc.desiredOutcome || "Drive growth and efficiency",
           proofPoints: sc.proofPoints ?? [],
           constraints: sc.constraints ?? [],
         },
@@ -182,13 +182,33 @@ export async function POST(request: Request) {
         try {
           const zodErrors = JSON.parse(error.message);
           if (Array.isArray(zodErrors)) {
-            const fields = zodErrors
-              .map((e: { path?: string[]; message?: string }) => {
-                const field = e.path?.slice(-1)[0] ?? "unknown";
-                return field;
-              })
-              .filter(Boolean);
-            message = `Please fill out the following fields in Deck Style: ${fields.join(", ")}`;
+            const sellerFields: string[] = [];
+            const questFields: string[] = [];
+            const otherFields: string[] = [];
+
+            for (const e of zodErrors as Array<{ path?: string[] }>) {
+              const path = e.path ?? [];
+              const field = path.slice(-1)[0] ?? "unknown";
+              if (path[0] === "sellerContext") {
+                sellerFields.push(field);
+              } else if (path[0] === "questionnaire") {
+                questFields.push(field);
+              } else {
+                otherFields.push(field);
+              }
+            }
+
+            const parts: string[] = [];
+            if (sellerFields.length > 0) {
+              parts.push(`Your Business: ${sellerFields.join(", ")}`);
+            }
+            if (questFields.length > 0) {
+              parts.push(`Deck Style: ${questFields.join(", ")}`);
+            }
+            if (otherFields.length > 0) {
+              parts.push(otherFields.join(", "));
+            }
+            message = `Please fill out: ${parts.join(" • ")}`;
           }
         } catch {
           message = error.message;

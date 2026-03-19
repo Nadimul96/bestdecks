@@ -251,6 +251,43 @@ export function TargetIntakeView() {
     setSubmitting(true);
     setNotice(null);
 
+    // ── Pre-flight: check onboarding completeness before hitting API ──
+    try {
+      const [scRes, qRes] = await Promise.all([
+        fetch("/api/onboarding/seller-context"),
+        fetch("/api/onboarding/questionnaire"),
+      ]);
+
+      const missingSteps: string[] = [];
+
+      if (scRes.ok) {
+        const sc = await scRes.json();
+        if (!sc.companyName && !sc.websiteUrl) {
+          missingSteps.push("Your Business — add your company name or website");
+        }
+      } else {
+        missingSteps.push("Your Business — complete your business profile");
+      }
+
+      if (missingSteps.length > 0) {
+        setNotice({
+          type: "error",
+          message: `Please complete setup before launching:\n• ${missingSteps.join("\n• ")}`,
+        });
+        toast.error("Please complete your business profile first.", {
+          action: {
+            label: "Go to Your Business",
+            onClick: () => { window.location.hash = "seller-context"; },
+          },
+        });
+        setSubmitting(false);
+        return;
+      }
+    } catch {
+      // Network error on pre-flight — let the main request handle it
+    }
+
+    // ── Main request ──
     try {
       const res = await fetch("/api/runs", {
         method: "POST",

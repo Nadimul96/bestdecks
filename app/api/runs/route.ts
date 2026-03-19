@@ -131,9 +131,9 @@ export async function POST(request: Request) {
         },
         questionnaire: {
           archetype: q.archetype ?? "cold_outreach",
-          audience: q.audience ?? "",
-          objective: q.objective ?? "",
-          callToAction: q.callToAction ?? "",
+          audience: q.audience || "Business decision-makers",
+          objective: q.objective || "Demonstrate value and start a conversation",
+          callToAction: q.callToAction || "Schedule a call to discuss next steps",
           outputFormat: (q.outputFormat as string) === "presenton_editor"
             ? "bestdecks_editor"
             : (q.outputFormat ?? "bestdecks_editor"),
@@ -173,11 +173,31 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("[runs] Error creating run:", error);
-    return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Unable to create the run.",
-      },
-      { status: 400 },
-    );
+
+    // Format Zod validation errors into a readable message
+    let message = "Unable to create the run.";
+    if (error instanceof Error) {
+      // Check for Zod-style JSON arrays in the message
+      if (error.message.startsWith("[") || error.message.startsWith("{")) {
+        try {
+          const zodErrors = JSON.parse(error.message);
+          if (Array.isArray(zodErrors)) {
+            const fields = zodErrors
+              .map((e: { path?: string[]; message?: string }) => {
+                const field = e.path?.slice(-1)[0] ?? "unknown";
+                return field;
+              })
+              .filter(Boolean);
+            message = `Please fill out the following fields in Deck Style: ${fields.join(", ")}`;
+          }
+        } catch {
+          message = error.message;
+        }
+      } else {
+        message = error.message;
+      }
+    }
+
+    return NextResponse.json({ error: message }, { status: 400 });
   }
 }

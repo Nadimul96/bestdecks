@@ -247,7 +247,7 @@ export function OverviewView({ currentUser }: { currentUser: CurrentUser }) {
                       {completedCount} of {readiness.length} steps done — finish
                       setup to launch your first run.
                     </p>
-                    <Progress value={progress} className="h-1.5 w-64" />
+                    <Progress value={progress} className="h-1.5 w-full max-w-64" />
                   </div>
                   <Button asChild size="sm" className="gap-1.5 shadow-sm">
                     <a
@@ -382,13 +382,19 @@ export function OverviewView({ currentUser }: { currentUser: CurrentUser }) {
                     status={
                       run.status === "completed"
                         ? "ready"
-                        : run.status === "failed"
+                        : run.status === "failed" || run.status === "cancelled"
                           ? "error"
-                          : run.status === "running"
+                          : run.status === "running" || run.status === "queued"
                             ? "running"
-                            : "incomplete"
+                            : run.status === "partially_completed"
+                              ? "incomplete"
+                              : "incomplete"
                     }
-                    label={run.status}
+                    label={
+                      run.status === "partially_completed" ? "partial"
+                        : run.status === "queued" ? "starting"
+                        : run.status
+                    }
                   />
                   <span className="hidden text-[11px] text-muted-foreground sm:inline">
                     {new Date(run.created_at).toLocaleDateString(undefined, {

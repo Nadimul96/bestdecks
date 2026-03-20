@@ -367,7 +367,7 @@ export function SellerContextView() {
             </div>
           </FieldGroup>
 
-          <FieldGroup label="Offer summary" className="sm:col-span-2">
+          <FieldGroup label="Offer summary">
             <Textarea
               value={form.offerSummary}
               onChange={(e) => update("offerSummary", e.target.value)}
@@ -375,7 +375,7 @@ export function SellerContextView() {
               className="min-h-[80px] resize-none"
             />
           </FieldGroup>
-          <FieldGroup label="Desired outcome" className="sm:col-span-2">
+          <FieldGroup label="Desired outcome">
             <Textarea
               value={form.desiredOutcome}
               onChange={(e) => update("desiredOutcome", e.target.value)}

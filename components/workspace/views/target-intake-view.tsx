@@ -184,13 +184,11 @@ export function TargetIntakeView() {
     const file = e.dataTransfer.files[0];
     if (file) {
       const ext = file.name.split(".").pop()?.toLowerCase();
-      if (!["csv", "tsv", "txt", "xlsx"].includes(ext ?? "")) {
-        toast.error("Please upload a CSV, TSV, or XLSX file.");
-        return;
-      }
-      if (ext === "xlsx") {
-        toast.info(
-          "XLSX support is coming soon. For now, please export as CSV from your spreadsheet.",
+      if (!["csv", "tsv", "txt"].includes(ext ?? "")) {
+        toast.error(
+          ext === "xlsx"
+            ? "XLSX isn't supported yet — please export as CSV from your spreadsheet."
+            : "Please upload a CSV or TSV file.",
         );
         return;
       }
@@ -253,7 +251,7 @@ export function TargetIntakeView() {
 
     // ── Pre-flight: check onboarding completeness before hitting API ──
     try {
-      const [scRes, qRes] = await Promise.all([
+      const [scRes] = await Promise.all([
         fetch("/api/onboarding/seller-context"),
         fetch("/api/onboarding/questionnaire"),
       ]);

@@ -392,11 +392,31 @@ export function StructureView() {
         )
         .join("\n");
 
+      // Preserve existing extraInstructions — only replace the SLIDE STRUCTURE block
+      let existingInstructions = "";
+      try {
+        const qRes = await fetch("/api/onboarding/questionnaire");
+        if (qRes.ok) {
+          const qData = await qRes.json();
+          existingInstructions = qData?.extraInstructions ?? "";
+        }
+      } catch {
+        // proceed with empty
+      }
+
+      // Strip any prior SLIDE STRUCTURE block, then append the new one
+      const withoutStructure = existingInstructions
+        .replace(/\n?SLIDE STRUCTURE:\n[\s\S]*$/, "")
+        .trim();
+      const combined = withoutStructure
+        ? `${withoutStructure}\n\nSLIDE STRUCTURE:\n${structureText}`
+        : `SLIDE STRUCTURE:\n${structureText}`;
+
       const res = await fetch("/api/onboarding/questionnaire", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          extraInstructions: `SLIDE STRUCTURE:\n${structureText}`,
+          extraInstructions: combined,
           desiredCardCount: slides.length,
         }),
       });

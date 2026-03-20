@@ -23,11 +23,17 @@ function useActiveWorkspaceView() {
     React.useState<WorkspaceViewId>(DEFAULT_WORKSPACE_VIEW);
 
   React.useEffect(() => {
+    // Aliases: #billing → #pricing
+    const hashAliases: Record<string, WorkspaceViewId> = {
+      billing: "pricing",
+    };
+
     const syncHash = () => {
       const nextHash = window.location.hash.replace(/^#/, "");
+      const resolved = hashAliases[nextHash] ?? nextHash;
       setActiveView(
-        nextHash && isWorkspaceViewId(nextHash)
-          ? nextHash
+        resolved && isWorkspaceViewId(resolved)
+          ? resolved
           : DEFAULT_WORKSPACE_VIEW,
       );
     };

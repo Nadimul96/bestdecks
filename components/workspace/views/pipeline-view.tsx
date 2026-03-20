@@ -6,8 +6,6 @@ import {
   Ban,
   CheckCircle2,
   Clock3,
-  Cloud,
-  ExternalLink,
   FileText,
   ImageIcon,
   Layers3,
@@ -30,107 +28,41 @@ import { cn } from "@/lib/utils";
 
 const meta = viewMeta.pipeline;
 
-const pipelineSteps = [
-  {
-    icon: Wand2,
-    title: "Seller discovery",
-    description: "We analyze your business context to understand your value proposition and positioning.",
-    color: "text-violet-500",
-    bgColor: "bg-violet-500/10",
-  },
-  {
-    icon: Cloud,
-    title: "Target crawl",
-    description: "We crawl the target company's website to gather intelligence about their business.",
-    color: "text-blue-500",
-    bgColor: "bg-blue-500/10",
-  },
-  {
-    icon: Layers3,
-    title: "Research synthesis",
-    description: "We enrich data with market research, buyer signals, and public information.",
-    color: "text-amber-500",
-    bgColor: "bg-amber-500/10",
-  },
-  {
-    icon: ImageIcon,
-    title: "Visual strategy",
-    description: "We generate supporting visuals when the deck benefits from custom imagery.",
-    color: "text-pink-500",
-    bgColor: "bg-pink-500/10",
-  },
-  {
-    icon: FileText,
-    title: "Deck assembly",
-    description: "We assemble the final personalized presentation tailored to your target.",
-    color: "text-emerald-500",
-    bgColor: "bg-emerald-500/10",
-  },
-];
-
 /* ─── Helpers ─── */
 
-function formatRunName(run: RunSummary): string {
-  // Use first target's domain as the name
-  const firstTarget = run.first_target_url;
-  let siteName = "Run";
-  if (firstTarget) {
-    try {
-      const url = new URL(firstTarget.startsWith("http") ? firstTarget : `https://${firstTarget}`);
-      siteName = url.hostname.replace(/^www\./, "");
-    } catch {
-      siteName = firstTarget;
-    }
+function runStatusToPill(status: string): { status: "ready" | "error" | "running" | "incomplete"; label: string } {
+  switch (status) {
+    case "completed":
+      return { status: "ready", label: "completed" };
+    case "failed":
+    case "cancelled":
+      return { status: "error", label: status };
+    case "running":
+    case "queued":
+      return { status: "running", label: status === "queued" ? "starting" : "running" };
+    case "partially_completed":
+      return { status: "incomplete", label: "partial" };
+    default:
+      return { status: "incomplete", label: status };
   }
-
-  const d = new Date(run.created_at);
-  const date = d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-  const time = d.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-
-  if (run.target_count > 1) {
-    return `${siteName} +${run.target_count - 1} more · ${date} ${time}`;
-  }
-  return `${siteName} · ${date} ${time}`;
 }
 
-function formatRunDetailName(run: RunDetail): string {
-  const firstTarget = run.targets[0];
-  let siteName = "Run";
-  if (firstTarget?.website_url) {
-    try {
-      const url = new URL(
-        firstTarget.website_url.startsWith("http")
-          ? firstTarget.website_url
-          : `https://${firstTarget.website_url}`,
-      );
-      siteName = url.hostname.replace(/^www\./, "");
-    } catch {
-      siteName = firstTarget.website_url;
-    }
+function formatDomain(url: string | undefined): string {
+  if (!url) return "Run";
+  try {
+    const parsed = new URL(url.startsWith("http") ? url : `https://${url}`);
+    return parsed.hostname.replace(/^www\./, "");
+  } catch {
+    return url;
   }
+}
 
-  const d = new Date(run.createdAt);
-  const date = d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-  const time = d.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-
-  if (run.targets.length > 1) {
-    return `${siteName} +${run.targets.length - 1} more · ${date} ${time}`;
-  }
-  return `${siteName} · ${date} ${time}`;
+function formatDate(iso: string): { date: string; time: string } {
+  const d = new Date(iso);
+  return {
+    date: d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+    time: d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
+  };
 }
 
 /** Compute progress percentage from run detail events/targets */
@@ -141,16 +73,13 @@ function computeProgress(run: RunDetail): { percent: number; stage: string } {
   if (run.status === "completed") return { percent: 100, stage: "Complete" };
   if (run.status === "failed") return { percent: 100, stage: "Failed" };
 
-  // Count completed/failed targets
   const doneTargets = run.targets.filter(
     (t) => t.status === "delivered" || t.status === "completed" || t.status === "failed",
   ).length;
 
-  // Check stages from events for in-progress targets
   const events = run.events;
   const lastStage = events.length > 0 ? events[events.length - 1] : null;
 
-  // Each target goes through ~5 stages. For running targets, estimate from last event
   const stageWeights: Record<string, number> = {
     run_started: 0.02,
     seller_brief: 0.1,
@@ -167,25 +96,22 @@ function computeProgress(run: RunDetail): { percent: number; stage: string } {
 
   if (doneTargets === total) return { percent: 100, stage: "Finishing up..." };
 
-  // Base progress from done targets
   const baseProgress = (doneTargets / total) * 100;
-  // Add partial progress for the current in-progress target
   const currentStageWeight = lastStage?.stage ? (stageWeights[lastStage.stage] ?? 0.15) : 0.05;
   const inProgressAdd = (currentStageWeight / total) * 100;
   const percent = Math.min(Math.round(baseProgress + inProgressAdd), 99);
 
-  // Friendly stage label
   const stageLabels: Record<string, string> = {
     run_started: "Starting pipeline...",
     preflight: "Verifying service connections...",
     seller_brief: "Analyzing your business positioning...",
-    crawl: "Crawling target website and gathering data...",
-    target_crawl: "Crawling target website and gathering data...",
+    crawl: "Crawling target website...",
+    target_crawl: "Crawling target website...",
     crawl_or_enrichment: "Gathering market intelligence...",
     enrichment: "Enriching with market research...",
     company_brief: "Building target company profile...",
     image_strategy: "Generating supporting visuals...",
-    slide_planning: "Planning slide content and structure...",
+    slide_planning: "Planning slide content...",
     delivery: "Assembling personalized deck...",
     target_failed: "Target processing encountered an error",
   };
@@ -199,18 +125,14 @@ function computeProgress(run: RunDetail): { percent: number; stage: string } {
 
 /* ─── Error message humanizer ─── */
 function humanizeError(raw: string): string {
-  // Plus AI errors
-  if (raw.includes("Plus AI create failed")) return "The deck generation service returned an error. This is usually temporary — retry in a moment.";
-  if (raw.includes("Plus AI generation timed out")) return "Deck generation took too long. The service may be overloaded — try again shortly.";
-  if (raw.includes("Plus AI presentation generation failed")) return "The deck generation service encountered an internal error. Please retry.";
-  // Crawler errors
-  if (raw.includes("Cloudflare") && raw.includes("429")) return "The website crawl was rate-limited. Wait a minute and retry.";
+  if (raw.includes("Plus AI create failed")) return "Deck generation service returned an error — retry in a moment.";
+  if (raw.includes("Plus AI generation timed out")) return "Deck generation took too long — try again shortly.";
+  if (raw.includes("Plus AI presentation generation failed")) return "Deck generation encountered an internal error. Please retry.";
+  if (raw.includes("Cloudflare") && raw.includes("429")) return "Website crawl was rate-limited. Wait a minute and retry.";
   if (raw.includes("unreachable") || raw.includes("ECONNREFUSED")) return "Could not connect to a required service. Check your API integrations.";
-  if (raw.includes("timed out")) return "The run timed out — the serverless function may have been terminated. Try again.";
-  // Config errors
-  if (raw.includes("configuration is missing")) return "Required API keys are not configured. Check Settings → Integrations.";
-  if (raw.includes("No deck provider configured")) return "No deck generation service is configured. Add a Plus AI API key in Settings.";
-  // Generic
+  if (raw.includes("timed out")) return "Run timed out — a pipeline step may have been terminated. Try again with fewer targets.";
+  if (raw.includes("configuration is missing")) return "Required API keys not configured. Check Settings → Integrations.";
+  if (raw.includes("No deck provider configured")) return "No deck generation service configured. Add a Plus AI API key in Settings.";
   if (raw.length > 120) return raw.slice(0, 120) + "…";
   return raw;
 }
@@ -221,11 +143,28 @@ function getRefundInfo(events: RunDetail["events"]): string | null {
   return refundEvent?.message ?? null;
 }
 
+/* ─── Target status helpers ─── */
+function targetStatusInfo(status: string): { icon: React.ReactNode; label: string; color: string } {
+  switch (status) {
+    case "delivered":
+    case "completed":
+      return { icon: <CheckCircle2 className="size-3.5 text-emerald-500" />, label: "Completed", color: "text-emerald-500 font-medium" };
+    case "failed":
+      return { icon: <AlertCircle className="size-3.5 text-destructive" />, label: "Failed", color: "text-destructive font-medium" };
+    case "queued":
+      return { icon: <Clock3 className="size-3.5 text-muted-foreground" />, label: "Queued", color: "text-muted-foreground" };
+    case "processing":
+    case "brief_ready":
+      return { icon: <LoaderCircle className="size-3.5 animate-spin text-primary" />, label: "In progress", color: "text-primary font-medium" };
+    default:
+      return { icon: <Clock3 className="size-3.5 text-muted-foreground" />, label: status, color: "text-muted-foreground" };
+  }
+}
+
 /* ─── Activity Log ─── */
 function ActivityLog({ events, isRunning }: { events: RunDetail["events"]; isRunning: boolean }) {
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom when new events arrive or when running
   React.useEffect(() => {
     const el = scrollRef.current;
     if (el) {
@@ -236,20 +175,20 @@ function ActivityLog({ events, isRunning }: { events: RunDetail["events"]; isRun
   return (
     <div
       ref={scrollRef}
-      className="h-[240px] overflow-y-auto rounded-lg border border-border/30 bg-muted/10 scroll-smooth"
+      className="max-h-[220px] overflow-y-auto rounded-lg border border-border/30 bg-muted/10 scroll-smooth"
     >
       <div className="divide-y divide-border/20">
         {events.map((event) => (
           <div
             key={event.id}
             className={cn(
-              "flex items-start gap-2.5 px-4 py-2.5 text-xs transition-colors",
+              "flex items-start gap-2.5 px-3.5 py-2 text-xs transition-colors",
               event.level === "error" && "bg-destructive/5",
             )}
           >
             <span
               className={cn(
-                "mt-1 size-2 shrink-0 rounded-full",
+                "mt-1 size-1.5 shrink-0 rounded-full",
                 event.level === "error"
                   ? "bg-destructive"
                   : event.level === "warning"
@@ -275,7 +214,7 @@ function ActivityLog({ events, isRunning }: { events: RunDetail["events"]; isRun
           </div>
         ))}
         {isRunning && (
-          <div className="flex items-center gap-2.5 px-4 py-2.5 text-xs">
+          <div className="flex items-center gap-2.5 px-3.5 py-2 text-xs">
             <LoaderCircle className="size-3 animate-spin text-primary" />
             <span className="text-muted-foreground/60 italic">Processing…</span>
           </div>
@@ -290,6 +229,8 @@ export function PipelineView() {
   const [selectedRun, setSelectedRun] = React.useState<RunDetail | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [detailLoading, setDetailLoading] = React.useState(false);
+  const [cancelling, setCancelling] = React.useState<string | null>(null);
+  const [retrying, setRetrying] = React.useState<string | null>(null);
 
   const initialLoadDone = React.useRef(false);
 
@@ -297,7 +238,7 @@ export function PipelineView() {
     fetchRuns();
   }, []);
 
-  // Auto-select the newest running/queued run on initial load (e.g. after launching from targets page)
+  // Auto-select the newest running/queued run on initial load
   React.useEffect(() => {
     if (initialLoadDone.current || loading || runs.length === 0) return;
     initialLoadDone.current = true;
@@ -314,7 +255,6 @@ export function PipelineView() {
     if (!hasRunning && !selectedRunActive) return;
 
     const interval = setInterval(() => {
-      // Fetch runs list and detail in parallel for faster updates
       const promises: Promise<void>[] = [fetchRuns()];
       if (selectedRunActive) {
         promises.push(selectRun(selectedRun.id, true));
@@ -336,9 +276,6 @@ export function PipelineView() {
       setLoading(false);
     }
   }
-
-  const [cancelling, setCancelling] = React.useState<string | null>(null);
-  const [retrying, setRetrying] = React.useState<string | null>(null);
 
   async function retryRun(runId: string) {
     setRetrying(runId);
@@ -405,50 +342,13 @@ export function PipelineView() {
         </Button>
       }
     >
-      {/* Pipeline steps — improved visual */}
-      <div className="rounded-xl border border-border/50 bg-gradient-to-r from-muted/30 via-background to-muted/30 p-6">
-        <div className="mb-4">
-          <h3 className="text-[14px] font-semibold text-foreground">How it works</h3>
-          <p className="text-[12px] text-muted-foreground">
-            Every target goes through 5 AI-powered stages to create a personalized deck.
-          </p>
-        </div>
-        <div className="relative">
-          {/* Connector line */}
-          <div className="absolute left-0 right-0 top-6 hidden h-px bg-gradient-to-r from-violet-500/20 via-blue-500/20 via-amber-500/20 via-pink-500/20 to-emerald-500/20 sm:block" />
-          <div className="grid gap-4 sm:grid-cols-5">
-            {pipelineSteps.map((step, i) => (
-              <div key={step.title} className="relative flex flex-col items-center text-center">
-                <div
-                  className={cn(
-                    "relative z-10 mb-3 flex size-12 items-center justify-center rounded-xl border border-border/30 bg-card shadow-sm transition-all hover:shadow-md",
-                    step.bgColor,
-                  )}
-                >
-                  <step.icon className={cn("size-5", step.color)} />
-                  <span className="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full bg-foreground text-[10px] font-bold text-background shadow-sm">
-                    {i + 1}
-                  </span>
-                </div>
-                <p className="text-[12px] font-semibold text-foreground">
-                  {step.title}
-                </p>
-                <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground max-w-[140px]">
-                  {step.description}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
       {/* Pipeline content — runs list + detail side by side */}
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,380px)_1fr] gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,340px)_1fr] gap-4">
 
       {/* Run list */}
       <SectionCard
         title="Runs"
-        description={`${runs.length} run${runs.length !== 1 ? "s" : ""} found`}
+        description={`${runs.length} run${runs.length !== 1 ? "s" : ""}`}
       >
         {loading ? (
           <div className="space-y-2">
@@ -470,70 +370,64 @@ export function PipelineView() {
             </Button>
           </div>
         ) : (
-          <ScrollArea className="max-h-[60vh]">
-            <div className="space-y-2">
-              {runs.map((run) => (
-                <button
-                  key={run.id}
-                  type="button"
-                  onClick={() => selectRun(run.id)}
-                  className={cn(
-                    "flex w-full items-center justify-between rounded-lg border px-4 py-3 text-left transition-all hover:bg-muted/50",
-                    selectedRun?.id === run.id
-                      ? "border-primary/30 bg-primary/5"
-                      : "border-border/40 bg-card",
-                  )}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="flex size-8 items-center justify-center rounded-md bg-muted">
-                      <FileText className="size-3.5 text-muted-foreground" />
-                    </div>
-                    <div>
-                      <p className="text-[13px] font-medium">
-                        {formatRunName(run)}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {run.target_count} Target
-                        {run.target_count !== 1 ? "s" : ""}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <StatusPill
-                      status={
-                        run.status === "completed"
-                          ? "ready"
-                          : run.status === "failed" || run.status === "cancelled"
-                            ? "error"
-                            : run.status === "running"
-                              ? "running"
-                              : run.status === "partially_completed"
-                                ? "incomplete"
-                                : "incomplete"
-                      }
-                      label={run.status}
-                    />
-                    {(run.status === "running" || run.status === "queued") && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          cancelRun(run.id);
-                        }}
-                        disabled={cancelling === run.id}
-                        className="rounded-md p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
-                        title="Cancel run"
-                      >
-                        {cancelling === run.id ? (
-                          <LoaderCircle className="size-3.5 animate-spin" />
-                        ) : (
-                          <XCircle className="size-3.5" />
-                        )}
-                      </button>
+          <ScrollArea className="max-h-[70vh]">
+            <div className="space-y-1.5">
+              {runs.map((run) => {
+                const domain = formatDomain(run.first_target_url);
+                const { date, time } = formatDate(run.created_at);
+                const pill = runStatusToPill(run.status);
+                return (
+                  <button
+                    key={run.id}
+                    type="button"
+                    onClick={() => selectRun(run.id)}
+                    className={cn(
+                      "flex w-full items-center justify-between rounded-lg border px-3.5 py-2.5 text-left transition-all hover:bg-muted/50",
+                      selectedRun?.id === run.id
+                        ? "border-primary/30 bg-primary/5"
+                        : "border-border/40 bg-card",
                     )}
-                  </div>
-                </button>
-              ))}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted">
+                        <FileText className="size-3.5 text-muted-foreground" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-[13px] font-medium">
+                          {domain}
+                          {run.target_count > 1 && (
+                            <span className="text-muted-foreground font-normal"> +{run.target_count - 1}</span>
+                          )}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {date} {time} · {run.target_count} target{run.target_count !== 1 ? "s" : ""}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                      <StatusPill status={pill.status} label={pill.label} />
+                      {(run.status === "running" || run.status === "queued") && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            cancelRun(run.id);
+                          }}
+                          disabled={cancelling === run.id}
+                          className="rounded-md p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+                          title="Cancel run"
+                        >
+                          {cancelling === run.id ? (
+                            <LoaderCircle className="size-3.5 animate-spin" />
+                          ) : (
+                            <XCircle className="size-3.5" />
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </ScrollArea>
         )}
@@ -542,8 +436,16 @@ export function PipelineView() {
       {/* Run detail */}
       {selectedRun && (
         <SectionCard
-          title={formatRunDetailName(selectedRun)}
-          description={`${selectedRun.targets.length} Target${selectedRun.targets.length !== 1 ? "s" : ""} · ${selectedRun.sellerContext?.companyName || "Your Business"}`}
+          title={(() => {
+            const domain = formatDomain(selectedRun.targets[0]?.website_url);
+            return selectedRun.targets.length > 1
+              ? `${domain} +${selectedRun.targets.length - 1} more`
+              : domain;
+          })()}
+          description={(() => {
+            const { date, time } = formatDate(selectedRun.createdAt);
+            return `${selectedRun.targets.length} target${selectedRun.targets.length !== 1 ? "s" : ""} · ${selectedRun.sellerContext?.companyName || "Your Business"} · ${date} ${time}`;
+          })()}
         >
           {detailLoading ? (
             <div className="space-y-3">
@@ -553,11 +455,10 @@ export function PipelineView() {
               ))}
             </div>
           ) : (
-            <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+            <div className="space-y-4 max-h-[70vh] overflow-y-auto">
               {/* Progress tracker for running runs */}
               {(selectedRun.status === "running" || selectedRun.status === "queued") && (() => {
                 const { percent, stage } = computeProgress(selectedRun);
-                // Determine which stages have been reached based on events
                 const completedStages = new Set(
                   selectedRun.events
                     .filter((e) => e.level !== "error")
@@ -567,23 +468,25 @@ export function PipelineView() {
                   ? selectedRun.events[selectedRun.events.length - 1]?.stage
                   : null;
 
-                const stages = [
-                  { key: "seller_brief", icon: Wand2, label: "Seller discovery", color: "text-violet-500" },
-                  { key: "crawl", icon: Cloud, label: "Target crawl", color: "text-blue-500" },
-                  { key: "enrichment", icon: Search, label: "Market research", color: "text-amber-500" },
-                  { key: "company_brief", icon: Layers3, label: "Company profile", color: "text-orange-500" },
-                  { key: "image_strategy", icon: ImageIcon, label: "Visual strategy", color: "text-pink-500" },
-                  { key: "slide_planning", icon: Layers3, label: "Slide planning", color: "text-cyan-500" },
-                  { key: "delivery", icon: FileText, label: "Deck assembly", color: "text-emerald-500" },
-                ] as const;
+                const stages: Array<{ key: string; altKeys: string[]; icon: typeof Wand2; label: string; color: string }> = [
+                  { key: "seller_brief", altKeys: [], icon: Wand2, label: "Seller brief", color: "text-violet-500" },
+                  { key: "crawl", altKeys: ["target_crawl", "crawl_or_enrichment"], icon: Search, label: "Crawl & enrich", color: "text-blue-500" },
+                  { key: "company_brief", altKeys: [], icon: Layers3, label: "Company brief", color: "text-amber-500" },
+                  { key: "image_strategy", altKeys: [], icon: ImageIcon, label: "Visuals", color: "text-pink-500" },
+                  { key: "slide_planning", altKeys: [], icon: Layers3, label: "Slide plan", color: "text-cyan-500" },
+                  { key: "delivery", altKeys: [], icon: FileText, label: "Deck assembly", color: "text-emerald-500" },
+                ];
 
-                // Order-aware: stage is "done" if a later stage has been started
-                const stageOrder = stages.map((s) => s.key);
-                const lastStageIdx = stageOrder.findIndex((k) => k === lastStage);
+                const findStageIdx = (eventStage: string | null | undefined): number => {
+                  if (!eventStage) return -1;
+                  return stages.findIndex(
+                    (s) => s.key === eventStage || s.altKeys.includes(eventStage),
+                  );
+                };
+                const lastStageIdx = findStageIdx(lastStage);
 
                 return (
-                  <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-4">
-                    {/* Header with progress */}
+                  <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <LoaderCircle className="size-4 animate-spin text-primary" />
@@ -591,30 +494,31 @@ export function PipelineView() {
                           {stage}
                         </span>
                       </div>
-                      <span className="text-[13px] font-semibold text-primary">
+                      <span className="text-[13px] font-semibold text-primary tabular-nums">
                         {percent}%
                       </span>
                     </div>
                     <Progress value={percent} className="h-2" />
 
-                    {/* Stage checklist */}
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                    {/* Stage checklist — compact 3-column grid */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-1">
                       {stages.map((s, i) => {
-                        const isDone = i < lastStageIdx || (completedStages.has(s.key) && s.key !== lastStage);
-                        const isCurrent = s.key === lastStage;
-                        const isPending = !isDone && !isCurrent;
+                        const matchesCurrent = s.key === lastStage || s.altKeys.includes(lastStage ?? "");
+                        const matchesCompleted = completedStages.has(s.key) || s.altKeys.some((k) => completedStages.has(k));
+                        const isDone = i < lastStageIdx || (matchesCompleted && !matchesCurrent);
+                        const isCurrent = matchesCurrent;
 
                         return (
-                          <div key={s.key} className="flex items-center gap-2 py-0.5">
+                          <div key={s.key} className="flex items-center gap-1.5 py-0.5">
                             {isDone ? (
-                              <CheckCircle2 className="size-3.5 text-emerald-500" />
+                              <CheckCircle2 className="size-3 text-emerald-500 shrink-0" />
                             ) : isCurrent ? (
-                              <LoaderCircle className={cn("size-3.5 animate-spin", s.color)} />
+                              <LoaderCircle className={cn("size-3 animate-spin shrink-0", s.color)} />
                             ) : (
-                              <div className="size-3.5 rounded-full border border-border/60" />
+                              <div className="size-3 shrink-0 rounded-full border border-border/60" />
                             )}
                             <span className={cn(
-                              "text-[11px]",
+                              "text-[11px] truncate",
                               isDone ? "text-muted-foreground line-through" : isCurrent ? "text-foreground font-medium" : "text-muted-foreground/50",
                             )}>
                               {s.label}
@@ -624,9 +528,9 @@ export function PipelineView() {
                       })}
                     </div>
 
-                    <div className="flex items-center justify-between pt-1 border-t border-primary/10">
+                    <div className="flex items-center justify-between pt-2 border-t border-primary/10">
                       <p className="text-[11px] text-muted-foreground">
-                        Typically completes in 1-2 minutes per target.
+                        ~1-2 min per target
                       </p>
                       <Button
                         variant="ghost"
@@ -640,7 +544,7 @@ export function PipelineView() {
                         ) : (
                           <Ban className="size-3" />
                         )}
-                        Cancel run
+                        Cancel
                       </Button>
                     </div>
                   </div>
@@ -649,7 +553,7 @@ export function PipelineView() {
 
               {/* Completed banner */}
               {selectedRun.status === "completed" && (
-                <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4">
+                <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-4 py-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <CheckCircle2 className="size-4 text-emerald-500" />
@@ -671,18 +575,16 @@ export function PipelineView() {
               {selectedRun.status === "failed" && (() => {
                 const refund = getRefundInfo(selectedRun.events);
                 return (
-                  <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <AlertCircle className="size-4 shrink-0 text-destructive" />
-                        <span className="text-[13px] font-medium text-destructive">
-                          {humanizeError(selectedRun.lastError ?? "Run failed. Check the activity log for details.")}
-                        </span>
-                      </div>
+                  <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 space-y-2">
+                    <div className="flex items-center gap-3">
+                      <AlertCircle className="size-4 shrink-0 text-destructive" />
+                      <p className="text-[13px] font-medium text-destructive min-w-0 flex-1">
+                        {humanizeError(selectedRun.lastError ?? "Run failed. Check the activity log for details.")}
+                      </p>
                       <Button
                         variant="outline"
                         size="sm"
-                        className="gap-1.5 shrink-0 ml-3"
+                        className="gap-1.5 shrink-0"
                         onClick={() => retryRun(selectedRun.id)}
                         disabled={retrying === selectedRun.id}
                       >
@@ -696,7 +598,7 @@ export function PipelineView() {
                     </div>
                     {refund && (
                       <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
-                        <CheckCircle2 className="size-3 text-emerald-500" />
+                        <CheckCircle2 className="size-3 text-emerald-500 shrink-0" />
                         {refund}
                       </p>
                     )}
@@ -708,15 +610,13 @@ export function PipelineView() {
               {selectedRun.status === "partially_completed" && (() => {
                 const refund = getRefundInfo(selectedRun.events);
                 return (
-                  <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <AlertCircle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-                        <span className="text-[13px] font-medium text-amber-600 dark:text-amber-400">
-                          {humanizeError(selectedRun.lastError ?? "Some targets failed.")}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0 ml-3">
+                  <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3 space-y-2">
+                    <div className="flex items-center gap-3">
+                      <AlertCircle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                      <p className="text-[13px] font-medium text-amber-600 dark:text-amber-400 min-w-0 flex-1">
+                        {humanizeError(selectedRun.lastError ?? "Some targets failed.")}
+                      </p>
+                      <div className="flex items-center gap-2 shrink-0">
                         <Button
                           variant="outline"
                           size="sm"
@@ -741,7 +641,7 @@ export function PipelineView() {
                     </div>
                     {refund && (
                       <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
-                        <CheckCircle2 className="size-3 text-emerald-500" />
+                        <CheckCircle2 className="size-3 text-emerald-500 shrink-0" />
                         {refund}
                       </p>
                     )}
@@ -753,7 +653,7 @@ export function PipelineView() {
               {selectedRun.status === "cancelled" && (() => {
                 const refund = getRefundInfo(selectedRun.events);
                 return (
-                  <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 space-y-2">
+                  <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3 space-y-2">
                     <div className="flex items-center gap-2">
                       <Ban className="size-4 text-amber-600 dark:text-amber-400" />
                       <span className="text-[13px] font-medium text-amber-600 dark:text-amber-400">
@@ -762,7 +662,7 @@ export function PipelineView() {
                     </div>
                     {refund && (
                       <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
-                        <CheckCircle2 className="size-3 text-emerald-500" />
+                        <CheckCircle2 className="size-3 text-emerald-500 shrink-0" />
                         {refund}
                       </p>
                     )}
@@ -772,48 +672,36 @@ export function PipelineView() {
 
               {/* Target statuses */}
               <div className="space-y-2">
-                <h3 className="text-[13px] font-medium text-foreground">
+                <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                   Targets
                 </h3>
                 <div className="space-y-1.5">
-                  {selectedRun.targets.map((target) => (
-                    <div
-                      key={target.id}
-                      className="rounded-lg border border-border/40 bg-muted/30 px-3.5 py-2.5"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2.5">
-                          {target.status === "completed" || target.status === "delivered" ? (
-                            <CheckCircle2 className="size-3.5 text-emerald-500" />
-                          ) : target.status === "failed" ? (
-                            <AlertCircle className="size-3.5 text-destructive" />
-                          ) : target.status === "queued" ? (
-                            <Clock3 className="size-3.5 text-muted-foreground" />
-                          ) : (
-                            <LoaderCircle className="size-3.5 animate-spin text-primary" />
-                          )}
-                          <span className="font-mono text-[11px]">
-                            {target.website_url}
+                  {selectedRun.targets.map((target) => {
+                    const info = targetStatusInfo(target.status);
+                    return (
+                      <div
+                        key={target.id}
+                        className="rounded-lg border border-border/40 bg-muted/30 px-3.5 py-2.5"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            {info.icon}
+                            <span className="font-mono text-[11px] truncate">
+                              {target.website_url}
+                            </span>
+                          </div>
+                          <span className={cn("text-[11px] shrink-0", info.color)}>
+                            {info.label}
                           </span>
                         </div>
-                        <span className={cn(
-                          "text-[11px] capitalize",
-                          target.status === "delivered" || target.status === "completed"
-                            ? "text-emerald-500 font-medium"
-                            : target.status === "failed"
-                              ? "text-destructive font-medium"
-                              : "text-muted-foreground",
-                        )}>
-                          {target.status === "delivered" ? "completed" : target.status}
-                        </span>
+                        {target.status === "failed" && target.last_error && (
+                          <p className="mt-1.5 pl-6 text-[11px] text-destructive/80 leading-relaxed">
+                            {humanizeError(target.last_error)}
+                          </p>
+                        )}
                       </div>
-                      {target.status === "failed" && target.last_error && (
-                        <p className="mt-1.5 pl-6 text-[11px] text-destructive/80 leading-relaxed">
-                          {humanizeError(target.last_error)}
-                        </p>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
@@ -821,10 +709,10 @@ export function PipelineView() {
               {selectedRun.events.length > 0 && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-[13px] font-medium text-foreground">
+                    <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                       Activity log
                     </h3>
-                    <span className="text-[11px] text-muted-foreground">
+                    <span className="text-[11px] text-muted-foreground tabular-nums">
                       {selectedRun.events.length} event{selectedRun.events.length !== 1 ? "s" : ""}
                     </span>
                   </div>
@@ -836,7 +724,7 @@ export function PipelineView() {
         </SectionCard>
       )}
 
-      {/* Close the grid wrapper — show placeholder if no run selected */}
+      {/* Placeholder if no run selected */}
       {!selectedRun && runs.length > 0 && (
         <div className="hidden lg:flex items-center justify-center rounded-xl border border-dashed border-border/50 bg-muted/10 p-8">
           <p className="text-[13px] text-muted-foreground">Select a run to view details</p>

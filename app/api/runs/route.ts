@@ -1,15 +1,13 @@
 import { NextResponse } from "next/server";
-import { after } from "next/server";
 
 import { createRun, listRuns, getOnboarding, deductCredits } from "@/src/server/repository";
-import { launchRunProcessing } from "@/src/server/run-executor";
 import { getAdminSession } from "@/src/server/auth";
 import type { IntakeRun } from "@/src/domain/schemas";
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? "nadimul96@gmail.com";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 300; // 5 min — runs need time for crawl + enrich + plan + generate
+export const maxDuration = 60; // Only creates the run — pipeline runs in separate chained steps
 
 export async function GET() {
   const session = await getAdminSession();
@@ -182,10 +180,22 @@ export async function POST(request: Request) {
     const runId = await createRun(intakeRun, session.user.id);
     const shouldLaunch = body.autoLaunch !== false; // Default to auto-launch
     if (shouldLaunch) {
-      // Use Next.js after() to keep the serverless function alive
-      // while processing runs in the background after sending the response
-      after(() => {
-        launchRunProcessing(runId);
+      // Fire-and-forget: kick off the step-based pipeline
+      // Each step is a separate HTTP request with its own 300s budget
+      const origin = request.headers.get("origin")
+        || (request.headers.get("x-forwarded-proto") && `${request.headers.get("x-forwarded-proto")}://${request.headers.get("host")}`)
+        || `https://${request.headers.get("host") || "localhost:3000"}`;
+      const INTERNAL_SECRET = process.env.INTERNAL_PIPELINE_SECRET || process.env.BETTER_AUTH_SECRET || "internal";
+
+      fetch(`${origin}/api/runs/${runId}/step`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-internal-secret": INTERNAL_SECRET,
+        },
+        body: JSON.stringify({ step: "prepare" }),
+      }).catch((err) => {
+        console.error(`[runs] Failed to kick off pipeline for run ${runId}:`, err);
       });
     }
 

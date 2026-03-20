@@ -3,6 +3,8 @@ export interface JsonRequestOptions {
   headers?: Record<string, string>;
   body?: unknown;
   signal?: AbortSignal;
+  /** Request timeout in milliseconds. Defaults to 120_000 (2 min). Set to 0 to disable. */
+  timeoutMs?: number;
 }
 
 export class HttpError extends Error {
@@ -17,10 +19,23 @@ export class HttpError extends Error {
   }
 }
 
+const DEFAULT_TIMEOUT_MS = 120_000; // 2 minutes
+
 export async function requestJson<T>(
   url: string,
   options: JsonRequestOptions = {},
 ): Promise<T> {
+  // Apply timeout if no external signal is provided
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  let signal = options.signal;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  if (!signal && timeoutMs > 0) {
+    const controller = new AbortController();
+    signal = controller.signal;
+    timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  }
+
   let response: Response;
   try {
     response = await fetch(url, {
@@ -31,13 +46,18 @@ export async function requestJson<T>(
         ...(options.headers ?? {}),
       },
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
-      signal: options.signal,
+      signal,
     });
   } catch (error) {
-    // Network-level failure — provide useful context instead of bare "fetch failed"
+    if (timeoutId) clearTimeout(timeoutId);
     const cause = error instanceof Error ? error.message : String(error);
+    if (cause.includes("abort")) {
+      throw new Error(`Request timed out after ${timeoutMs / 1000}s calling ${options.method ?? "GET"} ${url}`);
+    }
     throw new Error(`Network error calling ${options.method ?? "GET"} ${url}: ${cause}`);
   }
+
+  if (timeoutId) clearTimeout(timeoutId);
 
   const text = await response.text();
 

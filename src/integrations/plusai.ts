@@ -52,7 +52,7 @@ function pickTemplate(visualStyle: string): string | undefined {
 
 const MAX_RETRIES = 2;
 const POLL_INTERVAL_MS = 5000;
-const POLL_TIMEOUT_MS = 300_000; // 5 min max wait
+const POLL_TIMEOUT_MS = 240_000; // 4 min max wait — leaves headroom within 300s step budget
 const CREATE_RETRY_DELAY_MS = 5000;
 
 /**

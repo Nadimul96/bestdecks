@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getRun, updateRun, addRunEvent } from "@/src/server/repository";
+import { getRun, updateRun, addRunEvent, getRunOwner, refundCredits } from "@/src/server/repository";
 import { getAdminSession } from "@/src/server/auth";
 
 export const dynamic = "force-dynamic";
@@ -21,22 +21,38 @@ export async function GET(
     return NextResponse.json({ error: "Run not found." }, { status: 404 });
   }
 
-  // Auto-detect stuck runs: if status is "running" but last event is >10 min old, mark as failed
+  // Auto-detect stuck runs: if status is "running" but last event is >6 min old, mark as failed.
+  // With step-based execution each step gets 300s, so 6 min without progress means a step died.
   if (run.status === "running" && run.events.length > 0) {
     const lastEvent = run.events[run.events.length - 1];
     const lastEventTime = new Date(String(lastEvent.created_at)).getTime();
-    const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
+    const stuckThreshold = Date.now() - 6 * 60 * 1000; // 6 minutes
 
-    if (lastEventTime < tenMinutesAgo) {
+    if (lastEventTime < stuckThreshold) {
       await updateRun(runId, {
         status: "failed",
-        lastError: "Run timed out — no progress for over 10 minutes.",
+        lastError: "Run timed out — no progress for over 6 minutes.",
       });
       await addRunEvent(runId, {
         level: "error",
         stage: "timeout",
-        message: "Run timed out — no progress for over 10 minutes. The serverless function may have been terminated.",
+        message: "Run timed out — a pipeline step may have been terminated. Try again with fewer targets.",
       });
+
+      // Refund credits for the stuck run
+      try {
+        const { userId, creditsCharged } = await getRunOwner(runId);
+        if (userId && creditsCharged > 0) {
+          await refundCredits(userId, creditsCharged);
+          await addRunEvent(runId, {
+            level: "info",
+            stage: "credit_refund",
+            message: `${creditsCharged} credit${creditsCharged !== 1 ? "s" : ""} refunded — run timed out.`,
+          });
+        }
+      } catch (refundErr) {
+        console.error(`[stuck-detector] Credit refund failed for run ${runId}:`, refundErr);
+      }
 
       // Re-fetch to return updated data
       const updatedRun = await getRun(runId);

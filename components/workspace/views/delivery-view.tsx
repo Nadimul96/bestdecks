@@ -461,36 +461,34 @@ function DeckCardItem({
       </div>
 
       <div className="flex items-center gap-1.5 border-t border-border/30 px-3 py-2.5">
-        {(deck.status === "completed" || deck.status === "delivered") && (
-          <>
-            <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs flex-1" onClick={onPreview}>
-              <Eye className="size-3" />
-              Preview
-            </Button>
-            {deck.artifacts.some((a) => typeof a.artifact_json?.download_url === "string") && (
-              <Button variant="outline" size="sm" className="h-7 gap-1 text-xs flex-1" asChild>
-                <a
-                  href={(deck.artifacts.find((a) => typeof a.artifact_json?.download_url === "string")?.artifact_json?.download_url as string) ?? "#"}
-                  download
-                >
-                  <Download className="size-3" />
-                  Download
-                </a>
+        {(deck.status === "completed" || deck.status === "delivered") && (() => {
+          const da = deck.artifacts.find((a) => a.artifact_type === "presentation_delivery")?.artifact_json;
+          const cardEditorUrl = da?.editorUrl as string | undefined;
+          const cardDownloadUrl = (da?.pptxExportUrl ?? da?.download_url) as string | undefined;
+          return (
+            <>
+              <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs flex-1" onClick={onPreview}>
+                <Eye className="size-3" />
+                Preview
               </Button>
-            )}
-            {deck.artifacts.some((a) => typeof a.artifact_json?.url === "string") && (
-              <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs" asChild>
-                <a
-                  href={(deck.artifacts.find((a) => typeof a.artifact_json?.url === "string")?.artifact_json?.url as string) ?? "#"}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <ExternalLink className="size-3" />
-                </a>
-              </Button>
-            )}
-          </>
-        )}
+              {cardEditorUrl ? (
+                <Button variant="outline" size="sm" className="h-7 gap-1 text-xs flex-1" asChild>
+                  <a href={cardEditorUrl} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="size-3" />
+                    Edit
+                  </a>
+                </Button>
+              ) : cardDownloadUrl ? (
+                <Button variant="outline" size="sm" className="h-7 gap-1 text-xs flex-1" asChild>
+                  <a href={cardDownloadUrl} download>
+                    <Download className="size-3" />
+                    Download
+                  </a>
+                </Button>
+              ) : null}
+            </>
+          );
+        })()}
         {deck.status === "failed" && (
           <p className="px-1 text-[11px] text-destructive">Generation failed — try again from Pipeline</p>
         )}
@@ -523,11 +521,20 @@ function DeckPreviewDrawer({
   const viewUrl = deck.artifacts.find((a) => typeof a.artifact_json?.url === "string")?.artifact_json?.url as string | undefined;
   const downloadUrl = deck.artifacts.find((a) => typeof a.artifact_json?.download_url === "string")?.artifact_json?.download_url as string | undefined;
 
-  // Build a preview URL using Microsoft Office Online viewer (renders PPTX natively)
+  // Google Slides fields from the artifact (Plus AI generates Google Slides natively)
+  const deliveryArtifact = deck.artifacts.find((a) => a.artifact_type === "presentation_delivery")?.artifact_json;
+  const embedUrl = deliveryArtifact?.embedUrl as string | undefined;
+  const editorUrl = deliveryArtifact?.editorUrl as string | undefined;
+  const pdfExportUrl = deliveryArtifact?.pdfExportUrl as string | undefined;
+  const pptxExportUrl = deliveryArtifact?.pptxExportUrl as string | undefined;
+
+  // Prefer Google Slides embed for preview; fall back to Microsoft Office Online viewer
   const fileUrl = downloadUrl ?? viewUrl;
-  const previewUrl = fileUrl
-    ? `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileUrl)}`
-    : null;
+  const previewUrl = embedUrl
+    ? embedUrl
+    : fileUrl
+      ? `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileUrl)}`
+      : null;
 
   return (
     <div className="fixed inset-0 z-50 flex">
@@ -546,22 +553,37 @@ function DeckPreviewDrawer({
           </div>
           <div className="flex items-center gap-2">
             {deck.score && <DeckScoreBadge score={deck.score.overallScore} onClick={onScoreClick} />}
-            {downloadUrl && (
+            {pdfExportUrl && (
               <Button variant="outline" size="sm" className="gap-1.5 text-xs" asChild>
-                <a href={downloadUrl} download>
+                <a href={pdfExportUrl} target="_blank" rel="noopener noreferrer">
                   <Download className="size-3" />
-                  Download PPTX
+                  PDF
                 </a>
               </Button>
             )}
-            {fileUrl && (
+            {(pptxExportUrl || downloadUrl) && (
+              <Button variant="outline" size="sm" className="gap-1.5 text-xs" asChild>
+                <a href={pptxExportUrl ?? downloadUrl} download={!pptxExportUrl}>
+                  <Download className="size-3" />
+                  PPTX
+                </a>
+              </Button>
+            )}
+            {editorUrl ? (
+              <Button variant="default" size="sm" className="gap-1.5 text-xs" asChild>
+                <a href={editorUrl} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="size-3" />
+                  Edit in Google Slides
+                </a>
+              </Button>
+            ) : fileUrl ? (
               <Button variant="default" size="sm" className="gap-1.5 text-xs" asChild>
                 <a href={fileUrl} target="_blank" rel="noopener noreferrer">
                   <ExternalLink className="size-3" />
                   Open
                 </a>
               </Button>
-            )}
+            ) : null}
           </div>
         </div>
 

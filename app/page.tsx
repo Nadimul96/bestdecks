@@ -434,7 +434,7 @@ function Features() {
       icon: Shield,
       title: "Multi-model AI",
       description:
-        "Choose between Claude, GPT, Gemini, or Kimi K2.5 based on your quality and budget preferences. Switch models anytime from your dashboard.",
+        "Choose between Claude, GPT, Gemini, or Kimi K2.5 — each excels at different presentation strengths. Switch models anytime from your dashboard.",
     },
   ];
 

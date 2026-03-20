@@ -140,6 +140,14 @@ export interface PresentonResult {
   editorUrl?: string;
   exportUrl?: string;
   rawPath?: string;
+  /** Google Slides presentation ID (if generated via Plus AI) */
+  googleSlidesId?: string;
+  /** Google Slides embed URL for in-browser preview */
+  embedUrl?: string;
+  /** Direct PDF export URL */
+  pdfExportUrl?: string;
+  /** Direct PPTX export URL */
+  pptxExportUrl?: string;
 }
 
 export type DeckProviderName = "presenton" | "plusai";

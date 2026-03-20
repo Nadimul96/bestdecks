@@ -138,11 +138,24 @@ export class PlusAiDeckProvider implements DeckProvider {
     // Step 2: Poll until complete
     const result = await this.pollUntilDone(createResponse.pollingUrl);
 
+    const rawUrl = result.url ?? undefined;
+
+    // Plus AI creates Google Slides presentations — extract the slide ID for editor/embed/export URLs
+    const gsMatch = rawUrl?.match(/docs\.google\.com\/presentation\/d\/([a-zA-Z0-9_-]+)/);
+    const gsId = gsMatch?.[1];
+
     return {
       presentationId: result.id,
-      exportUrl: result.url ?? undefined,
-      editorUrl: undefined,
-      rawPath: result.url ?? undefined,
+      exportUrl: rawUrl,
+      editorUrl: gsId ? `https://docs.google.com/presentation/d/${gsId}/edit` : undefined,
+      rawPath: rawUrl,
+      // Extra Google Slides URLs for delivery view
+      ...(gsId && {
+        googleSlidesId: gsId,
+        embedUrl: `https://docs.google.com/presentation/d/${gsId}/embed?start=false&loop=false`,
+        pdfExportUrl: `https://docs.google.com/presentation/d/${gsId}/export/pdf`,
+        pptxExportUrl: `https://docs.google.com/presentation/d/${gsId}/export/pptx`,
+      }),
     };
   }
 

@@ -164,10 +164,10 @@ export const aiModelOptions: Array<{
   label: string;
   description: string;
 }> = [
-  { value: "claude", label: "Claude", description: "Best quality, recommended" },
-  { value: "gpt", label: "GPT", description: "Fast and reliable" },
-  { value: "gemini", label: "Gemini", description: "Cost-effective" },
-  { value: "kimi", label: "Kimi K2.5", description: "Budget-friendly, great value" },
+  { value: "claude", label: "Claude", description: "Strongest personalization and narrative flow" },
+  { value: "gpt", label: "GPT", description: "Polished layouts with clear structure" },
+  { value: "gemini", label: "Gemini", description: "Data-rich slides with deep research" },
+  { value: "kimi", label: "Kimi K2.5", description: "Sharp visuals and concise messaging" },
 ];
 
 /* ─────────────────────────────────────────────

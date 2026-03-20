@@ -7,10 +7,12 @@ import {
   Coins,
   CreditCard,
   MessageSquare,
+  Plus,
   Sparkles,
   Star,
   Zap,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -28,22 +30,52 @@ import { cn } from "@/lib/utils";
 
 const meta = viewMeta.pricing;
 
+const TOPUP_PACKS = [
+  { credits: 5, price: 12, perCredit: 2.40 },
+  { credits: 15, price: 30, perCredit: 2.00 },
+  { credits: 50, price: 75, perCredit: 1.50 },
+  { credits: 100, price: 120, perCredit: 1.20 },
+];
+
 export function PricingView() {
   const { credits } = useBusinessContext();
   const [selectedTier, setSelectedTier] = React.useState<PlanTier>(
     credits?.planTier ?? "growth",
   );
-  const [addonCredits, setAddonCredits] = React.useState(0);
   const [selectedModel, setSelectedModel] = React.useState<AIModel>("claude");
   const [annual, setAnnual] = React.useState(false);
+  const [checkoutLoading, setCheckoutLoading] = React.useState(false);
 
   const plan = pricingPlans.find((p) => p.tier === selectedTier)!;
-  const addonCost = addonCredits * plan.addonPricePerCredit;
   const basePrice = annual ? Math.round(plan.priceMonthly * 0.8) : plan.priceMonthly;
-  const totalMonthly = basePrice + addonCost;
-  const totalCredits = plan.credits + addonCredits;
-  const effectivePerCredit =
-    totalCredits > 0 ? (totalMonthly / totalCredits).toFixed(2) : "0.00";
+
+  const currentPlan = pricingPlans.find((p) => p.tier === credits?.planTier);
+  const hasActivePlan = credits?.planTier && credits.planTier !== "enterprise";
+
+  async function handleCheckout(tier: PlanTier, isAnnual: boolean) {
+    setCheckoutLoading(true);
+    try {
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tier, annual: isAnnual }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        toast.error(data.error || "Could not start checkout");
+      }
+    } catch {
+      toast.error("Checkout failed. Please try again.");
+    } finally {
+      setCheckoutLoading(false);
+    }
+  }
+
+  function handleTopup(pack: typeof TOPUP_PACKS[number]) {
+    toast.info(`Top-up of ${pack.credits} credits for $${pack.price} — Stripe integration coming soon!`);
+  }
 
   return (
     <ViewLayout
@@ -51,11 +83,83 @@ export function PricingView() {
       title={meta.title}
       description={meta.description}
     >
+      {/* ── Current plan + credits banner ── */}
+      {credits && (
+        <div className="rounded-xl border border-border/50 bg-card overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-stretch divide-y sm:divide-y-0 sm:divide-x divide-border/40">
+            {/* Plan info */}
+            <div className="flex-1 p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10">
+                  <CreditCard className="size-4 text-primary" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Current plan</p>
+                  <p className="text-[16px] font-bold text-foreground">
+                    {currentPlan?.name ?? "Free"}
+                  </p>
+                </div>
+              </div>
+              {currentPlan && (
+                <p className="text-[12px] text-muted-foreground">
+                  {currentPlan.credits} decks/month &middot; Resets {new Date(credits.resetDate).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                </p>
+              )}
+              {!currentPlan && (
+                <p className="text-[12px] text-muted-foreground">
+                  You&apos;re on the free trial with {credits.balance} credit{credits.balance !== 1 ? "s" : ""} remaining
+                </p>
+              )}
+            </div>
+
+            {/* Credits remaining */}
+            <div className="flex-1 p-5">
+              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2">Credits remaining</p>
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-bold tabular-nums text-foreground">{credits.balance}</span>
+                <span className="text-[13px] text-muted-foreground">
+                  / {credits.monthlyAllowance + credits.bonusCredits}
+                </span>
+              </div>
+              <div className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-muted">
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-all duration-500",
+                    credits.balance / Math.max(credits.monthlyAllowance + credits.bonusCredits, 1) > 0.2
+                      ? "bg-primary"
+                      : credits.balance > 0
+                        ? "bg-amber-500"
+                        : "bg-red-500",
+                  )}
+                  style={{
+                    width: `${Math.min(100, Math.round((credits.balance / Math.max(credits.monthlyAllowance + credits.bonusCredits, 1)) * 100))}%`,
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Quick top-up CTA */}
+            <div className="flex items-center justify-center p-5 sm:px-8">
+              <Button
+                variant="outline"
+                className="gap-2 h-10"
+                onClick={() => {
+                  document.getElementById("topup-section")?.scrollIntoView({ behavior: "smooth" });
+                }}
+              >
+                <Plus className="size-4" />
+                Top up credits
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Tagline */}
       <div className="text-center">
         <div className="mx-auto inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-2 text-sm font-semibold text-primary">
           <Coins className="size-4" />
-          1 credit = 1 deck, end to end
+          1 credit = 1 personalized deck
         </div>
       </div>
 
@@ -100,94 +204,46 @@ export function PricingView() {
             isPopular={p.tier === "growth"}
             annual={annual}
             currentTier={credits?.planTier}
+            loading={checkoutLoading}
             onSelect={() => {
-              setSelectedTier(p.tier);
-              setAddonCredits(0);
+              if (p.tier !== "enterprise" && p.tier !== credits?.planTier) {
+                handleCheckout(p.tier, annual);
+              } else {
+                setSelectedTier(p.tier);
+              }
             }}
           />
         ))}
       </div>
 
-      {/* Add-on credits slider */}
-      {plan.tier !== "enterprise" && (
+      {/* ── Top-up credit packs ── */}
+      <div id="topup-section">
         <SectionCard
-          title="Need more credits?"
-          description={`Slide to add extra credits to your ${plan.name} plan at $${plan.addonPricePerCredit.toFixed(2)}/credit`}
+          title="Top up credits"
+          description="Need more decks this month? Buy a one-time credit pack — no subscription change needed."
         >
-          <div className="space-y-6">
-            {/* Slider */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-[13px] font-medium text-foreground">
-                  Add-on credits
-                </span>
-                <span className="text-[13px] font-semibold tabular-nums text-primary">
-                  +{addonCredits} credits
-                </span>
-              </div>
-              <Slider
-                value={[addonCredits]}
-                onValueChange={(v: number[]) => setAddonCredits(v[0])}
-                min={0}
-                max={plan.maxAddonCredits}
-                step={plan.tier === "starter" ? 5 : plan.tier === "growth" ? 10 : 25}
-                className="w-full"
-              />
-              <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                <span>0</span>
-                <span>{plan.maxAddonCredits} credits</span>
-              </div>
-            </div>
-
-            {/* Cost summary */}
-            <div className="rounded-xl border border-border/50 bg-muted/30 p-5">
-              <div className="space-y-2.5">
-                <div className="flex items-center justify-between text-[13px]">
-                  <span className="text-muted-foreground">
-                    {plan.name} plan ({plan.credits} credits)
-                  </span>
-                  <span className="font-medium">${basePrice}/mo</span>
-                </div>
-                {addonCredits > 0 && (
-                  <div className="flex items-center justify-between text-[13px]">
-                    <span className="text-muted-foreground">
-                      Add-on ({addonCredits} credits × ${plan.addonPricePerCredit.toFixed(2)})
-                    </span>
-                    <span className="font-medium">
-                      +${addonCost.toFixed(2)}/mo
-                    </span>
-                  </div>
-                )}
-                <div className="border-t border-border/40 pt-2.5">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-[15px] font-semibold text-foreground">
-                        ${totalMonthly.toFixed(2)}/mo
-                      </p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {totalCredits} credits total · ${effectivePerCredit}/deck
-                      </p>
-                    </div>
-                    <Button className="gap-1.5 shadow-sm">
-                      <CreditCard className="size-3.5" />
-                      {credits?.planTier === selectedTier
-                        ? addonCredits > 0
-                          ? "Add credits"
-                          : "Current plan"
-                        : "Upgrade now"}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {TOPUP_PACKS.map((pack) => (
+              <button
+                key={pack.credits}
+                type="button"
+                onClick={() => handleTopup(pack)}
+                className="flex flex-col items-center rounded-xl border border-border/60 bg-card p-5 text-center transition-all hover:border-primary/40 hover:shadow-md hover:bg-primary/[0.02]"
+              >
+                <span className="text-2xl font-bold text-foreground">{pack.credits}</span>
+                <span className="text-[11px] font-medium text-muted-foreground mb-3">credits</span>
+                <span className="text-[18px] font-bold text-foreground">${pack.price}</span>
+                <span className="text-[11px] text-muted-foreground mt-0.5">${pack.perCredit.toFixed(2)}/deck</span>
+              </button>
+            ))}
           </div>
         </SectionCard>
-      )}
+      </div>
 
       {/* AI model preference */}
       <SectionCard
         title="AI model preference"
-        description="Choose which AI model generates your decks. This affects quality and speed."
+        description="Choose which AI model generates your decks. All models use the same credits."
       >
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {aiModelOptions.map((model) => (
@@ -218,43 +274,6 @@ export function PricingView() {
         </div>
       </SectionCard>
 
-      {/* Current usage — show if user has credits */}
-      {credits && (
-        <SectionCard
-          title="Current usage"
-          description={`Your ${pricingPlans.find((p) => p.tier === credits.planTier)?.name ?? ""} plan resets ${new Date(credits.resetDate).toLocaleDateString(undefined, { month: "long", day: "numeric" })}`}
-        >
-          <div className="flex items-center gap-6">
-            <div className="space-y-2 flex-1">
-              <div className="flex items-center justify-between text-[13px]">
-                <span className="text-muted-foreground">Credits used</span>
-                <span className="font-semibold tabular-nums">
-                  {credits.monthlyAllowance + credits.bonusCredits - credits.balance}
-                  {" / "}
-                  {credits.monthlyAllowance + credits.bonusCredits}
-                </span>
-              </div>
-              <div className="h-3 w-full overflow-hidden rounded-full bg-muted">
-                <div
-                  className={cn(
-                    "h-full rounded-full transition-all duration-500",
-                    credits.balance / (credits.monthlyAllowance + credits.bonusCredits) > 0.2
-                      ? "bg-primary"
-                      : "bg-amber-500",
-                  )}
-                  style={{
-                    width: `${Math.round(((credits.monthlyAllowance + credits.bonusCredits - credits.balance) / (credits.monthlyAllowance + credits.bonusCredits)) * 100)}%`,
-                  }}
-                />
-              </div>
-              <p className="text-[11px] text-muted-foreground">
-                {credits.balance} credit{credits.balance !== 1 ? "s" : ""} remaining
-              </p>
-            </div>
-          </div>
-        </SectionCard>
-      )}
-
       {/* FAQ or final CTA */}
       <div className="rounded-xl border border-border/50 bg-card p-8 text-center">
         <h3 className="text-[16px] font-semibold text-foreground">
@@ -283,6 +302,7 @@ function PlanCard({
   isPopular,
   annual,
   currentTier,
+  loading,
   onSelect,
 }: {
   plan: PricingPlan;
@@ -290,6 +310,7 @@ function PlanCard({
   isPopular: boolean;
   annual: boolean;
   currentTier?: PlanTier;
+  loading?: boolean;
   onSelect: () => void;
 }) {
   const isEnterprise = plan.tier === "enterprise";
@@ -300,14 +321,16 @@ function PlanCard({
     <div
       className={cn(
         "relative flex flex-col rounded-xl border p-5 transition-all",
-        isSelected
-          ? "border-primary ring-2 ring-primary/20 shadow-lg"
-          : "border-border/50 bg-card hover:border-border hover:shadow-md",
-        isPopular && "ring-1 ring-primary/10",
+        isCurrent
+          ? "border-emerald-500/40 ring-2 ring-emerald-500/20 shadow-lg bg-emerald-500/[0.02]"
+          : isSelected
+            ? "border-primary ring-2 ring-primary/20 shadow-lg"
+            : "border-border/50 bg-card hover:border-border hover:shadow-md",
+        isPopular && !isCurrent && "ring-1 ring-primary/10",
       )}
     >
       {/* Popular badge */}
-      {isPopular && (
+      {isPopular && !isCurrent && (
         <div className="absolute -top-3 left-1/2 -translate-x-1/2">
           <span className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-[11px] font-bold text-primary-foreground">
             <Star className="size-3 fill-current" />
@@ -318,10 +341,10 @@ function PlanCard({
 
       {/* Current badge */}
       {isCurrent && (
-        <div className="absolute -top-3 right-4">
+        <div className="absolute -top-3 left-1/2 -translate-x-1/2">
           <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500 px-3 py-1 text-[11px] font-bold text-white">
             <Check className="size-3" />
-            Current
+            Your Plan
           </span>
         </div>
       )}
@@ -372,8 +395,9 @@ function PlanCard({
 
       {/* CTA */}
       <Button
-        variant={isSelected ? "default" : "outline"}
-        className="mt-5 w-full gap-1.5"
+        variant={isCurrent ? "outline" : isSelected ? "default" : "outline"}
+        className={cn("mt-5 w-full gap-1.5", isCurrent && "border-emerald-500/40 text-emerald-600 dark:text-emerald-400")}
+        disabled={isCurrent || loading}
         onClick={onSelect}
       >
         {isEnterprise ? (
@@ -382,11 +406,14 @@ function PlanCard({
             Contact sales
           </>
         ) : isCurrent ? (
-          "Current plan"
+          <>
+            <Check className="size-3.5" />
+            Current plan
+          </>
         ) : (
           <>
             <Zap className="size-3.5" />
-            {isSelected ? "Selected" : "Select plan"}
+            {currentTier ? "Switch plan" : "Get started"}
           </>
         )}
       </Button>

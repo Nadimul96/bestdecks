@@ -66,9 +66,9 @@ export function SectionCard({
         className,
       )}
     >
-      <div className="flex items-start justify-between border-b border-border/40 px-6 py-4">
-        <div className="space-y-0.5">
-          <h2 className="text-[15px] font-semibold text-foreground">{title}</h2>
+      <div className="flex items-start justify-between border-b border-border/40 px-4 py-4 sm:px-6">
+        <div className="min-w-0 space-y-0.5">
+          <h2 className="truncate text-[15px] font-semibold text-foreground">{title}</h2>
           {description ? (
             <p className="text-[13px] text-muted-foreground">{description}</p>
           ) : null}
@@ -77,7 +77,7 @@ export function SectionCard({
           <div className="flex shrink-0 items-center gap-2">{actions}</div>
         ) : null}
       </div>
-      <div className="p-6">{children}</div>
+      <div className="p-4 sm:p-6">{children}</div>
     </div>
   );
 }
@@ -141,7 +141,7 @@ export function StatusPill({ status, label }: StatusPillProps) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset",
+        "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset",
         styles[status],
       )}
     >

@@ -690,9 +690,9 @@ export const viewMeta: Record<
   },
   pipeline: {
     eyebrow: "Pipeline",
-    title: "Research & generation progress",
+    title: "Generation progress",
     description:
-      "Track crawling, enrichment, image generation, and deck assembly across all targets.",
+      "Track research, enrichment, and deck assembly across all targets.",
   },
   delivery: {
     eyebrow: "Delivery",

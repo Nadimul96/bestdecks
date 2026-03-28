@@ -57,28 +57,38 @@ function SlidingTabs<T extends string>({
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [pillStyle, setPillStyle] = React.useState<React.CSSProperties>({});
 
-  React.useEffect(() => {
+  // Measure on mount + when active tab changes
+  const measure = React.useCallback(() => {
     const container = containerRef.current;
     if (!container) return;
     const activeEl = container.querySelector<HTMLButtonElement>(`[data-tab="${activeTab}"]`);
     if (!activeEl) return;
+    const containerRect = container.getBoundingClientRect();
+    const activeRect = activeEl.getBoundingClientRect();
     setPillStyle({
-      width: activeEl.offsetWidth,
-      transform: `translateX(${activeEl.offsetLeft - container.offsetLeft - 4}px)`,
+      width: activeRect.width,
+      transform: `translateX(${activeRect.left - containerRect.left - 6}px)`,
     });
   }, [activeTab]);
+
+  React.useEffect(() => {
+    measure();
+    // Re-measure after fonts load (can shift widths)
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [measure]);
 
   return (
     <div
       ref={containerRef}
-      className="relative flex items-center gap-0.5 rounded-xl border border-border/30 bg-muted/20 p-1 backdrop-blur-sm"
+      className="relative flex items-center rounded-2xl bg-muted/50 p-1.5"
     >
       {/* Sliding pill indicator */}
       <div
-        className="absolute left-1 top-1 bottom-1 rounded-lg bg-background shadow-sm ring-1 ring-border/10 transition-all duration-300"
+        className="absolute top-1.5 bottom-1.5 rounded-xl bg-background shadow-md ring-1 ring-black/[0.04] transition-all duration-[400ms]"
         style={{
           ...pillStyle,
-          transitionTimingFunction: "cubic-bezier(0.65, 0, 0.35, 1)",
+          transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
         }}
       />
       {tabs.map((tab) => (
@@ -88,10 +98,10 @@ function SlidingTabs<T extends string>({
           type="button"
           onClick={() => onTabChange(tab.key)}
           className={cn(
-            "relative z-10 flex-1 rounded-lg px-5 py-2.5 text-[13px] font-medium transition-colors duration-200",
+            "relative z-10 flex-1 rounded-xl px-6 py-2.5 text-sm font-medium transition-colors duration-200",
             activeTab === tab.key
               ? "text-foreground"
-              : "text-muted-foreground hover:text-foreground/70",
+              : "text-muted-foreground/60 hover:text-muted-foreground",
           )}
         >
           {tab.label}

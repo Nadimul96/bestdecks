@@ -44,6 +44,76 @@ const settingsTabs: Array<{ key: SettingsTab; label: string }> = [
   { key: "advanced", label: "Advanced" },
 ];
 
+/* ─── Sliding pill tab bar (Dribbble-inspired micro-interaction) ─── */
+function SlidingTabs<T extends string>({
+  tabs,
+  activeTab,
+  onTabChange,
+}: {
+  tabs: Array<{ key: T; label: string }>;
+  activeTab: T;
+  onTabChange: (key: T) => void;
+}) {
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const [pillStyle, setPillStyle] = React.useState<React.CSSProperties>({});
+
+  React.useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const activeEl = container.querySelector<HTMLButtonElement>(`[data-tab="${activeTab}"]`);
+    if (!activeEl) return;
+    setPillStyle({
+      width: activeEl.offsetWidth,
+      transform: `translateX(${activeEl.offsetLeft - container.offsetLeft - 4}px)`,
+    });
+  }, [activeTab]);
+
+  return (
+    <div
+      ref={containerRef}
+      className="relative flex items-center gap-0.5 rounded-xl border border-border/30 bg-muted/20 p-1 backdrop-blur-sm"
+    >
+      {/* Sliding pill indicator */}
+      <div
+        className="absolute left-1 top-1 bottom-1 rounded-lg bg-background shadow-sm ring-1 ring-border/10 transition-all duration-300"
+        style={{
+          ...pillStyle,
+          transitionTimingFunction: "cubic-bezier(0.65, 0, 0.35, 1)",
+        }}
+      />
+      {tabs.map((tab) => (
+        <button
+          key={tab.key}
+          data-tab={tab.key}
+          type="button"
+          onClick={() => onTabChange(tab.key)}
+          className={cn(
+            "relative z-10 flex-1 rounded-lg px-5 py-2.5 text-[13px] font-medium transition-colors duration-200",
+            activeTab === tab.key
+              ? "text-foreground"
+              : "text-muted-foreground hover:text-foreground/70",
+          )}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* ─── Archetype accent colors for ChromaGrid-inspired cards ─── */
+const archetypeAccents: Record<string, { gradient: string; border: string; glow: string }> = {
+  cold_outreach: { gradient: "from-blue-600/20 to-transparent", border: "hover:border-blue-500/40", glow: "group-hover:shadow-blue-500/10" },
+  warm_intro: { gradient: "from-amber-500/20 to-transparent", border: "hover:border-amber-500/40", glow: "group-hover:shadow-amber-500/10" },
+  agency_proposal: { gradient: "from-violet-600/20 to-transparent", border: "hover:border-violet-500/40", glow: "group-hover:shadow-violet-500/10" },
+  investor_pitch: { gradient: "from-emerald-600/20 to-transparent", border: "hover:border-emerald-500/40", glow: "group-hover:shadow-emerald-500/10" },
+  case_study: { gradient: "from-cyan-600/20 to-transparent", border: "hover:border-cyan-500/40", glow: "group-hover:shadow-cyan-500/10" },
+  competitive_displacement: { gradient: "from-rose-600/20 to-transparent", border: "hover:border-rose-500/40", glow: "group-hover:shadow-rose-500/10" },
+  thought_leadership: { gradient: "from-indigo-600/20 to-transparent", border: "hover:border-indigo-500/40", glow: "group-hover:shadow-indigo-500/10" },
+  product_launch: { gradient: "from-orange-500/20 to-transparent", border: "hover:border-orange-500/40", glow: "group-hover:shadow-orange-500/10" },
+  custom: { gradient: "from-fuchsia-600/20 to-transparent", border: "hover:border-fuchsia-500/40", glow: "group-hover:shadow-fuchsia-500/10" },
+};
+
 /* ─── Visual style color swatches ─── */
 const styleSwatches: Record<string, string> = {
   auto: "bg-gradient-to-r from-violet-400 via-blue-400 to-emerald-400",
@@ -469,71 +539,75 @@ export function RunSettingsView() {
           </Button>
         }
       >
-        {/* ─── Sub-tab bar ─── */}
-        <div className="flex items-center gap-1 rounded-lg border border-border/40 bg-muted/30 p-1">
-          {settingsTabs.map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setActiveTab(tab.key)}
-              className={cn(
-                "flex-1 rounded-md px-4 py-2 text-[13px] font-medium transition-all",
-                activeTab === tab.key
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        {/* ─── Sliding pill tab bar ─── */}
+        <SlidingTabs
+          tabs={settingsTabs}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+        />
 
         {/* ═══════════════════════════════════════════
             STRATEGY TAB
             ═══════════════════════════════════════════ */}
         {activeTab === "strategy" && (
           <>
-            {/* Archetype */}
+            {/* Archetype — ChromaGrid-inspired */}
             <SectionCard title="Deck archetype" description="Choose the primary framing for your outreach decks.">
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
                 {archetypeOptions.map((opt) => {
                   const isSelected = form.archetype === opt.value;
+                  const accent = archetypeAccents[opt.value] ?? archetypeAccents.cold_outreach;
                   return (
                     <button
                       key={opt.value}
                       type="button"
                       onClick={() => update("archetype", opt.value)}
                       className={cn(
-                        "group relative flex items-start gap-3 rounded-xl border p-4 text-left transition-all focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2",
+                        "group relative overflow-hidden rounded-2xl border p-4 text-left transition-all duration-300 focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2",
                         isSelected
-                          ? "border-primary bg-primary/5 ring-1 ring-primary/20"
-                          : "border-border/50 bg-card hover:border-border hover:shadow-sm",
+                          ? "border-primary/50 bg-primary/[0.04] ring-1 ring-primary/20 shadow-lg"
+                          : cn("border-border/30 bg-card/80", accent.border),
+                        !isSelected && accent.glow,
+                        !isSelected && "hover:shadow-md",
                       )}
                     >
-                      <span className="mt-0.5 text-lg shrink-0">{opt.emoji}</span>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[13px] font-medium text-foreground pr-6">
-                          {opt.label}
-                        </p>
-                        <p className="mt-0.5 text-[12px] text-muted-foreground line-clamp-2">
-                          {opt.description}
-                        </p>
-                        {archetypeExamples[opt.value] && (
-                          <span
-                            role="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setPreviewArchetype(opt.value);
-                            }}
-                            className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:text-primary/80 transition-colors cursor-pointer"
-                          >
-                            <Eye className="size-3" />
-                            See example
-                          </span>
-                        )}
+                      {/* Gradient accent overlay */}
+                      <div className={cn(
+                        "pointer-events-none absolute inset-0 bg-gradient-to-br opacity-0 transition-opacity duration-500 group-hover:opacity-100",
+                        accent.gradient,
+                      )} />
+
+                      {/* Content */}
+                      <div className="relative z-10 flex items-start gap-3">
+                        <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted/60 text-base transition-transform duration-300 group-hover:scale-110">
+                          {opt.emoji}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[13px] font-semibold text-foreground pr-6">
+                            {opt.label}
+                          </p>
+                          <p className="mt-0.5 text-[11.5px] leading-relaxed text-muted-foreground line-clamp-2">
+                            {opt.description}
+                          </p>
+                          {archetypeExamples[opt.value] && (
+                            <span
+                              role="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPreviewArchetype(opt.value);
+                              }}
+                              className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-primary/80 hover:text-primary transition-colors cursor-pointer"
+                            >
+                              <Eye className="size-3" />
+                              See example
+                            </span>
+                          )}
+                        </div>
                       </div>
+
+                      {/* Selected check */}
                       {isSelected && (
-                        <span className="absolute right-2.5 top-2.5 flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                        <span className="absolute right-3 top-3 flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
                           <Check className="size-3" strokeWidth={2.5} />
                         </span>
                       )}
@@ -541,7 +615,7 @@ export function RunSettingsView() {
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <span
-                              className="absolute right-2.5 top-2.5 shrink-0 rounded-full p-0.5 text-muted-foreground/40 transition-colors hover:text-muted-foreground"
+                              className="absolute right-3 top-3 shrink-0 rounded-full p-0.5 text-muted-foreground/30 transition-colors group-hover:text-muted-foreground/60"
                               onClick={(e) => e.stopPropagation()}
                             >
                               <Info className="size-3.5" />
@@ -604,80 +678,86 @@ export function RunSettingsView() {
                   </div>
                 )}
 
-                <div className="grid gap-5 sm:grid-cols-2">
-                  <FieldGroup label="Target audience" hint="Who receives these decks?">
-                    <Input
-                      value={form.audience}
-                      onChange={(e) => update("audience", e.target.value)}
-                      placeholder="VP of Marketing at mid-market SaaS"
-                      className="h-10"
-                    />
-                  </FieldGroup>
-                  <FieldGroup label="Industry / vertical">
-                    <Input
-                      value={form.audienceIndustry}
-                      onChange={(e) => update("audienceIndustry", e.target.value)}
-                      placeholder="Healthcare, FinTech, Real Estate..."
-                      className="h-10"
-                    />
-                  </FieldGroup>
-                </div>
-
-                <div className="grid gap-5 sm:grid-cols-2">
-                  <FieldGroup label="Company size">
-                    <Input
-                      value={form.audienceSize}
-                      onChange={(e) => update("audienceSize", e.target.value)}
-                      placeholder="50-500 employees, $5M-$50M revenue"
-                      className="h-10"
-                    />
-                  </FieldGroup>
-                  <FieldGroup label="Key pain points">
+                {/* ── Who are you targeting? ── */}
+                <div className="space-y-1.5">
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/60">Audience</p>
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <FieldGroup label="Target role">
+                      <Input
+                        value={form.audience}
+                        onChange={(e) => update("audience", e.target.value)}
+                        placeholder="VP of Marketing at mid-market SaaS"
+                        className="h-10"
+                      />
+                    </FieldGroup>
+                    <FieldGroup label="Industry">
+                      <Input
+                        value={form.audienceIndustry}
+                        onChange={(e) => update("audienceIndustry", e.target.value)}
+                        placeholder="Healthcare, FinTech, Real Estate..."
+                        className="h-10"
+                      />
+                    </FieldGroup>
+                    <FieldGroup label="Company size">
+                      <Input
+                        value={form.audienceSize}
+                        onChange={(e) => update("audienceSize", e.target.value)}
+                        placeholder="50-500 employees"
+                        className="h-10"
+                      />
+                    </FieldGroup>
+                  </div>
+                  <FieldGroup label="Key pain points" hint="What keeps them up at night?">
                     <Input
                       value={form.audiencePainPoints}
                       onChange={(e) => update("audiencePainPoints", e.target.value)}
-                      placeholder="Manual processes, scaling bottlenecks..."
+                      placeholder="Manual processes, scaling bottlenecks, tool fragmentation..."
                       className="h-10"
                     />
                   </FieldGroup>
                 </div>
 
-                <div className="grid gap-5 sm:grid-cols-2">
-                  <FieldGroup label="Objective" hint="What should this deck accomplish?">
-                    <Input
-                      value={form.objective}
-                      onChange={(e) => update("objective", e.target.value)}
-                      placeholder="Get a discovery call booked"
-                      className="h-10"
-                    />
-                  </FieldGroup>
-                  <FieldGroup label="Success metric">
-                    <Input
-                      value={form.successMetric}
-                      onChange={(e) => update("successMetric", e.target.value)}
-                      placeholder="Reply rate > 15%, meetings booked..."
-                      className="h-10"
-                    />
-                  </FieldGroup>
-                </div>
+                <div className="border-t border-border/30" />
 
-                <div className="grid gap-5 sm:grid-cols-2">
-                  <FieldGroup label="Call to action">
-                    <Input
-                      value={form.callToAction}
-                      onChange={(e) => update("callToAction", e.target.value)}
-                      placeholder="Book a 20-minute call this week"
-                      className="h-10"
-                    />
-                  </FieldGroup>
-                  <FieldGroup label="Urgency / timing">
-                    <Input
-                      value={form.ctaUrgency}
+                {/* ── What should this deck achieve? ── */}
+                <div className="space-y-1.5">
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/60">Objective</p>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <FieldGroup label="Goal">
+                      <Input
+                        value={form.objective}
+                        onChange={(e) => update("objective", e.target.value)}
+                        placeholder="Get a discovery call booked"
+                        className="h-10"
+                      />
+                    </FieldGroup>
+                    <FieldGroup label="Success metric">
+                      <Input
+                        value={form.successMetric}
+                        onChange={(e) => update("successMetric", e.target.value)}
+                        placeholder="Reply rate > 15%, meetings booked..."
+                        className="h-10"
+                      />
+                    </FieldGroup>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <FieldGroup label="Call to action">
+                      <Input
+                        value={form.callToAction}
+                        onChange={(e) => update("callToAction", e.target.value)}
+                        placeholder="Book a 20-minute call this week"
+                        className="h-10"
+                      />
+                    </FieldGroup>
+                    <FieldGroup label="Urgency / timing">
+                      <Input
+                        value={form.ctaUrgency}
                       onChange={(e) => update("ctaUrgency", e.target.value)}
                       placeholder="Q1 budget cycle, limited spots..."
                       className="h-10"
                     />
                   </FieldGroup>
+                </div>
                 </div>
               </div>
             </SectionCard>

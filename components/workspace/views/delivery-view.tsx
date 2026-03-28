@@ -5,12 +5,15 @@ import {
   AlertCircle,
   CheckCircle2,
   CheckSquare,
+  ChevronLeft,
   ChevronRight,
   Download,
   ExternalLink,
   Eye,
   FileText,
   LoaderCircle,
+  Maximize2,
+  Minimize2,
   RefreshCcw,
   Search,
   Send,
@@ -27,9 +30,7 @@ import { ViewLayout, StatusPill } from "../view-layout";
 import { DeckScoreBadge, DeckScoreDetail } from "@/components/deck-score-badge";
 import {
   viewMeta,
-  type RunSummary,
   type RunArtifactRecord,
-  type RunDetail,
   type RunTargetRecord,
   type DeckScore,
 } from "@/lib/workspace-types";
@@ -54,7 +55,6 @@ interface DeckCard {
 }
 
 export function DeliveryView() {
-  const [runs, setRuns] = React.useState<RunSummary[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [deckCards, setDeckCards] = React.useState<DeckCard[]>([]);
   const [searchQuery, setSearchQuery] = React.useState("");
@@ -69,62 +69,46 @@ export function DeliveryView() {
     fetchAllDecks();
   }, []);
 
-  async function fetchAllDecks() {
+  async function fetchAllDecks(retries = 2) {
     setLoading(true);
     try {
-      const runsRes = await fetch("/api/runs");
-      const runsData: RunSummary[] = await runsRes.json();
-      if (!Array.isArray(runsData)) {
-        setRuns([]);
+      // Single bulk API call instead of N+1 fetches — goes from ~60s to ~1s
+      const res = await fetch("/api/delivery");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      if (!data.decks) {
         setDeckCards([]);
         setLoading(false);
         return;
       }
-      setRuns(runsData);
 
-      const relevantRuns = runsData.filter(
-        (r) => r.status === "completed" || r.status === "partially_completed" || r.status === "running",
-      );
-
-      const cards: DeckCard[] = [];
-
-      await Promise.all(
-        relevantRuns.map(async (run) => {
-          try {
-            const detailRes = await fetch(`/api/runs/${run.id}`);
-            const detail: RunDetail = await detailRes.json();
-
-            const artifactsByTarget = new Map<string, RunArtifactRecord[]>();
-            for (const artifact of detail.artifacts) {
-              const key = artifact.target_id ?? "general";
-              const list = artifactsByTarget.get(key) ?? [];
-              list.push(artifact);
-              artifactsByTarget.set(key, list);
-            }
-
-            for (const target of detail.targets) {
-              cards.push({
-                targetId: target.id,
-                runId: run.id,
-                companyName: target.company_name || "",
-                websiteUrl: target.website_url,
-                status: target.status,
-                format: run.delivery_format,
-                createdAt: target.created_at,
-                artifacts: artifactsByTarget.get(target.id) ?? [],
-                score: (target.status === "completed" || target.status === "delivered") ? generateMockScore(target) : undefined,
-              });
-            }
-          } catch {
-            // skip
-          }
-        }),
-      );
+      // Map server response to DeckCard format with client-side scoring
+      const cards: DeckCard[] = (data.decks as Array<{
+        targetId: string;
+        runId: string;
+        companyName: string;
+        websiteUrl: string;
+        status: string;
+        format: string;
+        createdAt: string;
+        artifacts: RunArtifactRecord[];
+      }>).map((deck) => ({
+        ...deck,
+        score: (deck.status === "completed" || deck.status === "delivered")
+          ? generateMockScore({ id: deck.targetId, status: deck.status } as RunTargetRecord)
+          : undefined,
+      }));
 
       cards.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       setDeckCards(cards);
-    } catch {
-      // silently fail
+    } catch (err) {
+      if (retries > 0) {
+        await new Promise((r) => setTimeout(r, 1000));
+        return fetchAllDecks(retries - 1);
+      }
+      toast.error("Failed to load decks. Please refresh the page.");
+      setDeckCards([]);
     } finally {
       setLoading(false);
     }
@@ -168,7 +152,6 @@ export function DeliveryView() {
 
   function handleBatchExport() {
     const selected = selectableDecks.filter((d) => selectedIds.has(d.targetId));
-    // Open download/view URLs for each selected deck
     let downloadCount = 0;
     for (const deck of selected) {
       const downloadUrl = deck.artifacts.find(
@@ -192,10 +175,11 @@ export function DeliveryView() {
 
   function handleBatchSend() {
     const selected = selectableDecks.filter((d) => selectedIds.has(d.targetId));
-    toast.info(`Send ${selected.length} deck${selected.length > 1 ? "s" : ""} — coming soon! This will email decks directly to your contacts.`);
+    toast.info(`Send ${selected.length} deck${selected.length > 1 ? "s" : ""} — coming soon!`);
   }
 
   const completedCount = deckCards.filter((d) => d.status === "completed" || d.status === "delivered").length;
+  const failedCount = deckCards.filter((d) => d.status === "failed").length;
   const totalCount = deckCards.length;
   const scoredDecks = deckCards.filter((d) => d.score);
   const avgScore =
@@ -209,7 +193,7 @@ export function DeliveryView() {
       title={meta.title}
       description={meta.description}
       actions={
-        <Button variant="outline" size="sm" onClick={fetchAllDecks} disabled={loading} className="gap-1.5">
+        <Button variant="outline" size="sm" onClick={() => fetchAllDecks()} disabled={loading} className="gap-1.5">
           <RefreshCcw className={cn("size-3.5", loading && "animate-spin")} />
           Refresh
         </Button>
@@ -217,6 +201,7 @@ export function DeliveryView() {
     >
       {loading ? (
         <div className="space-y-6">
+          <p className="text-[13px] text-muted-foreground animate-pulse">Loading your decks...</p>
           <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
             {[0, 1, 2].map((i) => (
               <Skeleton key={i} className="h-20 rounded-xl" />
@@ -227,7 +212,7 @@ export function DeliveryView() {
               <Skeleton key={i} className="h-7 w-20 rounded-full" />
             ))}
           </div>
-          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
             {[0, 1, 2].map((i) => (
               <Skeleton key={i} className="h-48 rounded-xl" />
             ))}
@@ -244,30 +229,33 @@ export function DeliveryView() {
 
       {/* Filter bar */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2">
-          {(["all", "completed", "failed", "pending"] as const).map((status) => (
-            <button
-              key={status}
-              type="button"
-              onClick={() => setFilterStatus(status)}
-              className={cn(
-                "rounded-full px-3 py-1 text-[12px] font-medium transition-all",
-                filterStatus === status
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground hover:bg-muted/80",
-              )}
-            >
-              {status === "all"
-                ? `All (${deckCards.length})`
-                : `${status.charAt(0).toUpperCase() + status.slice(1)} (${
-                    status === "completed"
-                      ? deckCards.filter((d) => d.status === "completed" || d.status === "delivered").length
-                      : deckCards.filter((d) => d.status === status).length
-                  })`}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
+          {(["all", "completed", "failed", "pending"] as const).map((status) => {
+            const count = status === "all"
+              ? deckCards.length
+              : status === "completed"
+                ? completedCount
+                : status === "failed"
+                  ? failedCount
+                  : deckCards.filter((d) => d.status === "pending" || d.status === "brief_ready").length;
+            return (
+              <button
+                key={status}
+                type="button"
+                onClick={() => setFilterStatus(status)}
+                className={cn(
+                  "rounded-full px-3 py-1 text-[12px] font-medium transition-all focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2",
+                  filterStatus === status
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground",
+                )}
+              >
+                {status.charAt(0).toUpperCase() + status.slice(1)} ({count})
+              </button>
+            );
+          })}
         </div>
-        <div className="relative">
+        <div className="relative shrink-0">
           <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={searchQuery}
@@ -343,7 +331,7 @@ export function DeliveryView() {
           )}
         </div>
       ) : (
-        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 min-w-0">
+        <div className="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 min-w-0">
           {filteredDecks.map((deck) => (
             <DeckCardItem
               key={`${deck.runId}-${deck.targetId}`}
@@ -359,9 +347,9 @@ export function DeliveryView() {
       </>
       )}
 
-      {/* Deck preview drawer */}
+      {/* Deck preview overlay */}
       {previewDeck && (
-        <DeckPreviewDrawer
+        <DeckPreviewOverlay
           deck={previewDeck}
           onClose={() => setPreviewDeck(null)}
           onScoreClick={() => setScoreDetailDeck(previewDeck)}
@@ -370,8 +358,16 @@ export function DeliveryView() {
 
       {/* Score detail overlay */}
       {scoreDetailDeck?.score && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-lg mx-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in"
+          onClick={() => setScoreDetailDeck(null)}
+          onKeyDown={(e) => e.key === "Escape" && setScoreDetailDeck(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Deck quality score details"
+          tabIndex={-1}
+        >
+          <div className="w-full max-w-lg mx-4 animate-scale-in" onClick={(e) => e.stopPropagation()}>
             <DeckScoreDetail deckScore={scoreDetailDeck.score} onClose={() => setScoreDetailDeck(null)} />
           </div>
         </div>
@@ -404,105 +400,134 @@ function DeckCardItem({
 
   const isSelectable = deck.status === "completed" || deck.status === "delivered";
 
+  // Extract Google Slides embed for thumbnail
+  const deliveryArtifact = deck.artifacts.find((a) => a.artifact_type === "presentation_delivery")?.artifact_json;
+  const gsId = deliveryArtifact?.googleSlidesId as string | undefined;
+  const thumbnailUrl = gsId
+    ? `https://docs.google.com/presentation/d/${gsId}/export/png?pageid=p`
+    : null;
+
   return (
     <div className={cn(
-      "card-elevated group rounded-xl border bg-card transition-all hover:border-border hover:shadow-md",
-      selected ? "border-primary/40 bg-primary/[0.02] ring-1 ring-primary/20" : "border-border/50",
+      "card-elevated group rounded-xl border bg-card overflow-hidden transition-all duration-200 hover:shadow-md",
+      selected ? "border-primary/40 ring-1 ring-primary/20 shadow-md" : "border-border/50 hover:border-border",
     )}>
-      <div className="flex items-start justify-between p-4 pb-3">
-        <div className="flex items-center gap-3">
-          {/* Checkbox */}
-          {isSelectable ? (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleSelect();
-              }}
-              className="flex size-9 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-muted"
-            >
-              {selected ? (
-                <CheckSquare className="size-5 text-primary" />
-              ) : (
-                <Square className="size-5 text-muted-foreground/50 group-hover:text-muted-foreground" />
-              )}
-            </button>
-          ) : (
-            <div
-              className={cn(
-                "flex size-9 items-center justify-center rounded-lg",
-                deck.status === "failed" ? "bg-red-500/10" : "bg-muted",
-              )}
-            >
-              {deck.status === "failed" ? (
-                <AlertCircle className="size-4 text-red-500" />
-              ) : (
-                <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
-              )}
-            </div>
-          )}
-          <div className="min-w-0">
-            <p className="truncate text-[13px] font-semibold text-foreground">{displayName}</p>
-            <p className="truncate text-[11px] text-muted-foreground">{deck.websiteUrl}</p>
+      {/* Slide thumbnail preview */}
+      <button
+        type="button"
+        onClick={onPreview}
+        className="relative block w-full aspect-[16/10] bg-muted/30 overflow-hidden"
+      >
+        {thumbnailUrl && isSelectable ? (
+          <img
+            src={thumbnailUrl}
+            alt={`Preview of ${displayName} deck`}
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+            loading="lazy"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center">
+            {deck.status === "failed" ? (
+              <AlertCircle className="size-8 text-destructive/30" />
+            ) : !isSelectable ? (
+              <LoaderCircle className="size-6 animate-spin text-muted-foreground/40" />
+            ) : (
+              <FileText className="size-8 text-muted-foreground/20" />
+            )}
           </div>
+        )}
+        {/* Hover overlay */}
+        {isSelectable && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-all group-hover:bg-black/40 group-hover:opacity-100">
+            <span className="flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1.5 text-[12px] font-medium text-gray-900 shadow-lg backdrop-blur">
+              <Eye className="size-3.5" />
+              Preview
+            </span>
+          </div>
+        )}
+      </button>
+
+      {/* Card body */}
+      <div className="p-3.5">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            {/* Checkbox */}
+            {isSelectable ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleSelect();
+                }}
+                className="flex size-5 shrink-0 items-center justify-center rounded cursor-pointer transition-colors"
+              >
+                {selected ? (
+                  <CheckSquare className="size-4 text-primary" />
+                ) : (
+                  <Square className="size-4 text-muted-foreground/40 group-hover:text-muted-foreground" />
+                )}
+              </button>
+            ) : (
+              <div className="flex size-5 items-center justify-center shrink-0">
+                {deck.status === "failed" ? (
+                  <AlertCircle className="size-3.5 text-destructive" />
+                ) : (
+                  <LoaderCircle className="size-3.5 animate-spin text-muted-foreground" />
+                )}
+              </div>
+            )}
+            <div className="min-w-0">
+              <p className="truncate text-[13px] font-semibold text-foreground">{displayName}</p>
+              <p className="truncate text-[11px] text-muted-foreground">{deck.websiteUrl}</p>
+            </div>
+          </div>
+          {deck.score && <DeckScoreBadge score={deck.score.overallScore} onClick={onScoreClick} />}
         </div>
-        {deck.score && <DeckScoreBadge score={deck.score.overallScore} onClick={onScoreClick} />}
       </div>
 
-      <div className="flex items-center gap-3 border-t border-border/30 px-4 py-2.5 text-[11px] text-muted-foreground">
-        <span className="uppercase font-medium">{deck.format}</span>
-        <span>&middot;</span>
-        <span>{new Date(deck.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
-        <span>&middot;</span>
-        <StatusPill
-          status={deck.status === "completed" || deck.status === "delivered" ? "ready" : deck.status === "failed" ? "error" : "running"}
-          label={deck.status === "delivered" ? "completed" : deck.status}
-        />
-      </div>
+      {/* Footer metadata */}
+      <div className="flex items-center justify-between border-t border-border/30 px-3.5 py-2">
+        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+          <span className="uppercase font-medium tracking-wide">{deck.format}</span>
+          <span className="text-border">&middot;</span>
+          <span>{new Date(deck.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
+          <span className="text-border">&middot;</span>
+          <StatusPill
+            status={deck.status === "completed" || deck.status === "delivered" ? "ready" : deck.status === "failed" ? "error" : "running"}
+            label={deck.status === "delivered" ? "completed" : deck.status}
+          />
+        </div>
 
-      <div className="flex items-center gap-1.5 border-t border-border/30 px-3 py-2.5">
-        {(deck.status === "completed" || deck.status === "delivered") && (() => {
+        {isSelectable && (() => {
           const da = deck.artifacts.find((a) => a.artifact_type === "presentation_delivery")?.artifact_json;
-          const cardEditorUrl = da?.editorUrl as string | undefined;
-          const cardDownloadUrl = (da?.pptxExportUrl ?? da?.download_url) as string | undefined;
+          const editorUrl = da?.editorUrl as string | undefined;
+          const downloadUrl = (da?.pptxExportUrl ?? da?.download_url) as string | undefined;
+          const actionUrl = editorUrl ?? downloadUrl;
+          if (!actionUrl) return null;
           return (
-            <>
-              <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs flex-1" onClick={onPreview}>
-                <Eye className="size-3" />
-                Preview
-              </Button>
-              {cardEditorUrl ? (
-                <Button variant="outline" size="sm" className="h-7 gap-1 text-xs flex-1" asChild>
-                  <a href={cardEditorUrl} target="_blank" rel="noopener noreferrer">
-                    <ExternalLink className="size-3" />
-                    Edit
-                  </a>
-                </Button>
-              ) : cardDownloadUrl ? (
-                <Button variant="outline" size="sm" className="h-7 gap-1 text-xs flex-1" asChild>
-                  <a href={cardDownloadUrl} download>
-                    <Download className="size-3" />
-                    Download
-                  </a>
-                </Button>
-              ) : null}
-            </>
+            <a
+              href={actionUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {editorUrl ? (
+                <>Edit <ExternalLink className="size-2.5" /></>
+              ) : (
+                <>Download <Download className="size-2.5" /></>
+              )}
+            </a>
           );
         })()}
-        {deck.status === "failed" && (
-          <p className="px-1 text-[11px] text-destructive">Generation failed — try again from Pipeline</p>
-        )}
-        {deck.status !== "completed" && deck.status !== "delivered" && deck.status !== "failed" && (
-          <p className="px-1 text-[11px] text-muted-foreground">Generation in progress…</p>
-        )}
       </div>
     </div>
   );
 }
 
-/* ── Deck Preview Drawer ──────────────────── */
+/* ── Full-screen Deck Preview — Theater Mode ──── */
 
-function DeckPreviewDrawer({
+function DeckPreviewOverlay({
   deck,
   onClose,
   onScoreClick,
@@ -511,6 +536,11 @@ function DeckPreviewDrawer({
   onClose: () => void;
   onScoreClick: () => void;
 }) {
+  const [iframeLoaded, setIframeLoaded] = React.useState(false);
+  const [isFullscreen, setIsFullscreen] = React.useState(false);
+  const [controlsVisible, setControlsVisible] = React.useState(true);
+  const hideTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
   let displayName: string;
   try {
     displayName = deck.companyName || new URL(deck.websiteUrl.startsWith("http") ? deck.websiteUrl : `https://${deck.websiteUrl}`).hostname;
@@ -521,113 +551,277 @@ function DeckPreviewDrawer({
   const viewUrl = deck.artifacts.find((a) => typeof a.artifact_json?.url === "string")?.artifact_json?.url as string | undefined;
   const downloadUrl = deck.artifacts.find((a) => typeof a.artifact_json?.download_url === "string")?.artifact_json?.download_url as string | undefined;
 
-  // Google Slides fields from the artifact (Plus AI generates Google Slides natively)
   const deliveryArtifact = deck.artifacts.find((a) => a.artifact_type === "presentation_delivery")?.artifact_json;
   const embedUrl = deliveryArtifact?.embedUrl as string | undefined;
   const editorUrl = deliveryArtifact?.editorUrl as string | undefined;
   const pdfExportUrl = deliveryArtifact?.pdfExportUrl as string | undefined;
   const pptxExportUrl = deliveryArtifact?.pptxExportUrl as string | undefined;
 
-  // Prefer Google Slides embed for preview; fall back to Microsoft Office Online viewer
   const fileUrl = downloadUrl ?? viewUrl;
   const previewUrl = embedUrl
-    ? embedUrl
+    ? `${embedUrl}&rm=minimal`
     : fileUrl
       ? `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileUrl)}`
       : null;
 
+  // Auto-hide controls after 3s of inactivity
+  const resetHideTimer = React.useCallback(() => {
+    setControlsVisible(true);
+    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    hideTimerRef.current = setTimeout(() => setControlsVisible(false), 3000);
+  }, []);
+
+  React.useEffect(() => {
+    resetHideTimer();
+    return () => {
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    };
+  }, [resetHideTimer]);
+
+  // Keyboard shortcuts
+  React.useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+      if (e.key === "f" || e.key === "F") setIsFullscreen((p) => !p);
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  const scoreColor = deck.score
+    ? deck.score.overallScore >= 80
+      ? "text-emerald-400"
+      : deck.score.overallScore >= 60
+        ? "text-amber-400"
+        : "text-red-400"
+    : "";
+
   return (
-    <div className="fixed inset-0 z-50 flex">
-      <div className="flex-1 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="animate-slide-in-right flex h-full w-full max-w-4xl flex-col border-l border-border bg-background shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-border/40 px-6 py-4">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" className="size-8" onClick={onClose}>
-              <X className="size-4" />
-            </Button>
-            <div>
-              <p className="text-[14px] font-semibold">{displayName}</p>
-              <p className="text-[11px] text-muted-foreground">{deck.websiteUrl}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {deck.score && <DeckScoreBadge score={deck.score.overallScore} onClick={onScoreClick} />}
-            {pdfExportUrl && (
-              <Button variant="outline" size="sm" className="gap-1.5 text-xs" asChild>
-                <a href={pdfExportUrl} target="_blank" rel="noopener noreferrer">
-                  <Download className="size-3" />
-                  PDF
-                </a>
-              </Button>
-            )}
-            {(pptxExportUrl || downloadUrl) && (
-              <Button variant="outline" size="sm" className="gap-1.5 text-xs" asChild>
-                <a href={pptxExportUrl ?? downloadUrl} download={!pptxExportUrl}>
-                  <Download className="size-3" />
-                  PPTX
-                </a>
-              </Button>
-            )}
-            {editorUrl ? (
-              <Button variant="default" size="sm" className="gap-1.5 text-xs" asChild>
-                <a href={editorUrl} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="size-3" />
-                  Edit in Google Slides
-                </a>
-              </Button>
-            ) : fileUrl ? (
-              <Button variant="default" size="sm" className="gap-1.5 text-xs" asChild>
-                <a href={fileUrl} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="size-3" />
-                  Open
-                </a>
-              </Button>
-            ) : null}
+    <div
+      className="fixed inset-0 z-50 flex flex-col"
+      onMouseMove={resetHideTimer}
+      style={{
+        background: "radial-gradient(ellipse 80% 60% at 50% 55%, oklch(0.16 0.025 250), oklch(0.08 0.015 250) 70%, oklch(0.05 0.01 250))",
+      }}
+    >
+      {/* Scoped animations */}
+      <style>{`
+        @keyframes preview-enter {
+          from { opacity: 0; transform: scale(0.97); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        @keyframes preview-glow {
+          0%, 100% { opacity: 0.4; }
+          50% { opacity: 0.6; }
+        }
+        .preview-enter { animation: preview-enter 0.35s cubic-bezier(0.16, 1, 0.3, 1) both; }
+        .preview-glow { animation: preview-glow 4s ease-in-out infinite; }
+        .controls-bar { transition: opacity 0.4s ease, transform 0.4s ease; }
+        .controls-hidden { opacity: 0; transform: translateY(-8px); pointer-events: none; }
+        .controls-hidden-bottom { opacity: 0; transform: translateY(8px); pointer-events: none; }
+      `}</style>
+
+      {/* Top bar — auto-hides when idle */}
+      <div
+        className={cn("controls-bar relative z-10 flex items-center justify-between px-5 py-3", !controlsVisible && "controls-hidden")}
+        onMouseEnter={() => setControlsVisible(true)}
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="group flex items-center gap-2 rounded-full bg-white/[0.07] px-3.5 py-1.5 text-[13px] font-medium text-white/70 backdrop-blur-md transition-all hover:bg-white/[0.12] hover:text-white"
+          >
+            <ChevronLeft className="size-3.5 transition-transform group-hover:-translate-x-0.5" />
+            <span>Back</span>
+          </button>
+          <div className="min-w-0 hidden sm:block">
+            <p className="truncate text-[13px] font-medium text-white/50">{displayName}</p>
           </div>
         </div>
 
-        {/* Preview area */}
-        <div className="flex-1 overflow-auto bg-muted/20">
-          {previewUrl ? (
-            <iframe
-              src={previewUrl}
-              title={`Preview — ${displayName}`}
-              className="h-full w-full border-0"
-              allowFullScreen
-            />
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full py-20 text-center">
-              <div className="mb-4 flex size-14 items-center justify-center rounded-xl bg-muted">
-                <Eye className="size-6 text-muted-foreground/60" />
+        <div className="flex items-center gap-1">
+          {pdfExportUrl && (
+            <a
+              href={pdfExportUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 rounded-full bg-white/[0.07] px-3 py-1.5 text-[12px] font-medium text-white/60 backdrop-blur-md transition-all hover:bg-white/[0.12] hover:text-white"
+            >
+              <Download className="size-3" />
+              PDF
+            </a>
+          )}
+          {(pptxExportUrl || downloadUrl) && (
+            <a
+              href={(pptxExportUrl ?? downloadUrl)!}
+              download={!pptxExportUrl}
+              className="flex items-center gap-1.5 rounded-full bg-white/[0.07] px-3 py-1.5 text-[12px] font-medium text-white/60 backdrop-blur-md transition-all hover:bg-white/[0.12] hover:text-white"
+            >
+              <Download className="size-3" />
+              PPTX
+            </a>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setIsFullscreen((p) => !p)}
+            className="flex items-center justify-center size-8 rounded-full bg-white/[0.07] text-white/60 backdrop-blur-md transition-all hover:bg-white/[0.12] hover:text-white"
+            title={isFullscreen ? "Exit fullscreen (F)" : "Fullscreen (F)"}
+          >
+            {isFullscreen ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
+          </button>
+
+          {editorUrl ? (
+            <a
+              href={editorUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 rounded-full bg-white/90 px-4 py-1.5 text-[12px] font-semibold text-gray-900 shadow-lg shadow-black/20 backdrop-blur-md transition-all hover:bg-white hover:shadow-xl hover:shadow-black/25"
+            >
+              <ExternalLink className="size-3" />
+              Edit in Slides
+            </a>
+          ) : fileUrl ? (
+            <a
+              href={fileUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 rounded-full bg-white/90 px-4 py-1.5 text-[12px] font-semibold text-gray-900 shadow-lg shadow-black/20 backdrop-blur-md transition-all hover:bg-white hover:shadow-xl"
+            >
+              <ExternalLink className="size-3" />
+              Open
+            </a>
+          ) : null}
+        </div>
+      </div>
+
+      {/* Slide area */}
+      <div className="relative flex-1 flex items-center justify-center overflow-hidden">
+        {previewUrl ? (
+          <>
+            {/* Ambient glow behind the slide */}
+            {iframeLoaded && !isFullscreen && (
+              <div
+                className="preview-glow pointer-events-none absolute"
+                style={{
+                  width: "70%",
+                  height: "50%",
+                  top: "55%",
+                  left: "50%",
+                  transform: "translate(-50%, -50%)",
+                  background: "radial-gradient(ellipse, oklch(0.35 0.08 255 / 30%), transparent 70%)",
+                  filter: "blur(60px)",
+                }}
+              />
+            )}
+
+            {/* Loading state */}
+            {!iframeLoaded && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 z-10">
+                <div className="size-12 rounded-2xl bg-white/[0.05] backdrop-blur-sm flex items-center justify-center">
+                  <LoaderCircle className="size-5 animate-spin text-white/40" />
+                </div>
+                <div className="flex flex-col items-center gap-1">
+                  <p className="text-[13px] font-medium text-white/40">Loading presentation</p>
+                  <p className="text-[11px] text-white/20">This may take a moment</p>
+                </div>
               </div>
-              <p className="text-[14px] font-medium">No preview available</p>
-              <p className="mt-1 text-[12px] text-muted-foreground">
-                {downloadUrl ? "Download the deck to view it in PowerPoint or Google Slides." : "Artifacts are still being generated."}
+            )}
+
+            {/* Slide iframe */}
+            <div className={cn(
+              "preview-enter relative z-[1] transition-all duration-500 ease-out",
+              isFullscreen
+                ? "w-full h-full"
+                : "w-[92%] max-w-[1120px] aspect-[16/9.5]",
+              iframeLoaded ? "opacity-100" : "opacity-0",
+            )}>
+              <div
+                className={cn(
+                  "relative w-full h-full overflow-hidden",
+                  !isFullscreen && "rounded-xl",
+                )}
+                style={!isFullscreen ? {
+                  boxShadow: "0 25px 60px -12px oklch(0 0 0 / 60%), 0 0 0 1px oklch(1 0 0 / 6%)",
+                } : undefined}
+              >
+                <iframe
+                  src={previewUrl}
+                  title={`Preview — ${displayName}`}
+                  className="h-full w-full border-0 bg-white"
+                  allowFullScreen
+                  onLoad={() => setIframeLoaded(true)}
+                />
+              </div>
+            </div>
+          </>
+        ) : (
+          /* Empty state */
+          <div className="flex flex-col items-center justify-center gap-4 text-center">
+            <div className="flex size-20 items-center justify-center rounded-3xl bg-white/[0.04] ring-1 ring-white/[0.06]">
+              <Eye className="size-8 text-white/20" />
+            </div>
+            <div>
+              <p className="text-[15px] font-medium text-white/50">No preview available</p>
+              <p className="mt-1 text-[12px] text-white/25 max-w-xs">
+                {downloadUrl ? "Download the deck to view it in PowerPoint or Google Slides." : "The presentation is still being generated."}
               </p>
             </div>
-          )}
-        </div>
-
-        {/* Footer with score */}
-        {deck.score && (
-          <div className="border-t border-border/40 px-6 py-3">
-            <button
-              type="button"
-              onClick={onScoreClick}
-              className="flex w-full items-center justify-between rounded-lg bg-muted/50 px-4 py-2.5 text-left transition-colors hover:bg-muted"
-            >
-              <div className="flex items-center gap-2.5">
-                <Star className="size-3.5 text-amber-500 fill-amber-500" />
-                <span className="text-[12px] font-medium">Quality Score: {deck.score.overallScore}/100</span>
-              </div>
-              <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                <span>View breakdown</span>
-                <ChevronRight className="size-3" />
-              </div>
-            </button>
+            {downloadUrl && (
+              <a
+                href={downloadUrl}
+                download
+                className="mt-2 flex items-center gap-2 rounded-full bg-white/[0.08] px-4 py-2 text-[13px] font-medium text-white/70 transition-all hover:bg-white/[0.12] hover:text-white"
+              >
+                <Download className="size-3.5" />
+                Download deck
+              </a>
+            )}
           </div>
         )}
+      </div>
+
+      {/* Floating quality score pill */}
+      {deck.score && (
+        <div
+          className={cn(
+            "controls-bar absolute bottom-4 left-1/2 -translate-x-1/2 z-10",
+            !controlsVisible && "controls-hidden-bottom",
+          )}
+          onMouseEnter={() => setControlsVisible(true)}
+        >
+          <button
+            type="button"
+            onClick={onScoreClick}
+            className="group flex items-center gap-3 rounded-full bg-white/[0.08] backdrop-blur-xl px-5 py-2.5 transition-all hover:bg-white/[0.12] ring-1 ring-white/[0.06] shadow-lg shadow-black/20"
+          >
+            <div className="flex items-center gap-2">
+              <Star className={cn("size-3.5 fill-current", scoreColor)} />
+              <span className="text-[13px] font-semibold tabular-nums text-white/80">
+                {deck.score.overallScore}
+              </span>
+              <span className="text-[11px] text-white/30 font-normal">/100</span>
+            </div>
+            <div className="h-3 w-px bg-white/10" />
+            <span className="text-[11px] text-white/40 transition-colors group-hover:text-white/60">
+              View breakdown
+            </span>
+            <ChevronRight className="size-3 text-white/30 transition-transform group-hover:translate-x-0.5 group-hover:text-white/50" />
+          </button>
+        </div>
+      )}
+
+      {/* Keyboard hints — very subtle */}
+      <div className={cn(
+        "controls-bar absolute bottom-4 right-5 z-10 flex items-center gap-2",
+        !controlsVisible && "controls-hidden-bottom",
+      )}>
+        <span className="text-[10px] text-white/15 tracking-wide">
+          <kbd className="rounded bg-white/[0.06] px-1.5 py-0.5 text-white/25 font-mono">esc</kbd> close
+          <span className="mx-1.5">&middot;</span>
+          <kbd className="rounded bg-white/[0.06] px-1.5 py-0.5 text-white/25 font-mono">F</kbd> fullscreen
+        </span>
       </div>
     </div>
   );

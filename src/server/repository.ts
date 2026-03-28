@@ -80,26 +80,29 @@ export async function saveOnboarding(payload: OnboardingPayload) {
     ],
   );
 
-  for (const integration of payload.integrations ?? []) {
-    await db.run(
-      `
-        INSERT INTO integration_settings (provider, display_name, config_json, secret_ciphertext, updated_at)
-        VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(provider) DO UPDATE SET
-          display_name = excluded.display_name,
-          config_json = excluded.config_json,
-          secret_ciphertext = COALESCE(excluded.secret_ciphertext, integration_settings.secret_ciphertext),
-          updated_at = excluded.updated_at
-      `,
-      [
-        integration.provider,
-        integration.displayName ?? null,
-        integration.config ? JSON.stringify(integration.config) : null,
-        integration.secret ? encryptSecret(integration.secret) : null,
-        timestamp,
-      ],
-    );
-  }
+  // Insert all integration settings in parallel
+  await Promise.all(
+    (payload.integrations ?? []).map((integration) =>
+      db.run(
+        `
+          INSERT INTO integration_settings (provider, display_name, config_json, secret_ciphertext, updated_at)
+          VALUES (?, ?, ?, ?, ?)
+          ON CONFLICT(provider) DO UPDATE SET
+            display_name = excluded.display_name,
+            config_json = excluded.config_json,
+            secret_ciphertext = COALESCE(excluded.secret_ciphertext, integration_settings.secret_ciphertext),
+            updated_at = excluded.updated_at
+        `,
+        [
+          integration.provider,
+          integration.displayName ?? null,
+          integration.config ? JSON.stringify(integration.config) : null,
+          integration.secret ? encryptSecret(integration.secret) : null,
+          timestamp,
+        ],
+      ),
+    ),
+  );
 }
 
 export async function saveSellerBriefMd(markdown: string) {
@@ -252,11 +255,27 @@ export async function getOnboarding() {
     {
       provider: "presenton" as const,
       displayName: byProvider.get("presenton")?.display_name ?? undefined,
-      config: resolved.presentonBaseUrl
-        ? { baseUrl: resolved.presentonBaseUrl }
-        : undefined,
+      config:
+        resolved.presentonBaseUrl || resolved.presentonTemplate
+          ? {
+              ...(resolved.presentonBaseUrl
+                ? { baseUrl: resolved.presentonBaseUrl }
+                : {}),
+              ...(resolved.presentonTemplate
+                ? { template: resolved.presentonTemplate }
+                : {}),
+            }
+          : undefined,
       hasSecret: Boolean(
         byProvider.get("presenton")?.secret_ciphertext ?? resolved.presentonApiKey,
+      ),
+    },
+    {
+      provider: "plusai" as const,
+      displayName: byProvider.get("plusai")?.display_name ?? undefined,
+      config: undefined,
+      hasSecret: Boolean(
+        byProvider.get("plusai")?.secret_ciphertext ?? resolved.plusaiApiKey,
       ),
     },
   ].filter((integration) => integration.config || integration.hasSecret);
@@ -312,30 +331,33 @@ export async function createRun(input: IntakeRun, userId?: string) {
     ],
   );
 
-  for (const target of parsed.targets) {
-    await db.run(
-      `
-        INSERT INTO run_targets (
-          id, run_id, website_url, company_name, first_name, last_name, role, campaign_goal, notes,
-          status, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `,
-      [
-        randomUUID(),
-        runId,
-        target.websiteUrl,
-        target.companyName ?? null,
-        target.firstName ?? null,
-        target.lastName ?? null,
-        target.role ?? null,
-        target.campaignGoal ?? null,
-        target.notes ?? null,
-        "queued",
-        timestamp,
-        timestamp,
-      ],
-    );
-  }
+  // Batch insert all targets in parallel for speed
+  await Promise.all(
+    parsed.targets.map((target) =>
+      db.run(
+        `
+          INSERT INTO run_targets (
+            id, run_id, website_url, company_name, first_name, last_name, role, campaign_goal, notes,
+            status, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          randomUUID(),
+          runId,
+          target.websiteUrl,
+          target.companyName ?? null,
+          target.firstName ?? null,
+          target.lastName ?? null,
+          target.role ?? null,
+          target.campaignGoal ?? null,
+          target.notes ?? null,
+          "queued",
+          timestamp,
+          timestamp,
+        ],
+      ),
+    ),
+  );
 
   await addRunEvent(runId, {
     level: "info",
@@ -415,6 +437,115 @@ export async function listRuns() {
             (SELECT rt.website_url FROM run_targets rt WHERE rt.run_id = r.id ORDER BY rt.created_at ASC LIMIT 1) AS first_target_url
      FROM runs r ORDER BY r.created_at DESC`,
   );
+}
+
+/** Lightweight count query — avoids fetching full run data just for a count. */
+export async function countRuns(): Promise<number> {
+  const db = await getDb();
+  const row = await db.execute("SELECT COUNT(*) AS cnt FROM runs") as { cnt: number } | undefined;
+  return row?.cnt ?? 0;
+}
+
+/**
+ * Bulk fetch all data needed for the Delivery page in just 3 DB queries.
+ * Replaces the N+1 pattern of: listRuns() + getRun(id) per run.
+ *
+ * Returns runs that have at least one completed/delivered target, along with
+ * their targets and delivery artifacts (skipping crawl/enrichment artifacts
+ * which aren't needed for the delivery gallery).
+ */
+export async function listDeliveryDecks() {
+  const db = await getDb();
+
+  // 1. Get all runs that are relevant for delivery
+  const runs = await db.executeAll(
+    `SELECT r.id, r.status, r.delivery_format, r.created_at
+     FROM runs r
+     WHERE r.status IN ('completed', 'partially_completed', 'running')
+     ORDER BY r.created_at DESC`,
+  ) as unknown as Array<{
+    id: string;
+    status: string;
+    delivery_format: string;
+    created_at: string;
+  }>;
+
+  if (runs.length === 0) return [];
+
+  // 2. Get all targets for these runs in ONE query
+  const runIds = runs.map((r) => r.id);
+  const placeholders = runIds.map(() => "?").join(",");
+
+  const targets = await db.executeAll(
+    `SELECT id, run_id, website_url, company_name, status, last_error, created_at
+     FROM run_targets
+     WHERE run_id IN (${placeholders})
+     ORDER BY created_at ASC`,
+    runIds,
+  ) as unknown as Array<{
+    id: string;
+    run_id: string;
+    website_url: string;
+    company_name: string | null;
+    status: string;
+    last_error: string | null;
+    created_at: string;
+  }>;
+
+  // 3. Get only delivery artifacts (the only ones the delivery page needs)
+  const artifacts = await db.executeAll(
+    `SELECT id, run_id, target_id, artifact_type, artifact_json, created_at
+     FROM run_artifacts
+     WHERE run_id IN (${placeholders})
+       AND artifact_type = 'presentation_delivery'
+     ORDER BY created_at ASC`,
+    runIds,
+  ) as unknown as Array<{
+    id: string;
+    run_id: string;
+    target_id: string | null;
+    artifact_type: string;
+    artifact_json: string;
+    created_at: string;
+  }>;
+
+  // Index artifacts by target_id
+  const artifactsByTarget = new Map<string, Array<{
+    id: string;
+    run_id: string;
+    target_id: string | null;
+    artifact_type: string;
+    artifact_json: unknown;
+    created_at: string;
+  }>>();
+  for (const a of artifacts) {
+    const key = a.target_id ?? "general";
+    const parsed = {
+      ...a,
+      artifact_json: typeof a.artifact_json === "string" ? JSON.parse(a.artifact_json) : a.artifact_json,
+    };
+    const list = artifactsByTarget.get(key) ?? [];
+    list.push(parsed);
+    artifactsByTarget.set(key, list);
+  }
+
+  // Index runs by id
+  const runMap = new Map(runs.map((r) => [r.id, r]));
+
+  // Build flat deck cards
+  return targets.map((target) => {
+    const run = runMap.get(target.run_id)!;
+    return {
+      targetId: target.id,
+      runId: target.run_id,
+      companyName: target.company_name ?? "",
+      websiteUrl: target.website_url,
+      status: target.status,
+      format: run.delivery_format,
+      createdAt: target.created_at,
+      artifacts: artifactsByTarget.get(target.id) ?? [],
+    };
+  });
 }
 
 export async function updateRun(runId: string, values: {

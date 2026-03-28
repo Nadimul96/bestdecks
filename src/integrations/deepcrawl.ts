@@ -51,16 +51,13 @@ export class DeepcrawlCrawler implements CrawlProvider {
       .filter((value, index, all) => all.indexOf(value) === index)
       .slice(0, request.maxPages ?? 20);
 
-    const pages: CrawlPage[] = [];
-
-    for (const url of targetUrls) {
-      try {
-        const page = await this.readPage(url, request.requestedFormats);
-        pages.push(page);
-      } catch {
-        // Keep processing other pages. Deepcrawl is a fallback layer and partial results are better than none.
-      }
-    }
+    // Fetch all pages in parallel for speed — partial failures are tolerated
+    const settled = await Promise.allSettled(
+      targetUrls.map((url) => this.readPage(url, request.requestedFormats)),
+    );
+    const pages: CrawlPage[] = settled
+      .filter((r): r is PromiseFulfilledResult<CrawlPage> => r.status === "fulfilled")
+      .map((r) => r.value);
 
     if (pages.length === 0) {
       throw new Error("Deepcrawl fallback returned no readable pages.");

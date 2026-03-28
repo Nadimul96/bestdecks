@@ -9,7 +9,8 @@ export type IntegrationProviderKey =
   | "gemini"
   | "openai"
   | "presenton"
-  | "plusai";
+  | "plusai"
+  | "alai";
 
 export interface IntegrationRecord {
   provider: IntegrationProviderKey;
@@ -57,5 +58,6 @@ export async function resolveIntegrationConfig() {
     presentonTemplate:
       (presenton?.config?.template as string | undefined) ?? env.PRESENTON_TEMPLATE,
     plusaiApiKey: records.get("plusai")?.secret ?? env.PLUSAI_API_KEY,
+    alaiApiKey: records.get("alai")?.secret ?? env.ALAI_API_KEY,
   };
 }

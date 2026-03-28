@@ -10,6 +10,7 @@
 import type { CompanyBriefBuilder } from "@/src/app/orchestrator";
 import type { IntakeRun } from "@/src/domain/schemas";
 import type { CompanyBrief, SellerDiscoveryResult } from "@/src/integrations/providers";
+import type { CommunityIntelResult } from "@/src/integrations/community-intel";
 import { requestJson } from "@/src/integrations/http";
 
 interface GeminiTextResponse {
@@ -33,9 +34,15 @@ interface ExtractedBrief {
   keyServices: string[];
   competitiveAdvantages: string[];
   operationalInsights: string[];
+  /** The single most compelling metric that quantifies this company's core challenge or opportunity */
+  anchorMetric?: string;
+  /** A contrarian angle — reframing their situation in a way competitors wouldn't */
+  contrarianAngle?: string;
+  /** The flywheel — how solving one problem compounds into broader improvement */
+  compoundingLogic?: string;
 }
 
-const BRIEF_SYSTEM_PROMPT = `You are an expert B2B sales researcher. Given a target company's website content and external research, extract a structured company profile.
+const BRIEF_SYSTEM_PROMPT = `You are an expert B2B sales researcher who has studied how the best pitch decks in history (Anthropic, SpaceX, Airbnb, Coinbase) were constructed. Given a target company's website content and external research, extract a structured company profile that will power a world-class sales deck.
 
 IMPORTANT RULES:
 1. Focus ENTIRELY on the TARGET company — not the seller.
@@ -45,6 +52,11 @@ IMPORTANT RULES:
 5. Be specific — never use generic filler like "may have mismatches" or "likely receives generic outreach."
 6. If the company is a gym/fitness studio, mention specific classes, membership types, locations, trainers, etc.
 7. For operational insights: infer how they likely operate based on their industry, size, and website evidence.
+
+ADVANCED ANALYSIS (these power the best decks):
+8. ANCHOR METRIC: Identify ONE single metric that quantifies this company's core challenge or opportunity. SpaceX used "cost per kg to orbit." What is this company's equivalent? It should be a specific number that organizes the entire pitch narrative. Example: "47% of their new members churn within 6 months" or "$2.3M in annual revenue with only 2 account managers."
+9. CONTRARIAN ANGLE: What's a non-obvious way to frame this company's situation that competitors wouldn't think of? Anthropic led with safety when everyone else led with capability. What's the unexpected framing here?
+10. COMPOUNDING LOGIC: How does solving one problem for this company compound into broader improvement? Show the flywheel: fixing X enables Y, which unlocks Z.
 
 Return ONLY valid JSON matching this exact schema:
 {
@@ -59,14 +71,17 @@ Return ONLY valid JSON matching this exact schema:
   "pitchAngles": ["array of 3-5 angles to pitch services to them"],
   "keyServices": ["array of their main services/products"],
   "competitiveAdvantages": ["array of what makes them unique"],
-  "operationalInsights": ["array of 3-5 inferred operational realities"]
+  "operationalInsights": ["array of 3-5 inferred operational realities"],
+  "anchorMetric": "string - ONE metric that quantifies their core challenge (be specific with numbers)",
+  "contrarianAngle": "string - a non-obvious framing of their situation that competitors wouldn't use",
+  "compoundingLogic": "string - how solving one problem compounds: 'fixing X enables Y, which unlocks Z'"
 }`;
 
 export class AiBriefBuilder implements CompanyBriefBuilder {
   private readonly geminiApiKey: string;
   private readonly model: string;
 
-  constructor(geminiApiKey: string, model = "gemini-2.0-flash") {
+  constructor(geminiApiKey: string, model = "gemini-2.5-flash") {
     this.geminiApiKey = geminiApiKey;
     this.model = model;
   }
@@ -77,6 +92,7 @@ export class AiBriefBuilder implements CompanyBriefBuilder {
     crawlMarkdown: string;
     sourceUrls: string[];
     enrichmentSummary: string;
+    communityIntel?: CommunityIntelResult;
   }): Promise<CompanyBrief> {
     const companyName =
       input.target.companyName ??
@@ -103,6 +119,26 @@ export class AiBriefBuilder implements CompanyBriefBuilder {
       `The seller offers: ${input.sellerBrief.offerSummary}`,
       `Key differentiators: ${input.sellerBrief.preferredAngles.join(", ")}`,
       "",
+      // Inject community intelligence when available
+      ...(input.communityIntel && input.communityIntel.summary
+        ? [
+            "## Community Intelligence (recent industry discussions from Reddit, X, forums)",
+            `Summary: ${input.communityIntel.summary}`,
+            input.communityIntel.trendingPainPoints.length > 0
+              ? `Trending pain points being discussed: ${input.communityIntel.trendingPainPoints.join("; ")}`
+              : "",
+            input.communityIntel.industryTrends.length > 0
+              ? `Industry trends: ${input.communityIntel.industryTrends.join("; ")}`
+              : "",
+            input.communityIntel.communityBenchmarks.length > 0
+              ? `Benchmarks shared by practitioners: ${input.communityIntel.communityBenchmarks.join("; ")}`
+              : "",
+            "",
+            "IMPORTANT: Use these community insights to make pain points MORE SPECIFIC and CURRENT.",
+            "These are real things people in this industry are complaining about RIGHT NOW.",
+            "",
+          ]
+        : []),
       "Now extract the structured company profile JSON for the TARGET company.",
     ]
       .filter(Boolean)
@@ -155,6 +191,9 @@ export class AiBriefBuilder implements CompanyBriefBuilder {
           ? extracted.pitchAngles
           : input.sellerBrief.preferredAngles.slice(0, 3),
         sourceUrls: input.sourceUrls.filter((v, i, a) => a.indexOf(v) === i),
+        anchorMetric: extracted.anchorMetric || undefined,
+        contrarianAngle: extracted.contrarianAngle || undefined,
+        compoundingLogic: extracted.compoundingLogic || undefined,
       };
     } catch (error) {
       console.error("[ai-brief-builder] AI analysis failed, using fallback:", error);

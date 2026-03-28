@@ -278,7 +278,7 @@ export function OverviewView({ currentUser }: { currentUser: CurrentUser }) {
                 <a
                   key={item.label}
                   href={item.hash}
-                  className="card-elevated group flex items-start gap-3.5 rounded-xl border border-border/50 bg-card p-4 transition-all hover:border-border hover:shadow-md"
+                  className="card-elevated group flex items-start gap-3.5 rounded-xl border border-border/50 bg-card p-4 transition-all hover:border-border hover:shadow-sm focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
                 >
                   <div
                     className={cn(
@@ -312,7 +312,94 @@ export function OverviewView({ currentUser }: { currentUser: CurrentUser }) {
         </>
       )}
 
-      {/* Recent runs */}
+      {/* ── Quick actions row (for returning users with runs) ── */}
+      {setupComplete && runs.length > 0 && (
+        <div className="grid gap-3 sm:grid-cols-3">
+          {[
+            {
+              label: "New run",
+              description: "Add targets and launch",
+              icon: Rocket,
+              href: "#target-intake",
+              accent: "bg-primary/10 text-primary",
+            },
+            {
+              label: "View pipeline",
+              description: `${runs.filter((r) => r.status === "running" || r.status === "queued").length} active`,
+              icon: SearchCheck,
+              href: "#pipeline",
+              accent: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+            },
+            {
+              label: "Download decks",
+              description: `${runs.filter((r) => r.status === "completed").length} completed`,
+              icon: FileText,
+              href: "#delivery",
+              accent: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+            },
+          ].map((action) => (
+            <a
+              key={action.label}
+              href={action.href}
+              className="card-elevated group flex items-center gap-3.5 rounded-xl border border-border/50 bg-card p-4 transition-all hover:border-border hover:shadow-md focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
+            >
+              <div className={cn("flex size-10 shrink-0 items-center justify-center rounded-xl", action.accent)}>
+                <action.icon className="size-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[13px] font-semibold text-foreground group-hover:text-primary transition-colors">
+                  {action.label}
+                </p>
+                <p className="text-[11px] text-muted-foreground">{action.description}</p>
+              </div>
+              <ArrowRight className="ml-auto size-3.5 text-muted-foreground/40 transition-transform group-hover:translate-x-0.5" />
+            </a>
+          ))}
+        </div>
+      )}
+
+      {/* ── Stats row (for users with runs) ── */}
+      {setupComplete && runs.length > 0 && (
+        <div className="grid gap-3 sm:grid-cols-4">
+          {[
+            {
+              label: "Total runs",
+              value: runs.length,
+              icon: Star,
+            },
+            {
+              label: "Total targets",
+              value: runs.reduce((sum, r) => sum + r.target_count, 0),
+              icon: Upload,
+            },
+            {
+              label: "Completed",
+              value: runs.filter((r) => r.status === "completed").length,
+              icon: CheckCircle2,
+            },
+            {
+              label: "Credits",
+              value: credits?.balance ?? 0,
+              icon: Sparkles,
+            },
+          ].map((stat) => (
+            <div
+              key={stat.label}
+              className="flex items-center gap-3 rounded-xl border border-border/40 bg-card px-4 py-3"
+            >
+              <stat.icon className="size-4 text-muted-foreground/50" />
+              <div>
+                <p className="text-lg font-bold tabular-nums text-foreground">
+                  {stat.value.toLocaleString()}
+                </p>
+                <p className="text-[11px] text-muted-foreground">{stat.label}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Recent runs ── */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-[15px] font-semibold text-foreground">
@@ -339,20 +426,39 @@ export function OverviewView({ currentUser }: { currentUser: CurrentUser }) {
             <div className="mb-4 flex size-12 items-center justify-center rounded-xl bg-muted">
               <SearchCheck className="size-5 text-muted-foreground/60" />
             </div>
-            <p className="text-[13px] font-medium text-foreground">
+            <p className="text-[14px] font-semibold text-foreground">
               No runs yet
             </p>
-            <p className="mt-1 max-w-[260px] text-center text-[12px] leading-relaxed text-muted-foreground">
+            <p className="mt-1.5 max-w-[300px] text-center text-[13px] leading-relaxed text-muted-foreground">
               {setupComplete
-                ? "Import targets to launch your first batch of personalized decks."
-                : "Complete setup and import targets to launch your first batch of personalized decks."}
+                ? "Import target company URLs and launch your first batch of personalized decks."
+                : "Complete your setup, then import targets to generate your first decks."}
             </p>
-            <Button asChild variant="outline" size="sm" className="mt-5 gap-1.5">
-              <a href={setupComplete ? "#target-intake" : "#onboarding"}>
-                {setupComplete ? "Import targets" : "Get started"}
-                <ArrowRight className="size-3" />
-              </a>
-            </Button>
+            <div className="mt-6 flex items-center gap-2">
+              {setupComplete ? (
+                <>
+                  <Button asChild size="sm" className="gap-1.5 shadow-sm">
+                    <a href="#target-intake">
+                      <Upload className="size-3.5" />
+                      Import targets
+                    </a>
+                  </Button>
+                  <Button asChild variant="outline" size="sm" className="gap-1.5">
+                    <a href="#seller-context">
+                      <Briefcase className="size-3.5" />
+                      Review setup
+                    </a>
+                  </Button>
+                </>
+              ) : (
+                <Button asChild size="sm" className="gap-1.5 shadow-sm">
+                  <a href="#onboarding">
+                    <Rocket className="size-3.5" />
+                    Get started
+                  </a>
+                </Button>
+              )}
+            </div>
           </div>
         ) : (
           <div className="space-y-1.5">
@@ -360,7 +466,7 @@ export function OverviewView({ currentUser }: { currentUser: CurrentUser }) {
               <a
                 key={run.id}
                 href="#pipeline"
-                className="flex items-center justify-between rounded-lg border border-border/40 bg-card px-4 py-3 transition-all hover:border-border/60 hover:bg-muted/30"
+                className="flex items-center justify-between rounded-lg border border-border/40 bg-card px-4 py-3 transition-all hover:border-border hover:bg-muted/30 hover:shadow-sm focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
               >
                 <div className="flex items-center gap-3">
                   <div className="flex size-8 items-center justify-center rounded-md bg-muted">

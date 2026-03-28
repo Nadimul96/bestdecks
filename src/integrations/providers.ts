@@ -98,12 +98,19 @@ export interface CompanyBrief {
   proofPoints: string[];
   pitchAngles: string[];
   sourceUrls: string[];
+  /** The single most compelling metric that quantifies this company's core challenge */
+  anchorMetric?: string;
+  /** A contrarian framing of their situation that competitors wouldn't use */
+  contrarianAngle?: string;
+  /** How solving one problem compounds: "fixing X enables Y, which unlocks Z" */
+  compoundingLogic?: string;
 }
 
 export interface DeckGenerationInput {
   companyBrief: CompanyBrief;
   sellerPositioningSummary: string;
   archetype: DeckArchetype;
+  customArchetypePrompt?: string;
   objective: string;
   audience: string;
   cardCount: number;
@@ -150,7 +157,7 @@ export interface PresentonResult {
   pptxExportUrl?: string;
 }
 
-export type DeckProviderName = "presenton" | "plusai";
+export type DeckProviderName = "presenton" | "plusai" | "alai";
 
 export interface DeckProvider {
   name: DeckProviderName;

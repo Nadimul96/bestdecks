@@ -29,10 +29,15 @@ export async function GET(
     const stuckThreshold = Date.now() - 6 * 60 * 1000; // 6 minutes
 
     if (lastEventTime < stuckThreshold) {
-      await updateRun(runId, {
-        status: "failed",
-        lastError: "Run timed out — no progress for over 6 minutes.",
-      });
+      // Run timeout + credit refund in parallel where possible
+      const [, ownerInfo] = await Promise.all([
+        updateRun(runId, {
+          status: "failed",
+          lastError: "Run timed out — no progress for over 6 minutes.",
+        }),
+        getRunOwner(runId),
+      ]);
+
       await addRunEvent(runId, {
         level: "error",
         stage: "timeout",
@@ -41,13 +46,12 @@ export async function GET(
 
       // Refund credits for the stuck run
       try {
-        const { userId, creditsCharged } = await getRunOwner(runId);
-        if (userId && creditsCharged > 0) {
-          await refundCredits(userId, creditsCharged);
+        if (ownerInfo.userId && ownerInfo.creditsCharged > 0) {
+          await refundCredits(ownerInfo.userId, ownerInfo.creditsCharged);
           await addRunEvent(runId, {
             level: "info",
             stage: "credit_refund",
-            message: `${creditsCharged} credit${creditsCharged !== 1 ? "s" : ""} refunded — run timed out.`,
+            message: `${ownerInfo.creditsCharged} credit${ownerInfo.creditsCharged !== 1 ? "s" : ""} refunded — run timed out.`,
           });
         }
       } catch (refundErr) {

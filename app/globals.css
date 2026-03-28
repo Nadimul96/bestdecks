@@ -97,7 +97,7 @@
   --secondary-foreground: oklch(0.92 0.005 250);
 
   --muted: oklch(0.22 0.012 250);
-  --muted-foreground: oklch(0.65 0.015 250);
+  --muted-foreground: oklch(0.68 0.015 250);
 
   --accent: oklch(0.22 0.012 250);
   --accent-foreground: oklch(0.95 0.005 250);
@@ -316,6 +316,9 @@
 .stagger-children > *:nth-child(6) { animation-delay: 300ms; }
 .stagger-children > *:nth-child(7) { animation-delay: 360ms; }
 .stagger-children > *:nth-child(8) { animation-delay: 420ms; }
+.stagger-children > *:nth-child(9) { animation-delay: 480ms; }
+.stagger-children > *:nth-child(10) { animation-delay: 540ms; }
+.stagger-children > *:nth-child(n+11) { animation-delay: 600ms; }
 
 /* ── Glass effect ───────────────────────────── */
 .glass {

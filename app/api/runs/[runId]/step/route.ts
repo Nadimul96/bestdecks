@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 
 import { getRun, updateRun, addRunEvent, updateRunTarget, addArtifact, getRunOwner, refundCredits } from "@/src/server/repository";
 import { resolveIntegrationConfig } from "@/src/server/settings";
@@ -9,9 +9,10 @@ import { DeepcrawlCrawler } from "@/src/integrations/deepcrawl";
 import { GeminiImageProvider } from "@/src/integrations/gemini";
 import { PerplexityEnrichmentProvider } from "@/src/integrations/perplexity";
 import { PlusAiDeckProvider } from "@/src/integrations/plusai";
-import { PresentonDeckProvider } from "@/src/integrations/presenton";
 import { UnconfiguredDeepcrawlCrawler, type DeckGenerationInput, type DeckProvider } from "@/src/integrations/providers";
 import { AiBriefBuilder } from "@/src/server/ai-brief-builder";
+import { createDeckProvider, hasDeckProviderConfig } from "@/src/server/deck-provider";
+import { INTERNAL_ORIGIN_HEADER, resolveRequestOrigin } from "@/src/server/request-origin";
 import { LocalCompanyBriefBuilder, LocalSellerBriefBuilder } from "@/src/server/builders";
 import { SlidePlanner } from "@/src/server/slide-planner";
 import type { IntakeRun } from "@/src/domain/schemas";
@@ -66,9 +67,7 @@ export async function POST(
     return NextResponse.json({ ok: true, skipped: true, reason: `Run is ${run.status}` });
   }
 
-  const origin = request.headers.get("origin")
-    || request.headers.get("x-forwarded-proto") && `${request.headers.get("x-forwarded-proto")}://${request.headers.get("host")}`
-    || `https://${request.headers.get("host") || "localhost:3000"}`;
+  const origin = resolveRequestOrigin(request);
   const stepUrl = `${origin}/api/runs/${runId}/step`;
 
   try {
@@ -115,17 +114,29 @@ function chainNextStep(
   stepUrl: string,
   body: Record<string, unknown>,
   secret: string,
+  origin: string,
 ) {
-  // Fire and forget — don't await, don't care about the response
-  fetch(stepUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-internal-secret": secret,
-    },
-    body: JSON.stringify(body),
-  }).catch((err) => {
-    console.error("[step-runner] Failed to chain next step:", err);
+  after(async () => {
+    try {
+      const response = await fetch(stepUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-internal-secret": secret,
+          [INTERNAL_ORIGIN_HEADER]: origin,
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        console.error(
+          `[step-runner] Failed to chain next step: HTTP ${response.status}: ${text.slice(0, 500)}`,
+        );
+      }
+    } catch (err) {
+      console.error("[step-runner] Failed to chain next step:", err);
+    }
   });
 }
 
@@ -180,7 +191,7 @@ async function runPrepareStep(
   }
 
   // Validate deck provider exists before spending time on crawl
-  if (!settings.plusaiApiKey && !settings.presentonBaseUrl) {
+  if (!hasDeckProviderConfig(settings)) {
     throw new Error("No deck provider configured. Set PLUSAI_API_KEY or PRESENTON_BASE_URL.");
   }
 
@@ -207,37 +218,51 @@ async function runPrepareStep(
   });
 
   const input = buildIntakeRun(run);
+  const persistedTargets = run.targets as unknown as PersistedRunTarget[];
 
-  await addRunEvent(runId, { level: "info", stage: "seller_brief", message: "Analyzing your business positioning..." });
-  await addRunEvent(runId, { level: "info", stage: "crawl", message: `Starting crawl and enrichment for ${input.targets.length} target(s)...` });
+  // Fire events and mark all targets as processing in parallel
+  await Promise.all([
+    addRunEvent(runId, { level: "info", stage: "seller_brief", message: "Analyzing your business positioning..." }),
+    addRunEvent(runId, { level: "info", stage: "crawl", message: `Starting crawl and enrichment for ${input.targets.length} target(s)...` }),
+    ...persistedTargets.map((targetRow) =>
+      updateRunTarget(targetRow.id, { status: "processing", lastError: null }),
+    ),
+  ]);
 
   const prepared = await orchestrator.prepareRun(input);
 
-  await addRunEvent(runId, { level: "info", stage: "company_brief", message: `Crawl and enrichment complete. ${prepared.preparedCompanies.length} target(s) ready, ${prepared.failedCompanies.length} failed.` });
-  await updateRun(runId, { sellerBriefJson: prepared.sellerBrief });
-  await addArtifact(runId, { artifactType: "run_plan", artifactJson: buildRunPlan(input) });
-  await addArtifact(runId, { artifactType: "seller_brief", artifactJson: prepared.sellerBrief });
+  // Save run-level results and mark targets in parallel
+  await Promise.all([
+    addRunEvent(runId, { level: "info", stage: "company_brief", message: `Crawl and enrichment complete. ${prepared.preparedCompanies.length} target(s) ready, ${prepared.failedCompanies.length} failed.` }),
+    updateRun(runId, { sellerBriefJson: prepared.sellerBrief }),
+    addArtifact(runId, { artifactType: "run_plan", artifactJson: buildRunPlan(input) }),
+    addArtifact(runId, { artifactType: "seller_brief", artifactJson: prepared.sellerBrief }),
+  ]);
 
-  const persistedTargets = run.targets as unknown as PersistedRunTarget[];
-
-  // Mark failed targets
-  for (const failedCompany of prepared.failedCompanies) {
-    const targetRow = persistedTargets.find((t) => t.website_url === failedCompany.target.websiteUrl);
-    if (!targetRow) continue;
-    await updateRunTarget(targetRow.id, { status: "failed", lastError: failedCompany.message });
-    await addRunEvent(runId, { targetId: targetRow.id, level: "error", stage: failedCompany.stage, message: failedCompany.message });
-  }
-
-  // Save prepared data as artifacts so the target step can retrieve them
-  for (const preparedCompany of prepared.preparedCompanies) {
-    const targetRow = persistedTargets.find((t) => t.website_url === preparedCompany.target.websiteUrl);
-    if (!targetRow) continue;
-    await updateRunTarget(targetRow.id, { status: "brief_ready", crawlProvider: preparedCompany.crawlResult.provider, lastError: null });
-    await addArtifact(runId, { targetId: targetRow.id, artifactType: "crawl_result", artifactJson: preparedCompany.crawlResult });
-    await addArtifact(runId, { targetId: targetRow.id, artifactType: "enrichment", artifactJson: preparedCompany.enrichment });
-    await addArtifact(runId, { targetId: targetRow.id, artifactType: "company_brief", artifactJson: preparedCompany.companyBrief });
-    await addRunEvent(runId, { targetId: targetRow.id, level: "info", stage: "company_brief", message: `Built detailed profile for ${preparedCompany.companyBrief.companyName ?? preparedCompany.target.websiteUrl}.` });
-  }
+  // Mark failed targets and save prepared data in parallel
+  await Promise.all([
+    // Failed targets
+    ...prepared.failedCompanies.flatMap((failedCompany) => {
+      const targetRow = persistedTargets.find((t) => t.website_url === failedCompany.target.websiteUrl);
+      if (!targetRow) return [];
+      return [
+        updateRunTarget(targetRow.id, { status: "failed", lastError: failedCompany.message }),
+        addRunEvent(runId, { targetId: targetRow.id, level: "error", stage: failedCompany.stage, message: failedCompany.message }),
+      ];
+    }),
+    // Prepared targets
+    ...prepared.preparedCompanies.flatMap((preparedCompany) => {
+      const targetRow = persistedTargets.find((t) => t.website_url === preparedCompany.target.websiteUrl);
+      if (!targetRow) return [];
+      return [
+        updateRunTarget(targetRow.id, { status: "brief_ready", crawlProvider: preparedCompany.crawlResult.provider, lastError: null }),
+        addArtifact(runId, { targetId: targetRow.id, artifactType: "crawl_result", artifactJson: preparedCompany.crawlResult }),
+        addArtifact(runId, { targetId: targetRow.id, artifactType: "enrichment", artifactJson: preparedCompany.enrichment }),
+        addArtifact(runId, { targetId: targetRow.id, artifactType: "company_brief", artifactJson: preparedCompany.companyBrief }),
+        addRunEvent(runId, { targetId: targetRow.id, level: "info", stage: "company_brief", message: `Built detailed profile for ${preparedCompany.companyBrief.companyName ?? preparedCompany.target.websiteUrl}.` }),
+      ];
+    }),
+  ]);
 
   // If ALL targets failed in prepare, finalize now
   if (prepared.preparedCompanies.length === 0) {
@@ -254,7 +279,7 @@ async function runPrepareStep(
   }
 
   // Chain to target step 0
-  chainNextStep(stepUrl, { step: "target", targetIndex: 0 }, secret);
+  chainNextStep(stepUrl, { step: "target", targetIndex: 0 }, secret, new URL(stepUrl).origin);
 }
 
 /* ─────────────────────────────────────────────
@@ -293,7 +318,12 @@ async function runTargetStep(
     await updateRunTarget(targetRow.id, { status: "failed", lastError: "Company brief not found — prepare step may have failed." });
     await addRunEvent(runId, { targetId: targetRow.id, level: "error", stage: "target_failed", message: "Company brief not found." });
     // Continue to next target
-    chainNextStep(stepUrl, { step: "target", targetIndex: targetIndex + 1 }, secret);
+    chainNextStep(
+      stepUrl,
+      { step: "target", targetIndex: targetIndex + 1 },
+      secret,
+      new URL(stepUrl).origin,
+    );
     return;
   }
 
@@ -327,16 +357,49 @@ async function runTargetStep(
   try {
     // ── Image generation ──
     let imageUrls: string[] = [];
+    let imagePromise: Promise<Awaited<ReturnType<GeminiImageProvider["generateSupportingAssets"]>>> | null = null;
     if (deckInput.imagePolicy !== "never" && settings.geminiApiKey) {
       await addRunEvent(runId, { targetId: targetRow.id, level: "info", stage: "image_strategy", message: `Generating supporting visuals for ${targetName}...` });
+      const imageProvider = new GeminiImageProvider(settings.geminiApiKey);
+      imagePromise = imageProvider.generateSupportingAssets({
+        companyBrief,
+        sellerPositioningSummary,
+        visualStyle: deckInput.visualStyle,
+        objective: deckInput.objective,
+      });
+    }
+
+    // ── Slide planning ──
+    let slidePlanPrompt: string | undefined;
+    let slidePlanPromise: Promise<{
+      slidePlan: Awaited<ReturnType<SlidePlanner["planSlides"]>>;
+      slidePlanPrompt: string;
+    }> | null = null;
+    const sellerContactInfo = {
+      companyName: run.sellerContext.companyName,
+      email: undefined as string | undefined,
+      phone: undefined as string | undefined,
+      website: run.sellerContext.websiteUrl,
+      logoUrl: undefined as string | undefined,
+    };
+    if (settings.geminiApiKey) {
+      await addRunEvent(runId, { targetId: targetRow.id, level: "info", stage: "slide_planning", message: `Planning slide content for ${targetName}...` });
+      const slidePlanner = new SlidePlanner(settings.geminiApiKey);
+      slidePlanPromise = slidePlanner.planSlides({
+        companyBrief,
+        sellerBrief: sellerBrief as { positioningSummary: string; offerSummary: string; proofPoints: string[]; preferredAngles: string[] },
+        deckInput,
+        sellerContactInfo,
+        slideStructure: run.questionnaire.extraInstructions,
+      }).then((slidePlan) => ({
+        slidePlan,
+        slidePlanPrompt: slidePlanner.formatPlanAsPrompt(slidePlan, sellerContactInfo),
+      }));
+    }
+
+    if (imagePromise) {
       try {
-        const imageProvider = new GeminiImageProvider(settings.geminiApiKey);
-        const imageResult = await imageProvider.generateSupportingAssets({
-          companyBrief,
-          sellerPositioningSummary,
-          visualStyle: deckInput.visualStyle,
-          objective: deckInput.objective,
-        });
+        const imageResult = await imagePromise;
         imageUrls = imageResult.assetUrls;
         await addArtifact(runId, { targetId: targetRow.id, artifactType: "image_strategy", artifactJson: imageResult });
       } catch (error) {
@@ -344,29 +407,10 @@ async function runTargetStep(
       }
     }
 
-    // ── Slide planning ──
-    let slidePlanPrompt: string | undefined;
-    if (settings.geminiApiKey) {
-      await addRunEvent(runId, { targetId: targetRow.id, level: "info", stage: "slide_planning", message: `Planning slide content for ${targetName}...` });
+    if (slidePlanPromise) {
       try {
-        const slidePlanner = new SlidePlanner(settings.geminiApiKey);
-        const sellerContactInfo = {
-          companyName: run.sellerContext.companyName,
-          email: undefined as string | undefined,
-          phone: undefined as string | undefined,
-          website: run.sellerContext.websiteUrl,
-          logoUrl: undefined as string | undefined,
-        };
-
-        const slidePlan = await slidePlanner.planSlides({
-          companyBrief,
-          sellerBrief: sellerBrief as { positioningSummary: string; offerSummary: string; proofPoints: string[]; preferredAngles: string[] },
-          deckInput,
-          sellerContactInfo,
-          slideStructure: run.questionnaire.extraInstructions,
-        });
-
-        slidePlanPrompt = slidePlanner.formatPlanAsPrompt(slidePlan, sellerContactInfo);
+        const { slidePlan, slidePlanPrompt: prompt } = await slidePlanPromise;
+        slidePlanPrompt = prompt;
         await addArtifact(runId, { targetId: targetRow.id, artifactType: "slide_plan", artifactJson: slidePlan as unknown as Record<string, unknown> });
         await addRunEvent(runId, { targetId: targetRow.id, level: "info", stage: "slide_planning", message: `Content plan ready: ${slidePlan.slides.length} slides structured.` });
       } catch (error) {
@@ -378,18 +422,7 @@ async function runTargetStep(
     // ── Deck generation ──
     await addRunEvent(runId, { targetId: targetRow.id, level: "info", stage: "delivery", message: `Generating personalized deck for ${targetName}...` });
 
-    let deckProvider: DeckProvider;
-    if (settings.plusaiApiKey) {
-      deckProvider = new PlusAiDeckProvider({ apiKey: settings.plusaiApiKey });
-    } else if (settings.presentonBaseUrl) {
-      deckProvider = new PresentonDeckProvider({
-        baseUrl: settings.presentonBaseUrl,
-        apiKey: settings.presentonApiKey,
-        defaultTemplate: settings.presentonTemplate,
-      });
-    } else {
-      throw new Error("No deck provider configured.");
-    }
+    const deckProvider: DeckProvider = createDeckProvider(settings);
 
     let delivery;
     if (deckProvider instanceof PlusAiDeckProvider && slidePlanPrompt) {
@@ -417,7 +450,12 @@ async function runTargetStep(
 
   // Chain to next target or finalize
   if (targetIndex + 1 < readyTargets.length) {
-    chainNextStep(stepUrl, { step: "target", targetIndex: targetIndex + 1 }, secret);
+    chainNextStep(
+      stepUrl,
+      { step: "target", targetIndex: targetIndex + 1 },
+      secret,
+      new URL(stepUrl).origin,
+    );
   } else {
     await finalizeRun(runId);
   }

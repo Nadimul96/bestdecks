@@ -209,6 +209,7 @@ export interface SellerContextForm {
 
 export interface QuestionnaireForm {
   archetype: DeckArchetype;
+  customArchetypePrompt: string;
   audience: string;
   audienceSize: string;
   audienceIndustry: string;
@@ -411,6 +412,7 @@ export const archetypeOptions: Array<{
   label: string;
   description: string;
   detail: string;
+  emoji: string;
 }> = [
   {
     value: "cold_outreach",
@@ -419,6 +421,7 @@ export const archetypeOptions: Array<{
       "Lead with company-specific evidence and a narrow, credible call to action.",
     detail:
       "Best for first-touch outreach to prospects who don't know you. Opens with a researched hook about their business, frames your value against their specific pain points, and closes with a single low-friction CTA.",
+    emoji: "\uD83C\uDFAF",
   },
   {
     value: "warm_intro",
@@ -427,6 +430,7 @@ export const archetypeOptions: Array<{
       "Frame shared context, likely upside, and why the conversation should happen now.",
     detail:
       "Ideal when you have a mutual connection, met at an event, or the prospect engaged with your content. Emphasizes common ground and makes the case for a timely conversation.",
+    emoji: "\uD83E\uDD1D",
   },
   {
     value: "agency_proposal",
@@ -435,6 +439,7 @@ export const archetypeOptions: Array<{
       "Translate research into a tailored recommendation, scope direction, and next step.",
     detail:
       "Structures a formal proposal around the prospect's stated needs: scope, timeline, deliverables, pricing context, and team fit. Works for both retainers and project-based engagements.",
+    emoji: "\uD83D\uDCCB",
   },
   {
     value: "investor_pitch",
@@ -443,6 +448,7 @@ export const archetypeOptions: Array<{
       "Build a narrative around opportunity, traction, and your ask.",
     detail:
       "Follows the classic pitch flow: problem, solution, market size, traction, team, and ask. Adapts framing based on the investor's portfolio focus and stage preference.",
+    emoji: "\uD83D\uDCB0",
   },
   {
     value: "case_study",
@@ -451,6 +457,7 @@ export const archetypeOptions: Array<{
       "Let results tell the story with data-driven proof points.",
     detail:
       "Leads with measurable outcomes, walks through the challenge-solution-result arc, and ends with a 'you could see similar results' bridge. Great for mid-funnel nurture.",
+    emoji: "\uD83D\uDCC8",
   },
   {
     value: "competitive_displacement",
@@ -459,6 +466,7 @@ export const archetypeOptions: Array<{
       "Show why switching from their current solution makes sense now.",
     detail:
       "Tactfully positions your solution against their incumbent. Highlights switching triggers, migration ease, and ROI of change without being overtly negative about competitors.",
+    emoji: "\u2694\uFE0F",
   },
   {
     value: "thought_leadership",
@@ -467,6 +475,7 @@ export const archetypeOptions: Array<{
       "Educate first, then naturally position your solution.",
     detail:
       "Opens with industry insights or a provocative trend, builds credibility through data and perspective, then pivots to how your approach addresses the shift. Ideal for top-of-funnel education.",
+    emoji: "\uD83D\uDCA1",
   },
   {
     value: "product_launch",
@@ -475,6 +484,16 @@ export const archetypeOptions: Array<{
       "Announce new capabilities with clarity and excitement.",
     detail:
       "Structured around what's new, why it matters, who it's for, and how to get started. Works for feature launches, new product lines, or major platform updates.",
+    emoji: "\uD83D\uDE80",
+  },
+  {
+    value: "custom",
+    label: "Custom",
+    description:
+      "Define your own deck framing",
+    detail:
+      "Write a custom prompt describing exactly how you want your deck structured, framed, and delivered. Full creative control.",
+    emoji: "\u270F\uFE0F",
   },
 ];
 
@@ -531,13 +550,16 @@ export const toneOptions: Array<{ value: Tone; label: string; description?: stri
 
 export const visualStyleOptions: Array<{ value: VisualStyle; label: string; description?: string }> =
   [
-    { value: "auto", label: "AI's Choice", description: "Let AI pick the best template for your content" },
-    { value: "minimal", label: "Minimal", description: "Clean lines, white space, understated" },
-    { value: "editorial", label: "Editorial", description: "Magazine-quality layouts with bold typography" },
-    { value: "sales_polished", label: "Sales Polished", description: "Professional with brand-forward polish" },
-    { value: "premium_modern", label: "Premium Modern", description: "Sophisticated gradients and sharp design" },
-    { value: "playful", label: "Playful", description: "Colorful, dynamic, energetic" },
-    { value: "custom", label: "Custom", description: "Describe your own visual style" },
+    { value: "auto", label: "AI's Choice", description: "AI selects the best design for your content" },
+    { value: "minimal", label: "Minimal", description: "Clean, spacious layouts with understated elegance" },
+    { value: "editorial", label: "Editorial", description: "Bold typography and magazine-quality hierarchy" },
+    { value: "sales_polished", label: "Consulting", description: "McKinsey-style authority with data-forward polish" },
+    { value: "premium_modern", label: "Startup Modern", description: "Contemporary design like Stripe or Linear decks" },
+    { value: "playful", label: "Creative", description: "Dynamic energy with bold color and layout variety" },
+    { value: "dark_executive", label: "Dark Executive", description: "Deep charcoal with neon accents — boardroom-ready" },
+    { value: "dark_minimal", label: "Dark Cinematic", description: "Dark background with moody editorial aesthetic" },
+    { value: "custom", label: "Custom", description: "Describe your own visual direction" },
+    { value: "mixed", label: "Surprise Me", description: "Random premium theme for each deck" },
   ];
 
 export const imagePolicyOptions: Array<{ value: ImagePolicy; label: string; description?: string }> =
@@ -612,6 +634,7 @@ export function defaultSellerContext(): SellerContextForm {
 export function defaultQuestionnaire(): QuestionnaireForm {
   return {
     archetype: "cold_outreach",
+    customArchetypePrompt: "",
     audience: "",
     audienceSize: "",
     audienceIndustry: "",

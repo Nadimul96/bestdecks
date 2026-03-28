@@ -71,7 +71,7 @@ export class LocalCompanyBriefBuilder implements CompanyBriefBuilder {
         input.enrichmentSummary,
       ].slice(0, 5),
       pitchAngles: input.sellerBrief.preferredAngles.slice(0, 5),
-      sourceUrls: input.sourceUrls.filter((value, index, all) => all.indexOf(value) === index),
+      sourceUrls: [...new Set(input.sourceUrls)],
     };
   }
 }

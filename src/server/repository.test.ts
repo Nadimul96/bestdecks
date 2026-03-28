@@ -7,17 +7,16 @@ import { tmpdir } from "node:os";
 const tempDir = mkdtempSync(join(tmpdir(), "bestdecks-repo-"));
 process.env.APP_SECRETS_KEY = "unit-test-secret";
 process.env.LOCAL_DB_PATH = join(tempDir, "repository.sqlite");
+delete process.env.TURSO_DATABASE_URL;
+delete process.env.TURSO_AUTH_TOKEN;
 
 const { getDb } = await import("./db");
 const { getOnboarding, saveOnboarding } = await import("./repository");
 
-const db = getDb();
-
-beforeEach(() => {
-  db.exec(`
-    DELETE FROM integration_settings;
-    DELETE FROM workspace_state;
-  `);
+beforeEach(async () => {
+  const db = await getDb();
+  await db.run("DELETE FROM integration_settings");
+  await db.run("DELETE FROM workspace_state");
 });
 
 after(() => {
@@ -74,7 +73,11 @@ test("saveOnboarding persists workspace drafts and integration secret markers", 
       },
       {
         provider: "presenton",
-        config: { baseUrl: "http://localhost:5050" },
+        config: { baseUrl: "http://localhost:5050", template: "modern" },
+      },
+      {
+        provider: "plusai",
+        secret: "plusai-secret",
       },
     ],
   });
@@ -96,5 +99,15 @@ test("saveOnboarding persists workspace drafts and integration secret markers", 
     onboarding.integrations.find((integration) => integration.provider === "presenton")
       ?.config?.baseUrl,
     "http://localhost:5050",
+  );
+  assert.equal(
+    onboarding.integrations.find((integration) => integration.provider === "presenton")
+      ?.config?.template,
+    "modern",
+  );
+  assert.equal(
+    onboarding.integrations.find((integration) => integration.provider === "plusai")
+      ?.hasSecret,
+    true,
   );
 });

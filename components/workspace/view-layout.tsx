@@ -18,14 +18,14 @@ export function ViewLayout({
   className,
 }: ViewLayoutProps) {
   return (
-    <div className={cn("stagger-children space-y-8 min-w-0 overflow-x-hidden", className)}>
+    <div className={cn("stagger-children space-y-8 min-w-0", className)}>
       {/* View header */}
-      <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-        <div className="space-y-1.5">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-1">
           <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-primary">
             {eyebrow}
           </p>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-[1.65rem]">
+          <h1 className="text-[1.5rem] font-semibold tracking-tight text-foreground lg:text-[1.65rem]">
             {title}
           </h1>
           <p className="max-w-2xl text-[13.5px] leading-relaxed text-muted-foreground">
@@ -66,18 +66,18 @@ export function SectionCard({
         className,
       )}
     >
-      <div className="flex items-start justify-between border-b border-border/40 px-4 py-4 sm:px-6">
+      <div className="flex items-start justify-between border-b border-border/40 px-5 py-4 sm:px-6">
         <div className="min-w-0 space-y-0.5">
-          <h2 className="truncate text-[15px] font-semibold text-foreground">{title}</h2>
+          <h2 className="truncate text-[15px] font-semibold text-foreground" title={title}>{title}</h2>
           {description ? (
-            <p className="text-[13px] text-muted-foreground">{description}</p>
+            <p className="text-[13px] leading-relaxed text-muted-foreground">{description}</p>
           ) : null}
         </div>
         {actions ? (
           <div className="flex shrink-0 items-center gap-2">{actions}</div>
         ) : null}
       </div>
-      <div className="p-4 sm:p-6">{children}</div>
+      <div className="p-5 sm:p-6">{children}</div>
     </div>
   );
 }

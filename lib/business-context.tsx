@@ -11,6 +11,7 @@ interface BusinessContextValue {
   switchBusiness: (id: string) => void;
   addBusiness: (business: Business) => void;
   updateBusiness: (id: string, updates: Partial<Business>) => void;
+  startNewBusiness: () => void;
   refreshBusinesses: () => Promise<void>;
   refreshCredits: () => Promise<void>;
 }
@@ -121,6 +122,22 @@ export function BusinessProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
+  const startNewBusiness = React.useCallback(() => {
+    const now = new Date().toISOString();
+    const newBiz: Business = {
+      id: `new-${Date.now()}`,
+      name: "New Business",
+      websiteUrl: "",
+      setupComplete: false,
+      createdAt: now,
+      updatedAt: now,
+    };
+    setBusinesses((prev) => [...prev, newBiz]);
+    setCurrentId(newBiz.id);
+    // Signal to seller-context view to start with blank fields
+    sessionStorage.setItem("bestdecks_new_business", newBiz.id);
+  }, []);
+
   return (
     <BusinessContext.Provider
       value={{
@@ -131,6 +148,7 @@ export function BusinessProvider({ children }: { children: React.ReactNode }) {
         switchBusiness,
         addBusiness,
         updateBusiness,
+        startNewBusiness,
         refreshBusinesses,
         refreshCredits,
       }}

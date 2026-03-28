@@ -11,12 +11,12 @@ let migrated = false;
    ───────────────────────────────────────────── */
 
 function resolveDbUrl(): string {
-  if (process.env.TURSO_DATABASE_URL) {
-    return process.env.TURSO_DATABASE_URL;
-  }
-
   if (process.env.LOCAL_DB_PATH) {
     return `file:${process.env.LOCAL_DB_PATH}`;
+  }
+
+  if (process.env.TURSO_DATABASE_URL) {
+    return process.env.TURSO_DATABASE_URL;
   }
 
   return "file:.data/custom-proposals.sqlite";
@@ -213,6 +213,12 @@ async function migrate(c: Client) {
     CREATE INDEX IF NOT EXISTS idx_run_targets_run_id ON run_targets(run_id);
     CREATE INDEX IF NOT EXISTS idx_run_artifacts_run_id ON run_artifacts(run_id);
     CREATE INDEX IF NOT EXISTS idx_run_events_run_id ON run_events(run_id);
+    CREATE INDEX IF NOT EXISTS idx_run_artifacts_target_id ON run_artifacts(target_id);
+    CREATE INDEX IF NOT EXISTS idx_run_events_target_id ON run_events(target_id);
+    CREATE INDEX IF NOT EXISTS idx_runs_status ON runs(status);
+    CREATE INDEX IF NOT EXISTS idx_run_targets_status ON run_targets(status);
+    CREATE INDEX IF NOT EXISTS idx_run_artifacts_type ON run_artifacts(artifact_type);
+    CREATE INDEX IF NOT EXISTS idx_runs_created_at ON runs(created_at);
   `);
 
   await ensureColumn(c, "workspace_state", "draft_websites_text", "TEXT");

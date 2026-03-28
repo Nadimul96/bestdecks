@@ -9,6 +9,7 @@ export const deckArchetypeSchema = z.enum([
   "competitive_displacement",
   "thought_leadership",
   "product_launch",
+  "custom",
 ]);
 
 export const deliveryFormatSchema = z.enum([
@@ -56,7 +57,10 @@ export const visualStyleSchema = z.enum([
   "sales_polished",
   "premium_modern",
   "playful",
+  "dark_executive",
+  "dark_minimal",
   "custom",
+  "mixed",
 ]);
 
 export const companyRowSchema = z.object({
@@ -105,6 +109,7 @@ export const runQuestionnaireSchema = z.object({
   mustInclude: z.array(z.string().trim().min(1)).default([]),
   mustAvoid: z.array(z.string().trim().min(1)).default([]),
   extraInstructions: z.string().trim().min(1).optional(),
+  customArchetypePrompt: z.string().trim().min(1).optional(),
   customTone: z.string().trim().min(1).optional(),
   customVisualStyle: z.string().trim().min(1).optional(),
   visualContentTypes: z.array(visualContentTypeSchema).default([]),

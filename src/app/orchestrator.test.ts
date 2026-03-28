@@ -49,8 +49,16 @@ const intake: IntakeRun = {
 
 class TestCrawler implements CrawlProvider {
   public readonly name = "cloudflare" as const;
+  public readonly requests: Array<Record<string, unknown>> = [];
 
-  public async crawlSite(input: { websiteUrl: string }) {
+  public async crawlSite(input: {
+    websiteUrl: string;
+    maxPages?: number;
+    maxDepth?: number;
+    source?: string;
+  }) {
+    this.requests.push(input);
+
     if (input.websiteUrl.includes("broken")) {
       throw new Error("Primary crawl failed.");
     }
@@ -91,8 +99,9 @@ class TestEnrichment implements EnrichmentProvider {
 }
 
 test("prepareRun isolates failed targets instead of aborting the whole batch", async () => {
+  const primaryCrawler = new TestCrawler();
   const orchestrator = new ProposalOrchestrator({
-    primaryCrawler: new TestCrawler(),
+    primaryCrawler,
     fallbackCrawler: new NoopFallbackCrawler(),
     enrichmentProvider: new TestEnrichment(),
     sellerBriefBuilder: {
@@ -126,4 +135,71 @@ test("prepareRun isolates failed targets instead of aborting the whole batch", a
   assert.equal(prepared.failedCompanies.length, 1);
   assert.equal(prepared.failedCompanies[0]?.target.websiteUrl, "https://broken.com");
   assert.match(prepared.failedCompanies[0]?.message ?? "", /crawl failed|Fallback unavailable/i);
+  assert.equal(primaryCrawler.requests[0]?.maxPages, 10);
+  assert.equal(primaryCrawler.requests[0]?.maxDepth, 2);
+  assert.equal(primaryCrawler.requests[0]?.source, "all");
+});
+
+test("prepareRun narrows crawl scope and content for path-based landing pages", async () => {
+  const primaryCrawler = new TestCrawler();
+  const orchestrator = new ProposalOrchestrator({
+    primaryCrawler,
+    fallbackCrawler: new NoopFallbackCrawler(),
+    enrichmentProvider: new TestEnrichment(),
+    sellerBriefBuilder: {
+      async buildSellerBrief() {
+        return sellerBrief;
+      },
+    },
+    companyBriefBuilder: {
+      async buildCompanyBrief(input): Promise<CompanyBrief> {
+        assert.match(input.crawlMarkdown, /Portland details/);
+        assert.doesNotMatch(input.crawlMarkdown, /Scarborough details/);
+        assert.ok(input.sourceUrls.includes("https://nxgenfitness.com/portland-home"));
+        assert.ok(!input.sourceUrls.includes("https://nxgenfitness.com/scarborough-home"));
+
+        return {
+          websiteUrl: input.target.websiteUrl,
+          companyName: input.target.companyName ?? "Unknown",
+          industry: "Fitness",
+          offer: input.enrichmentSummary,
+          locale: "Local",
+          likelyBuyer: "Owner",
+          whyNow: input.enrichmentSummary,
+          painPoints: ["Generic outreach"],
+          proofPoints: ["Evidence-backed"],
+          pitchAngles: ["Target-specific"],
+          sourceUrls: input.sourceUrls,
+        };
+      },
+    },
+  });
+
+  const landingInput: IntakeRun = {
+    ...intake,
+    targets: [{ websiteUrl: "https://nxgenfitness.com/portland-home", companyName: "NXGen Fitness" }],
+  };
+
+  primaryCrawler.crawlSite = async (request) => {
+    primaryCrawler.requests.push(request);
+    return {
+      provider: "cloudflare" as const,
+      pages: [
+        { url: "https://nxgenfitness.com/portland-home", markdown: "# Portland details" },
+        { url: "https://nxgenfitness.com/scarborough-home", markdown: "# Scarborough details" },
+      ],
+      discoveredUrls: [
+        "https://nxgenfitness.com/portland-home",
+        "https://nxgenfitness.com/scarborough-home",
+      ],
+      blockedUrls: [],
+    };
+  };
+
+  const prepared = await orchestrator.prepareRun(landingInput);
+
+  assert.equal(prepared.preparedCompanies.length, 1);
+  assert.equal(primaryCrawler.requests[0]?.maxPages, 5);
+  assert.equal(primaryCrawler.requests[0]?.maxDepth, 1);
+  assert.equal(primaryCrawler.requests[0]?.source, "links");
 });

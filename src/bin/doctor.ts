@@ -28,6 +28,9 @@ async function main() {
           apiKey: status(Boolean(env.PRESENTON_API_KEY)),
           template: status(Boolean(env.PRESENTON_TEMPLATE)),
         },
+        plusai: {
+          apiKey: status(Boolean(env.PLUSAI_API_KEY)),
+        },
       },
       null,
       2,

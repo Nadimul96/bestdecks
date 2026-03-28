@@ -22,7 +22,7 @@ import { useBusinessContext } from "@/lib/business-context";
 import { cn } from "@/lib/utils";
 
 export function BusinessSwitcher() {
-  const { businesses, currentBusiness, switchBusiness } = useBusinessContext();
+  const { businesses, currentBusiness, switchBusiness, startNewBusiness } = useBusinessContext();
 
   if (businesses.length === 0) {
     return (
@@ -120,16 +120,17 @@ export function BusinessSwitcher() {
 
         <DropdownMenuSeparator />
 
-        <DropdownMenuItem asChild>
-          <a
-            href="#onboarding"
-            className="flex items-center gap-2.5 px-3 py-2 text-[13px]"
-          >
-            <div className="flex size-7 items-center justify-center rounded-md border border-dashed border-border">
-              <Plus className="size-3.5 text-muted-foreground" />
-            </div>
-            <span className="font-medium">Add new business</span>
-          </a>
+        <DropdownMenuItem
+          onClick={() => {
+            startNewBusiness();
+            window.location.hash = "seller-context";
+          }}
+          className="flex items-center gap-2.5 px-3 py-2 text-[13px]"
+        >
+          <div className="flex size-7 items-center justify-center rounded-md border border-dashed border-border">
+            <Plus className="size-3.5 text-muted-foreground" />
+          </div>
+          <span className="font-medium">Add new business</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

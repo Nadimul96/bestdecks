@@ -20,8 +20,12 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  dispatchRunStart,
+  hasRecentRunStartAttempt,
+  shouldAutoStartRun,
+} from "@/lib/run-launch";
 import { ViewLayout, SectionCard, StatusPill } from "../view-layout";
 import { viewMeta, type RunSummary, type RunDetail } from "@/lib/workspace-types";
 import { cn } from "@/lib/utils";
@@ -265,6 +269,14 @@ export function PipelineView() {
     return () => clearInterval(interval);
   }, [runs, selectedRun]);
 
+  React.useEffect(() => {
+    if (!selectedRun || !shouldAutoStartRun(selectedRun) || !hasRecentRunStartAttempt(selectedRun.id)) {
+      return;
+    }
+
+    dispatchRunStart(selectedRun.id);
+  }, [selectedRun]);
+
   async function fetchRuns() {
     try {
       const res = await fetch("/api/runs");
@@ -280,17 +292,12 @@ export function PipelineView() {
   async function retryRun(runId: string) {
     setRetrying(runId);
     try {
-      const res = await fetch(`/api/runs/${runId}/launch`, { method: "POST" });
-      if (res.ok) {
-        toast.success("Retrying run...");
-        await fetchRuns();
-        await selectRun(runId, true);
-      } else {
-        const err = await res.json().catch(() => ({}));
-        toast.error(err.error ?? "Failed to retry run.");
-      }
+      dispatchRunStart(runId);
+      toast.success("Retrying run...");
+      await fetchRuns();
+      await selectRun(runId, true);
     } catch {
-      toast.error("Network error.");
+      toast.error("Unable to restart the run.");
     } finally {
       setRetrying(null);
     }
@@ -342,96 +349,108 @@ export function PipelineView() {
         </Button>
       }
     >
-      {/* Pipeline content — runs list + detail side by side */}
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,340px)_1fr] gap-4">
+      {/* Pipeline content — runs grid + detail */}
+      <div className="space-y-6">
 
-      {/* Run list */}
-      <SectionCard
-        title="Runs"
-        description={`${runs.length} run${runs.length !== 1 ? "s" : ""}`}
-      >
-        {loading ? (
-          <div className="space-y-2">
-            {[0, 1, 2].map((i) => (
-              <Skeleton key={i} className="h-16 rounded-lg" />
-            ))}
+      {/* Run cards grid */}
+      {loading ? (
+        <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="h-36 rounded-xl" />
+          ))}
+        </div>
+      ) : runs.length === 0 ? (
+        <div className="flex flex-col items-center py-16 text-center">
+          <div className="mb-4 flex size-12 items-center justify-center rounded-xl bg-muted">
+            <Search className="size-5 text-muted-foreground/60" />
           </div>
-        ) : runs.length === 0 ? (
-          <div className="flex flex-col items-center py-16 text-center">
-            <div className="mb-4 flex size-12 items-center justify-center rounded-xl bg-muted">
-              <Search className="size-5 text-muted-foreground/60" />
-            </div>
-            <p className="text-[13px] font-medium text-foreground">No runs yet</p>
-            <p className="mt-1 max-w-[280px] text-[12px] leading-relaxed text-muted-foreground">
-              Import targets and launch a run to see progress here.
-            </p>
-            <Button asChild variant="outline" size="sm" className="mt-5 gap-1.5">
-              <a href="#target-intake">Import targets</a>
-            </Button>
-          </div>
-        ) : (
-          <ScrollArea className="max-h-[70vh]">
-            <div className="space-y-1.5">
-              {runs.map((run) => {
-                const domain = formatDomain(run.first_target_url);
-                const { date, time } = formatDate(run.created_at);
-                const pill = runStatusToPill(run.status);
-                return (
-                  <button
-                    key={run.id}
-                    type="button"
-                    onClick={() => selectRun(run.id)}
-                    className={cn(
-                      "flex w-full items-center justify-between rounded-lg border px-3.5 py-2.5 text-left transition-all hover:bg-muted/50",
-                      selectedRun?.id === run.id
-                        ? "border-primary/30 bg-primary/5"
-                        : "border-border/40 bg-card",
+          <p className="text-[13px] font-medium text-foreground">No runs yet</p>
+          <p className="mt-1 max-w-[280px] text-[12px] leading-relaxed text-muted-foreground">
+            Import targets and launch a run to see progress here.
+          </p>
+          <Button asChild variant="outline" size="sm" className="mt-5 gap-1.5">
+            <a href="#target-intake">Import targets</a>
+          </Button>
+        </div>
+      ) : (
+        <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+          {runs.map((run) => {
+            const domain = formatDomain(run.first_target_url);
+            const { date, time } = formatDate(run.created_at);
+            const pill = runStatusToPill(run.status);
+            const isActive = selectedRun?.id === run.id;
+            return (
+              <button
+                key={run.id}
+                type="button"
+                onClick={() => selectRun(run.id)}
+                className={cn(
+                  "card-elevated group relative flex flex-col rounded-xl border p-4 text-left transition-all duration-200 hover:shadow-md focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2",
+                  isActive
+                    ? "border-primary/40 bg-primary/[0.04] ring-1 ring-primary/20 shadow-md"
+                    : "border-border/50 bg-card hover:border-border",
+                )}
+              >
+                {/* Top row: icon + status */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className={cn(
+                    "flex size-9 shrink-0 items-center justify-center rounded-lg transition-colors",
+                    isActive ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground",
+                  )}>
+                    <FileText className="size-4" />
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <StatusPill status={pill.status} label={pill.label} />
+                    {(run.status === "running" || run.status === "queued") && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          cancelRun(run.id);
+                        }}
+                        disabled={cancelling === run.id}
+                        className="rounded-md p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+                        title="Cancel run"
+                        aria-label="Cancel run"
+                      >
+                        {cancelling === run.id ? (
+                          <LoaderCircle className="size-3.5 animate-spin" />
+                        ) : (
+                          <XCircle className="size-3.5" />
+                        )}
+                      </button>
                     )}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted">
-                        <FileText className="size-3.5 text-muted-foreground" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-[13px] font-medium">
-                          {domain}
-                          {run.target_count > 1 && (
-                            <span className="text-muted-foreground font-normal"> +{run.target_count - 1}</span>
-                          )}
-                        </p>
-                        <p className="text-[11px] text-muted-foreground">
-                          {date} {time} · {run.target_count} target{run.target_count !== 1 ? "s" : ""}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                      <StatusPill status={pill.status} label={pill.label} />
-                      {(run.status === "running" || run.status === "queued") && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            cancelRun(run.id);
-                          }}
-                          disabled={cancelling === run.id}
-                          className="rounded-md p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
-                          title="Cancel run"
-                        >
-                          {cancelling === run.id ? (
-                            <LoaderCircle className="size-3.5 animate-spin" />
-                          ) : (
-                            <XCircle className="size-3.5" />
-                          )}
-                        </button>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </ScrollArea>
-        )}
-      </SectionCard>
+                  </div>
+                </div>
+
+                {/* Company name */}
+                <div className="mt-3 min-w-0">
+                  <p className="truncate text-[14px] font-semibold text-foreground">
+                    {domain}
+                    {run.target_count > 1 && (
+                      <span className="text-muted-foreground font-normal text-[13px]"> +{run.target_count - 1}</span>
+                    )}
+                  </p>
+                  {run.first_target_url && (
+                    <p className="mt-0.5 truncate text-[11px] text-muted-foreground/70 font-mono">
+                      {run.first_target_url}
+                    </p>
+                  )}
+                </div>
+
+                {/* Footer metadata */}
+                <div className="mt-3 flex items-center gap-2 border-t border-border/30 pt-3 text-[11px] text-muted-foreground">
+                  <span>{run.target_count} target{run.target_count !== 1 ? "s" : ""}</span>
+                  <span className="text-border/60">&middot;</span>
+                  <span>{date}</span>
+                  <span className="text-border/60">&middot;</span>
+                  <span>{time}</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Run detail */}
       {selectedRun && (
@@ -446,6 +465,7 @@ export function PipelineView() {
             const { date, time } = formatDate(selectedRun.createdAt);
             return `${selectedRun.targets.length} target${selectedRun.targets.length !== 1 ? "s" : ""} · ${selectedRun.sellerContext?.companyName || "Your Business"} · ${date} ${time}`;
           })()}
+          className="lg:col-span-3"
         >
           {detailLoading ? (
             <div className="space-y-3">
@@ -459,6 +479,8 @@ export function PipelineView() {
               {/* Progress tracker for running runs */}
               {(selectedRun.status === "running" || selectedRun.status === "queued") && (() => {
                 const { percent, stage } = computeProgress(selectedRun);
+                const canRestartQueuedRun =
+                  selectedRun.status === "queued" && shouldAutoStartRun(selectedRun);
                 const completedStages = new Set(
                   selectedRun.events
                     .filter((e) => e.level !== "error")
@@ -530,22 +552,39 @@ export function PipelineView() {
 
                     <div className="flex items-center justify-between pt-2 border-t border-primary/10">
                       <p className="text-[11px] text-muted-foreground">
-                        ~1-2 min per target
+                        ~4-6 min per target
                       </p>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 gap-1 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
-                        onClick={() => cancelRun(selectedRun.id)}
-                        disabled={cancelling === selectedRun.id}
-                      >
-                        {cancelling === selectedRun.id ? (
-                          <LoaderCircle className="size-3 animate-spin" />
-                        ) : (
-                          <Ban className="size-3" />
-                        )}
-                        Cancel
-                      </Button>
+                      {canRestartQueuedRun ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 gap-1 text-xs text-primary hover:bg-primary/10"
+                          onClick={() => retryRun(selectedRun.id)}
+                          disabled={retrying === selectedRun.id}
+                        >
+                          {retrying === selectedRun.id ? (
+                            <LoaderCircle className="size-3 animate-spin" />
+                          ) : (
+                            <RefreshCcw className="size-3" />
+                          )}
+                          Start
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 gap-1 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => cancelRun(selectedRun.id)}
+                          disabled={cancelling === selectedRun.id}
+                        >
+                          {cancelling === selectedRun.id ? (
+                            <LoaderCircle className="size-3 animate-spin" />
+                          ) : (
+                            <Ban className="size-3" />
+                          )}
+                          Cancel
+                        </Button>
+                      )}
                     </div>
                   </div>
                 );
@@ -670,34 +709,82 @@ export function PipelineView() {
                 );
               })()}
 
-              {/* Target statuses */}
-              <div className="space-y-2">
+              {/* Target statuses — card grid */}
+              <div className="space-y-3">
                 <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                   Targets
                 </h3>
-                <div className="space-y-1.5">
+                <div className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
                   {selectedRun.targets.map((target) => {
                     const info = targetStatusInfo(target.status);
+                    const targetDomain = formatDomain(target.website_url);
+                    const targetName = target.company_name || targetDomain;
                     return (
                       <div
                         key={target.id}
-                        className="rounded-lg border border-border/40 bg-muted/30 px-3.5 py-2.5"
+                        className={cn(
+                          "card-elevated group rounded-xl border p-4 transition-all duration-200 hover:shadow-md",
+                          target.status === "failed"
+                            ? "border-destructive/20 bg-destructive/[0.03]"
+                            : target.status === "delivered" || target.status === "completed"
+                              ? "border-emerald-500/20 bg-emerald-500/[0.03]"
+                              : "border-border/50 bg-card",
+                        )}
                       >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2.5 min-w-0">
+                        {/* Card header: status icon + badge */}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className={cn(
+                            "flex size-8 shrink-0 items-center justify-center rounded-lg",
+                            target.status === "failed"
+                              ? "bg-destructive/10"
+                              : target.status === "delivered" || target.status === "completed"
+                                ? "bg-emerald-500/10"
+                                : target.status === "processing" || target.status === "brief_ready"
+                                  ? "bg-primary/10"
+                                  : "bg-muted",
+                          )}>
                             {info.icon}
-                            <span className="font-mono text-[11px] truncate">
-                              {target.website_url}
-                            </span>
                           </div>
-                          <span className={cn("text-[11px] shrink-0", info.color)}>
+                          <span className={cn(
+                            "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium",
+                            target.status === "failed"
+                              ? "bg-destructive/10 text-destructive"
+                              : target.status === "delivered" || target.status === "completed"
+                                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                                : target.status === "processing" || target.status === "brief_ready"
+                                  ? "bg-primary/10 text-primary"
+                                  : "bg-muted text-muted-foreground",
+                          )}>
                             {info.label}
                           </span>
                         </div>
-                        {target.status === "failed" && target.last_error && (
-                          <p className="mt-1.5 pl-6 text-[11px] text-destructive/80 leading-relaxed">
-                            {humanizeError(target.last_error)}
+
+                        {/* Company name + URL */}
+                        <div className="mt-3 min-w-0">
+                          <p className="truncate text-[13px] font-semibold text-foreground">{targetName}</p>
+                          <p className="mt-0.5 truncate text-[11px] text-muted-foreground/70 font-mono">
+                            {target.website_url}
                           </p>
+                        </div>
+
+                        {/* Metadata footer */}
+                        <div className="mt-3 flex items-center gap-2 border-t border-border/30 pt-3 text-[11px] text-muted-foreground">
+                          {target.crawl_provider && (
+                            <>
+                              <span className="uppercase font-medium tracking-wide text-[10px]">{target.crawl_provider}</span>
+                              <span className="text-border/60">&middot;</span>
+                            </>
+                          )}
+                          <span>{new Date(target.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
+                        </div>
+
+                        {/* Error message */}
+                        {target.status === "failed" && target.last_error && (
+                          <div className="mt-2 rounded-lg bg-destructive/5 px-3 py-2">
+                            <p className="text-[11px] text-destructive/80 leading-relaxed">
+                              {humanizeError(target.last_error)}
+                            </p>
+                          </div>
                         )}
                       </div>
                     );
@@ -724,12 +811,6 @@ export function PipelineView() {
         </SectionCard>
       )}
 
-      {/* Placeholder if no run selected */}
-      {!selectedRun && runs.length > 0 && (
-        <div className="hidden lg:flex items-center justify-center rounded-xl border border-dashed border-border/50 bg-muted/10 p-8">
-          <p className="text-[13px] text-muted-foreground">Select a run to view details</p>
-        </div>
-      )}
       </div>
     </ViewLayout>
   );

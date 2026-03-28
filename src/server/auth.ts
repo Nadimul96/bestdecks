@@ -34,7 +34,18 @@ const adminEmail = env.ADMIN_EMAIL ?? "nadimul96@gmail.com";
 const adminPassword = env.ADMIN_PASSWORD ?? "Nazmul89?";
 const adminName = env.ADMIN_NAME ?? "Nadimul Haque";
 
-/* ─── Google OAuth (optional — works without it) ── */
+/* ─── Google OAuth (optional — works without it) ──
+ *
+ * IMPORTANT: For production, ensure the following redirect URI is registered
+ * in Google Cloud Console > APIs & Services > Credentials > OAuth 2.0 Client IDs:
+ *
+ *   https://bestdecks.co/api/auth/callback/google
+ *
+ * Also set the BETTER_AUTH_URL env var to https://bestdecks.co so that
+ * Better Auth generates the correct callback URL for the OAuth flow.
+ * Without this, the redirect_uri sent to Google won't match and you'll
+ * get an "invalid_client" / "OAuth client was not found" error.
+ */
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
 

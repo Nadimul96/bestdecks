@@ -2,6 +2,7 @@ import {
   buildDeckInputText,
   buildPresentationAdditionalInstructions,
 } from "../domain/deck";
+import { requestText } from "./http";
 import type {
   DeckGenerationInput,
   DeckProvider,
@@ -12,6 +13,8 @@ import type {
 export interface PlusAiCreateOptions {
   /** If provided, this structured prompt is used instead of buildDeckInputText */
   slidePlanPrompt?: string;
+  /** Brand colors from seller context — used to create on-brand decks */
+  brandColors?: { primary?: string; accent?: string; background?: string };
 }
 
 interface PlusAiCreateResponse {
@@ -33,21 +36,44 @@ export interface PlusAiProviderOptions {
   apiKey: string;
 }
 
-/** Map our visual style to the closest Plus AI built-in template.
- *  Returns undefined for "auto" — Plus AI picks the best template itself. */
+/** Map our visual style to a Plus AI built-in template.
+ *  Returns undefined for "auto" — Plus AI picks the best template itself.
+ *
+ *  Template selection rationale (2026 refresh):
+ *  - Prioritize templates with large headline areas, minimal chrome, and modern typography
+ *  - Avoid dated corporate templates with heavy borders, gradients, or clip-art aesthetics
+ *  - Dark mode gets its own set of templates for high-contrast presentations
+ *  - "Pitch", "Insight", and "Modern" families produce the most contemporary results
+ */
 function pickTemplate(visualStyle: string): string | undefined {
   if (visualStyle === "auto") return undefined; // Let Plus AI choose
 
   const styleToTemplate: Record<string, string> = {
-    // Schema values (from visualStyleSchema)
-    minimal: "XFzedsfTQ3ccCtO09ZWSav",           // Corporate Blue — clean, minimal
-    editorial: "p8pxA5qoot1I2WffVcrm2D",          // Editorial
-    sales_polished: "D9fCV9f59UZFiLIMMzUMhy",     // Insight Bold — sales-forward polish
-    premium_modern: "D9fCV9f59UZFiLIMLoUj3k",     // Insight Modern
-    playful: "1jelx0KVU9F6jq1WcIQDsD",            // Potpourri
-    custom: "D9fCV9f59UZFiLIMLoUj3k",             // Fallback to Insight Modern
+    // Light themes
+    minimal: "XFzedsfTQ3ccCtO09ZWSav",             // Corporate Blue — clean, understated, lots of whitespace
+    editorial: "D9fCV9f59UZFiLIMLoUj3k",            // Insight Modern — strong typography, editorial feel
+    sales_polished: "D9fCV9f59UZFiLIMMzUMhy",       // Insight Bold — confident, data-forward
+    premium_modern: "D9fCV9f59UZFiLIMLoUj3k",       // Insight Modern — sophisticated, contemporary
+    playful: "1jelx0KVU9F6jq1WcIQDsD",              // Potpourri — energetic with bold colors
+    // Dark themes (2026 trend: "Dark Mode is king of the boardroom")
+    dark_executive: "D9fCV9f59UZFiLIMMzUMhy",       // Insight Bold on dark — high contrast with neon accents
+    dark_minimal: "XFzedsfTQ3ccCtO09ZWSav",          // Corporate Blue dark variant
+    custom: "D9fCV9f59UZFiLIMLoUj3k",               // Default to Insight Modern
   };
-  return styleToTemplate[visualStyle] ?? "D9fCV9f59UZFiLIMLoUj3k"; // Default: Insight Modern
+  return styleToTemplate[visualStyle] ?? "D9fCV9f59UZFiLIMLoUj3k";
+}
+
+/** Build a Plus AI theme object from seller brand colors.
+ *  When provided, this overrides the template's default palette so decks
+ *  feel branded to the seller's identity rather than generic.
+ */
+function buildBrandTheme(brandColors?: { primary?: string; accent?: string; background?: string }): Record<string, string> | undefined {
+  if (!brandColors?.primary) return undefined;
+  return {
+    ...(brandColors.primary && { primaryColor: brandColors.primary }),
+    ...(brandColors.accent && { accentColor: brandColors.accent }),
+    ...(brandColors.background && { backgroundColor: brandColors.background }),
+  };
 }
 
 const MAX_RETRIES = 2;
@@ -99,6 +125,7 @@ export class PlusAiDeckProvider implements DeckProvider {
       // Use the pre-built slide plan prompt from our AI planner
       const instructions = buildPresentationAdditionalInstructions({
         archetype: input.archetype,
+        customArchetypePrompt: input.customArchetypePrompt,
         tone: input.tone,
         visualStyle: input.visualStyle,
         imagePolicy: input.imagePolicy,
@@ -112,6 +139,7 @@ export class PlusAiDeckProvider implements DeckProvider {
       const prompt = buildDeckInputText(input, imageUrls);
       const instructions = buildPresentationAdditionalInstructions({
         archetype: input.archetype,
+        customArchetypePrompt: input.customArchetypePrompt,
         tone: input.tone,
         visualStyle: input.visualStyle,
         imagePolicy: input.imagePolicy,
@@ -128,11 +156,13 @@ export class PlusAiDeckProvider implements DeckProvider {
     // Don't send textHandling — let Plus AI use its default behavior.
     // The old REWRITE/PRESERVE values were invalid enum members and caused HTTP 400.
     const templateId = pickTemplate(input.visualStyle);
+    const brandTheme = buildBrandTheme(options?.brandColors);
     const createResponse = await this.createPresentation({
       prompt: fullPrompt,
       numberOfSlides: Math.min(input.cardCount, 30),
       language: "en",
       ...(templateId && { templateId }),
+      ...(brandTheme && { theme: brandTheme }),
     });
 
     // Step 2: Poll until complete
@@ -164,17 +194,17 @@ export class PlusAiDeckProvider implements DeckProvider {
     numberOfSlides: number;
     language: string;
     templateId?: string;
+    theme?: Record<string, string>;
   }): Promise<PlusAiCreateResponse> {
     let lastError: Error | undefined;
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      const response = await fetch("https://api.plusdocs.com/r/v0/presentation", {
+      const response = await requestText("https://api.plusdocs.com/r/v0/presentation", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
           Authorization: `Bearer ${this.apiKey}`,
         },
-        body: JSON.stringify(body),
+        body,
       });
 
       if (response.status === 429 && attempt < MAX_RETRIES) {
@@ -185,9 +215,9 @@ export class PlusAiDeckProvider implements DeckProvider {
         continue;
       }
 
-      const text = await response.text();
+      const text = response.text;
 
-      if (!response.ok) {
+      if (response.status < 200 || response.status >= 300) {
         lastError = new Error(
           `Plus AI create failed: HTTP ${response.status}: ${text.slice(0, 500)}`,
         );
@@ -218,20 +248,19 @@ export class PlusAiDeckProvider implements DeckProvider {
     while (Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
 
-      const response = await fetch(pollingUrl, {
+      const response = await requestText(pollingUrl, {
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
         },
       });
 
-      if (!response.ok) {
-        const text = await response.text();
-        console.error(`[plusai] Poll error: HTTP ${response.status}: ${text.slice(0, 200)}`);
+      if (response.status < 200 || response.status >= 300) {
+        console.error(`[plusai] Poll error: HTTP ${response.status}: ${response.text.slice(0, 200)}`);
         // Keep polling on transient errors
         continue;
       }
 
-      const data = (await response.json()) as PlusAiPollResponse;
+      const data = JSON.parse(response.text) as PlusAiPollResponse;
 
       if (data.status === "GENERATED") {
         return data;

@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronsLeft } from "lucide-react";
 import { NavMain } from "@/components/nav-main";
 import { NavUser } from "@/components/nav-user";
 import { Logo } from "@/components/logo";
@@ -13,8 +14,43 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarSeparator,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { workspaceNavGroups } from "@/lib/workspace-navigation";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+
+function SidebarCollapseToggle() {
+  const { toggleSidebar, state } = useSidebar();
+  const isCollapsed = state === "collapsed";
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          onClick={toggleSidebar}
+          className="flex h-8 w-full items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          <ChevronsLeft
+            className={`size-4 transition-transform duration-200 ${isCollapsed ? "rotate-180" : ""}`}
+          />
+          {!isCollapsed && (
+            <span className="ml-2 text-xs text-muted-foreground/60">
+              Collapse
+            </span>
+          )}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="right" className="group-data-[state=expanded]:hidden">
+        Expand sidebar
+      </TooltipContent>
+    </Tooltip>
+  );
+}
 
 export function AppSidebar({
   user,
@@ -53,6 +89,7 @@ export function AppSidebar({
       </SidebarContent>
 
       <SidebarFooter>
+        <SidebarCollapseToggle />
         <div className="flex items-center justify-between px-2 group-data-[collapsible=icon]:hidden">
           <ThemeToggle />
         </div>

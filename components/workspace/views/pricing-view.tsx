@@ -64,10 +64,10 @@ export function PricingView() {
       if (data.url) {
         window.location.href = data.url;
       } else {
-        toast.error(data.error || "Could not start checkout");
+        toast.error(data.error || "Could not start checkout. Please try again.");
       }
     } catch {
-      toast.error("Checkout failed. Please try again.");
+      toast.error("Could not start checkout. Please try again or contact support.");
     } finally {
       setCheckoutLoading(false);
     }
@@ -169,7 +169,7 @@ export function PricingView() {
           type="button"
           onClick={() => setAnnual(false)}
           className={cn(
-            "rounded-full px-4 py-1.5 text-[13px] font-medium transition-all",
+            "rounded-full px-4 py-1.5 text-[13px] font-medium transition-all focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2",
             !annual
               ? "bg-primary text-primary-foreground"
               : "text-muted-foreground hover:text-foreground",
@@ -181,7 +181,7 @@ export function PricingView() {
           type="button"
           onClick={() => setAnnual(true)}
           className={cn(
-            "rounded-full px-4 py-1.5 text-[13px] font-medium transition-all",
+            "rounded-full px-4 py-1.5 text-[13px] font-medium transition-all focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2",
             annual
               ? "bg-primary text-primary-foreground"
               : "text-muted-foreground hover:text-foreground",
@@ -228,12 +228,15 @@ export function PricingView() {
                 key={pack.credits}
                 type="button"
                 onClick={() => handleTopup(pack)}
-                className="flex flex-col items-center rounded-xl border border-border/60 bg-card p-5 text-center transition-all hover:border-primary/40 hover:shadow-md hover:bg-primary/[0.02]"
+                className="flex flex-col items-center rounded-xl border border-border/60 bg-card p-5 text-center transition-all hover:border-primary/40 hover:shadow-md hover:bg-primary/[0.02] focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
               >
                 <span className="text-2xl font-bold text-foreground">{pack.credits}</span>
                 <span className="text-[11px] font-medium text-muted-foreground mb-3">credits</span>
                 <span className="text-[18px] font-bold text-foreground">${pack.price}</span>
                 <span className="text-[11px] text-muted-foreground mt-0.5">${pack.perCredit.toFixed(2)}/deck</span>
+                <span className="mt-3 text-[12px] font-medium text-primary">
+                  Buy now
+                </span>
               </button>
             ))}
           </div>
@@ -252,10 +255,10 @@ export function PricingView() {
               type="button"
               onClick={() => setSelectedModel(model.value)}
               className={cn(
-                "flex items-start gap-3 rounded-xl border p-4 text-left transition-all",
+                "flex items-start gap-3 rounded-xl border p-4 text-left transition-all focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2",
                 selectedModel === model.value
                   ? "border-primary bg-primary/5 ring-1 ring-primary/20"
-                  : "border-border/60 bg-card hover:border-border",
+                  : "border-border/60 bg-card hover:border-border hover:shadow-sm",
               )}
             >
               <div className="flex size-8 items-center justify-center rounded-lg bg-muted">
@@ -373,7 +376,7 @@ function PlanCard({
             </div>
           )}
           {!isEnterprise && (
-            <p className="mt-0.5 text-[11px] text-muted-foreground">
+            <p className="mt-1 text-[12px] text-muted-foreground">
               ${(price / plan.credits).toFixed(2)} per deck
             </p>
           )}

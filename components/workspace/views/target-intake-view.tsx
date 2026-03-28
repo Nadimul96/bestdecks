@@ -16,6 +16,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { dispatchRunStart } from "@/lib/run-launch";
 import { ViewLayout, SectionCard, FieldGroup } from "../view-layout";
 import { viewMeta, type Notice } from "@/lib/workspace-types";
 import { cn } from "@/lib/utils";
@@ -293,12 +294,18 @@ export function TargetIntakeView() {
         body: JSON.stringify({
           websitesText,
           contactsCsvText: contactsCsvText || undefined,
+          autoLaunch: false,
         }),
       });
 
-      if (res.ok) {
+      const payload = await res.json().catch(() => null) as
+        | { runId?: string; error?: string; insufficientCredits?: boolean }
+        | null;
+
+      if (res.ok && payload?.runId) {
+        dispatchRunStart(payload.runId);
         toast.success(
-          `Run launched with ${websiteCount} target${websiteCount > 1 ? "s" : ""}.`,
+          `Run starting with ${websiteCount} target${websiteCount > 1 ? "s" : ""}.`,
         );
         setWebsitesText("");
         setContactsCsvText("");
@@ -306,15 +313,14 @@ export function TargetIntakeView() {
         // Auto-navigate to pipeline page so user can see progress
         window.location.hash = "pipeline";
       } else {
-        const err = await res.json().catch(() => ({}));
-        const errorMsg = err.error ?? "Failed to create run.";
+        const errorMsg = payload?.error ?? "Failed to create run.";
         setNotice({
           type: "error",
           message: errorMsg,
         });
 
         // Special handling for insufficient credits
-        if (err.insufficientCredits || res.status === 402) {
+        if (payload?.insufficientCredits || res.status === 402) {
           toast.error(errorMsg, {
             action: {
               label: "Upgrade",
@@ -433,8 +439,16 @@ export function TargetIntakeView() {
               onDragLeave={() => setIsDragging(false)}
               onDrop={handleDrop}
               onClick={() => fileInputRef.current?.click()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  fileInputRef.current?.click();
+                }
+              }}
+              role="button"
+              tabIndex={0}
               className={cn(
-                "flex cursor-pointer flex-col items-center gap-3 rounded-xl border-2 border-dashed py-10 transition-all",
+                "flex cursor-pointer flex-col items-center gap-3 rounded-xl border-2 border-dashed py-10 transition-all focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2",
                 isDragging
                   ? "border-primary bg-primary/5"
                   : "border-border/50 bg-muted/20 hover:border-border hover:bg-muted/40",
@@ -457,6 +471,7 @@ export function TargetIntakeView() {
                 accept=".csv,.tsv,.txt,.xlsx"
                 onChange={handleFileInput}
                 className="hidden"
+                aria-label="Upload contact list file"
               />
             </div>
           ) : (
@@ -481,6 +496,7 @@ export function TargetIntakeView() {
               <button
                 type="button"
                 onClick={removeFile}
+                aria-label="Remove uploaded file"
                 className="rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
               >
                 <X className="size-4" />
@@ -662,7 +678,7 @@ export function TargetIntakeView() {
       </SectionCard>
 
       {/* ─── Bottom action bar ─── */}
-      <div className="sticky bottom-0 -mx-1 flex items-center justify-between rounded-xl border border-border/50 bg-card/95 px-6 py-4 shadow-lg backdrop-blur-sm">
+      <div className="sticky bottom-0 z-10 flex items-center justify-between rounded-xl border border-border/50 bg-card/95 px-6 py-4 shadow-lg backdrop-blur-sm">
         <p className="text-[13px] text-muted-foreground">
           {websiteCount > 0
             ? `${websiteCount} target${websiteCount > 1 ? "s" : ""} ready`

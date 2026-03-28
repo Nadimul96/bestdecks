@@ -5,14 +5,16 @@ import { DeepcrawlCrawler } from "@/src/integrations/deepcrawl";
 import { CloudflareCrawler } from "@/src/integrations/cloudflare";
 import { GeminiImageProvider } from "@/src/integrations/gemini";
 import { PerplexityEnrichmentProvider } from "@/src/integrations/perplexity";
+import { AlaiDeckProvider } from "@/src/integrations/alai";
 import { PlusAiDeckProvider } from "@/src/integrations/plusai";
-import { PresentonDeckProvider } from "@/src/integrations/presenton";
 import {
   UnconfiguredDeepcrawlCrawler,
   type DeckGenerationInput,
   type DeckProvider,
 } from "@/src/integrations/providers";
 import { AiBriefBuilder } from "@/src/server/ai-brief-builder";
+import { PerplexityCommunityIntelProvider } from "@/src/integrations/community-intel";
+import { createDeckProvider, hasDeckProviderConfig } from "@/src/server/deck-provider";
 import { LocalCompanyBriefBuilder, LocalSellerBriefBuilder } from "@/src/server/builders";
 import { SlidePlanner } from "@/src/server/slide-planner";
 import {
@@ -63,6 +65,7 @@ function buildDeckInput(run: Awaited<ReturnType<typeof getRun>>, companyBrief: D
     companyBrief,
     sellerPositioningSummary,
     archetype: run.questionnaire.archetype,
+    customArchetypePrompt: run.questionnaire.customArchetypePrompt,
     objective: run.questionnaire.objective,
     audience: run.questionnaire.audience,
     cardCount: run.questionnaire.desiredCardCount,
@@ -128,25 +131,25 @@ async function processRun(runId: string) {
     ? new AiBriefBuilder(settings.geminiApiKey)
     : new LocalCompanyBriefBuilder();
 
+  // Community intelligence — uses existing Perplexity key to search Reddit/X/forums
+  const communityIntelProvider = settings.perplexityApiKey
+    ? new PerplexityCommunityIntelProvider(settings.perplexityApiKey)
+    : undefined;
+
   // Slide planner for structured deck content (requires Gemini)
   const slidePlanner = settings.geminiApiKey
     ? new SlidePlanner(settings.geminiApiKey)
     : undefined;
 
-  // Resolve deck provider: Plus AI (primary) → Presenton (fallback)
+  // Resolve deck provider: Alai (primary) → Plus AI → Presenton (fallback)
   let deckProvider: DeckProvider | undefined;
-  const presentonProvider = settings.presentonBaseUrl
-    ? new PresentonDeckProvider({
-        baseUrl: settings.presentonBaseUrl,
-        apiKey: settings.presentonApiKey,
-        defaultTemplate: settings.presentonTemplate,
-      })
-    : undefined;
-
-  if (settings.plusaiApiKey) {
-    deckProvider = new PlusAiDeckProvider({ apiKey: settings.plusaiApiKey });
+  if (settings.alaiApiKey) {
+    deckProvider = createDeckProvider(settings);
+    await addRunEvent(runId, { level: "info", stage: "preflight", message: "Deck generation service connected (Alai)." });
+  } else if (settings.plusaiApiKey) {
+    deckProvider = createDeckProvider(settings);
     await addRunEvent(runId, { level: "info", stage: "preflight", message: "Deck generation service connected." });
-  } else if (presentonProvider) {
+  } else if (settings.presentonBaseUrl) {
     // Presenton fallback — with pre-flight check
     try {
       const controller = new AbortController();
@@ -162,18 +165,19 @@ async function processRun(runId: string) {
         `Presenton is unreachable at ${settings.presentonBaseUrl}. Error: ${cause}`
       );
     }
-    deckProvider = presentonProvider;
+    deckProvider = createDeckProvider(settings);
     await addRunEvent(runId, { level: "info", stage: "preflight", message: "Deck generation service connected." });
   }
 
-  if (!deckProvider) {
-    throw new Error("No deck provider configured. Set PLUSAI_API_KEY or PRESENTON_BASE_URL.");
+  if (!deckProvider || !hasDeckProviderConfig(settings)) {
+    throw new Error("No deck provider configured. Set ALAI_API_KEY, PLUSAI_API_KEY, or PRESENTON_BASE_URL.");
   }
 
   const orchestrator = new ProposalOrchestrator({
     primaryCrawler,
     fallbackCrawler,
     enrichmentProvider,
+    communityIntelProvider,
     imageProvider,
     presentonProvider: deckProvider,
     sellerBriefBuilder: new LocalSellerBriefBuilder(),
@@ -192,36 +196,48 @@ async function processRun(runId: string) {
     logoUrl: undefined as string | undefined,
   };
 
-  await addRunEvent(runId, { level: "info", stage: "seller_brief", message: "Analyzing your business positioning..." });
-  await addRunEvent(runId, { level: "info", stage: "crawl", message: `Starting crawl and enrichment for ${input.targets.length} target(s)...` });
+  // Fire events and mark all targets as processing in parallel
+  await Promise.all([
+    addRunEvent(runId, { level: "info", stage: "seller_brief", message: "Analyzing your business positioning..." }),
+    addRunEvent(runId, { level: "info", stage: "crawl", message: `Starting crawl and enrichment for ${input.targets.length} target(s)...` }),
+    ...(run.targets as unknown as PersistedRunTarget[]).map((targetRow) =>
+      updateRunTarget(targetRow.id, { status: "processing", lastError: null }),
+    ),
+  ]);
   const prepared = await orchestrator.prepareRun(input);
   checkCancelled(runId);
-  await addRunEvent(runId, { level: "info", stage: "company_brief", message: `Crawl and enrichment complete. ${prepared.preparedCompanies.length} target(s) ready, ${prepared.failedCompanies.length} failed.` });
-  await updateRun(runId, { sellerBriefJson: prepared.sellerBrief });
-  await addArtifact(runId, { artifactType: "run_plan", artifactJson: buildRunPlan(input) });
-  await addArtifact(runId, { artifactType: "seller_brief", artifactJson: prepared.sellerBrief });
+  // Save run-level results in parallel
   const persistedTargets = run.targets as unknown as PersistedRunTarget[];
+  await Promise.all([
+    addRunEvent(runId, { level: "info", stage: "company_brief", message: `Crawl and enrichment complete. ${prepared.preparedCompanies.length} target(s) ready, ${prepared.failedCompanies.length} failed.` }),
+    updateRun(runId, { sellerBriefJson: prepared.sellerBrief }),
+    addArtifact(runId, { artifactType: "run_plan", artifactJson: buildRunPlan(input) }),
+    addArtifact(runId, { artifactType: "seller_brief", artifactJson: prepared.sellerBrief }),
+  ]);
 
-  for (const failedCompany of prepared.failedCompanies) {
-    const targetRow = persistedTargets.find(
-      (target) => target.website_url === failedCompany.target.websiteUrl,
-    );
-
-    if (!targetRow) {
-      continue;
-    }
-
-    await updateRunTarget(targetRow.id, {
-      status: "failed",
-      lastError: failedCompany.message,
-    });
-    await addRunEvent(runId, {
-      targetId: targetRow.id,
-      level: "error",
-      stage: failedCompany.stage,
-      message: failedCompany.message,
-    });
-  }
+  // Mark all failed companies in parallel
+  await Promise.all(
+    prepared.failedCompanies
+      .map((failedCompany) => {
+        const targetRow = persistedTargets.find(
+          (target) => target.website_url === failedCompany.target.websiteUrl,
+        );
+        if (!targetRow) return [];
+        return [
+          updateRunTarget(targetRow.id, {
+            status: "failed",
+            lastError: failedCompany.message,
+          }),
+          addRunEvent(runId, {
+            targetId: targetRow.id,
+            level: "error",
+            stage: failedCompany.stage,
+            message: failedCompany.message,
+          }),
+        ];
+      })
+      .flat(),
+  );
 
   // Process targets sequentially — SQLite cannot handle concurrent writes
   for (const preparedCompany of prepared.preparedCompanies) {
@@ -235,6 +251,9 @@ async function processRun(runId: string) {
     }
 
     try {
+      // Mark target as brief_ready (skipping redundant "processing" update
+      // since UI already shows this target in the processing state from the
+      // batch update above)
       await updateRunTarget(targetRow.id, {
         status: "brief_ready",
         crawlProvider: preparedCompany.crawlResult.provider,
@@ -270,6 +289,7 @@ async function processRun(runId: string) {
         prepared.sellerBrief.positioningSummary,
       );
       let imageUrls: string[] = [];
+      let imagePromise: Promise<Awaited<ReturnType<NonNullable<typeof imageProvider>["generateSupportingAssets"]>>> | null = null;
 
       if (deckInput.imagePolicy !== "never" && imageProvider) {
         await addRunEvent(runId, {
@@ -278,13 +298,45 @@ async function processRun(runId: string) {
           stage: "image_strategy",
           message: `Generating supporting visuals for ${targetName}...`,
         });
+        imagePromise = imageProvider.generateSupportingAssets({
+          companyBrief: preparedCompany.companyBrief,
+          sellerPositioningSummary: prepared.sellerBrief.positioningSummary,
+          visualStyle: deckInput.visualStyle,
+          objective: deckInput.objective,
+        });
+      }
+
+      // ── Slide Planning Step ──────────────────────────────────
+      let slidePlanPrompt: string | undefined;
+      let slidePlanPromise: Promise<{
+        slidePlan: Awaited<ReturnType<NonNullable<typeof slidePlanner>["planSlides"]>>;
+        slidePlanPrompt: string;
+      }> | null = null;
+
+      if (slidePlanner) {
+        await addRunEvent(runId, {
+          targetId: targetRow.id,
+          level: "info",
+          stage: "slide_planning",
+          message: `Planning slide content for ${targetName}...`,
+        });
+        slidePlanPromise = slidePlanner.planSlides({
+          companyBrief: preparedCompany.companyBrief,
+          sellerBrief: prepared.sellerBrief,
+          deckInput,
+          sellerContactInfo,
+          slideStructure: run?.questionnaire.extraInstructions,
+        }).then((slidePlan) => ({
+          slidePlan,
+          slidePlanPrompt: deckProvider instanceof AlaiDeckProvider
+            ? slidePlanner.formatPlanForAlai(slidePlan, sellerContactInfo)
+            : slidePlanner.formatPlanAsPrompt(slidePlan, sellerContactInfo),
+        }));
+      }
+
+      if (imagePromise) {
         try {
-          const imageResult = await imageProvider.generateSupportingAssets({
-            companyBrief: preparedCompany.companyBrief,
-            sellerPositioningSummary: prepared.sellerBrief.positioningSummary,
-            visualStyle: deckInput.visualStyle,
-            objective: deckInput.objective,
-          });
+          const imageResult = await imagePromise;
           imageUrls = imageResult.assetUrls;
           await addArtifact(runId, {
             targetId: targetRow.id,
@@ -304,27 +356,10 @@ async function processRun(runId: string) {
         }
       }
 
-      // ── Slide Planning Step ──────────────────────────────────
-      let slidePlanPrompt: string | undefined;
-
-      if (slidePlanner) {
-        await addRunEvent(runId, {
-          targetId: targetRow.id,
-          level: "info",
-          stage: "slide_planning",
-          message: `Planning slide content for ${targetName}...`,
-        });
-
+      if (slidePlanPromise) {
         try {
-          const slidePlan = await slidePlanner.planSlides({
-            companyBrief: preparedCompany.companyBrief,
-            sellerBrief: prepared.sellerBrief,
-            deckInput,
-            sellerContactInfo,
-            slideStructure: run?.questionnaire.extraInstructions,
-          });
-
-          slidePlanPrompt = slidePlanner.formatPlanAsPrompt(slidePlan, sellerContactInfo);
+          const { slidePlan, slidePlanPrompt: prompt } = await slidePlanPromise;
+          slidePlanPrompt = prompt;
 
           await addArtifact(runId, {
             targetId: targetRow.id,
@@ -357,9 +392,11 @@ async function processRun(runId: string) {
         message: `Generating personalized deck for ${targetName}...`,
       });
 
-      // If using Plus AI with a slide plan, pass the structured prompt
+      // If using Alai or Plus AI with a slide plan, pass the structured prompt
       let delivery;
-      if (deckProvider instanceof PlusAiDeckProvider && slidePlanPrompt) {
+      if (deckProvider instanceof AlaiDeckProvider && slidePlanPrompt) {
+        delivery = await deckProvider.createDeck(deckInput, imageUrls, { slidePlanPrompt });
+      } else if (deckProvider instanceof PlusAiDeckProvider && slidePlanPrompt) {
         delivery = await deckProvider.createDeck(deckInput, imageUrls, { slidePlanPrompt });
       } else {
         delivery = await deckProvider.createDeck(deckInput, imageUrls);

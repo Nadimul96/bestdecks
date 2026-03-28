@@ -22,6 +22,15 @@ export interface PresentonProviderOptions {
   defaultTemplate?: string;
 }
 
+function hostedPresentonRequiresApiKey(baseUrl: string, apiKey?: string) {
+  try {
+    const hostname = new URL(baseUrl).hostname.toLowerCase();
+    return hostname === "api.presenton.ai" && !apiKey;
+  } catch {
+    return false;
+  }
+}
+
 function toAbsoluteUrl(baseUrl: string, candidate?: string) {
   if (!candidate) {
     return undefined;
@@ -117,9 +126,16 @@ export class PresentonDeckProvider implements PresentonProvider {
   }
 
   public async createDeck(input: DeckGenerationInput, imageUrls: string[] = []) {
+    if (hostedPresentonRequiresApiKey(this.baseUrl, this.apiKey)) {
+      throw new Error(
+        "Presenton Cloud requires a PRESENTON_API_KEY. Add the API key or switch to a self-hosted Presenton base URL.",
+      );
+    }
+
     const content = buildDeckInputText(input, imageUrls);
     const instructions = buildPresentationAdditionalInstructions({
       archetype: input.archetype,
+      customArchetypePrompt: input.customArchetypePrompt,
       tone: input.tone,
       visualStyle: input.visualStyle,
       imagePolicy: input.imagePolicy,

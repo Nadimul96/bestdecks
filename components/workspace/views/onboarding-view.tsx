@@ -35,6 +35,7 @@ import {
   type Business,
 } from "@/lib/workspace-types";
 import { useBusinessContext } from "@/lib/business-context";
+import { dispatchRunStart } from "@/lib/run-launch";
 import { cn } from "@/lib/utils";
 
 const meta = viewMeta.onboarding;
@@ -184,14 +185,25 @@ export function OnboardingView({ currentUser }: { currentUser: CurrentUser }) {
         .split("\n")
         .filter((l) => l.trim().length > 0);
       if (urls.length > 0) {
-        await fetch("/api/runs", {
+        const runResponse = await fetch("/api/runs", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             websitesText: state.websitesText,
             contactsCsvText: state.contactsCsvText || undefined,
+            autoLaunch: false,
           }),
         });
+
+        const runPayload = await runResponse.json().catch(() => null) as
+          | { runId?: string; error?: string }
+          | null;
+
+        if (!runResponse.ok || !runPayload?.runId) {
+          throw new Error(runPayload?.error ?? "Failed to create the initial run.");
+        }
+
+        dispatchRunStart(runPayload.runId);
       }
 
       // Create or update the business entity in context
@@ -263,12 +275,12 @@ export function OnboardingView({ currentUser }: { currentUser: CurrentUser }) {
               type="button"
               onClick={() => index <= currentStep && setCurrentStep(index)}
               className={cn(
-                "flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all",
+                "flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2",
                 index === currentStep
                   ? "bg-primary text-primary-foreground shadow-sm"
                   : index < currentStep
-                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 cursor-pointer"
-                    : "bg-muted text-muted-foreground",
+                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 cursor-pointer hover:bg-emerald-500/15"
+                    : "bg-muted text-muted-foreground cursor-default",
               )}
             >
               {index < currentStep ? (
@@ -282,8 +294,8 @@ export function OnboardingView({ currentUser }: { currentUser: CurrentUser }) {
             {index < steps.length - 1 && (
               <div
                 className={cn(
-                  "h-px flex-1",
-                  index < currentStep ? "bg-emerald-500/30" : "bg-border",
+                  "h-px flex-1 transition-colors",
+                  index < currentStep ? "bg-emerald-500/40" : "bg-border/60",
                 )}
               />
             )}
@@ -402,10 +414,10 @@ export function OnboardingView({ currentUser }: { currentUser: CurrentUser }) {
                     type="button"
                     onClick={() => update("intent", opt.value)}
                     className={cn(
-                      "group relative flex items-start gap-3 rounded-xl border p-4 text-left transition-all",
+                      "group relative flex items-start gap-3 rounded-xl border p-4 text-left transition-all focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2",
                       state.intent === opt.value
                         ? "border-primary bg-primary/5 ring-1 ring-primary/20"
-                        : "border-border/60 bg-card hover:border-border",
+                        : "border-border/60 bg-card hover:border-border hover:shadow-sm",
                     )}
                   >
                     <span className="mt-0.5 text-lg shrink-0">{opt.emoji}</span>
@@ -470,7 +482,7 @@ export function OnboardingView({ currentUser }: { currentUser: CurrentUser }) {
             <button
               type="button"
               onClick={() => update("showCsv", !state.showCsv)}
-              className="flex w-full items-center justify-between px-5 py-3.5 text-left"
+              className="flex w-full items-center justify-between px-5 py-3.5 text-left transition-colors hover:bg-muted/30 rounded-xl focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
             >
               <div>
                 <p className="text-sm font-medium text-foreground">

@@ -37,6 +37,7 @@ import type {
 } from "@/src/domain/schemas";
 import type { IntegrationProviderKey } from "@/src/server/settings";
 import { cn } from "@/lib/utils";
+import { dispatchRunStart } from "@/lib/run-launch";
 import {
   DEFAULT_WORKSPACE_VIEW,
   isWorkspaceViewId,
@@ -2675,15 +2676,16 @@ export function RunBuilderShell({ currentUser }: { currentUser?: CurrentUser }) 
         method: "POST",
         body: {
           run: runPayload,
-          autoLaunch: true,
+          autoLaunch: false,
         },
       });
 
+      dispatchRunStart(response.runId);
       await refreshRuns(response.runId);
       window.location.hash = "#delivery";
       setNotice({
         type: "success",
-        message: `Run ${response.runId.slice(0, 8)} launched.`,
+        message: `Run ${response.runId.slice(0, 8)} starting.`,
       });
     } catch (error) {
       setNotice({
@@ -2705,16 +2707,11 @@ export function RunBuilderShell({ currentUser }: { currentUser?: CurrentUser }) 
     setIsLaunching(true);
 
     try {
-      await requestJson<{ ok: true; launched: boolean }>(
-        `/api/runs/${selectedRunId}/launch`,
-        {
-          method: "POST",
-        },
-      );
+      dispatchRunStart(selectedRunId);
       await refreshRuns(selectedRunId);
       setNotice({
         type: "success",
-        message: `Run ${selectedRunId.slice(0, 8)} launched.`,
+        message: `Run ${selectedRunId.slice(0, 8)} starting.`,
       });
     } catch (error) {
       setNotice({

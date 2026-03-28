@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createRun, listRuns, getOnboarding, deductCredits } from "@/src/server/repository";
 import { getAdminSession } from "@/src/server/auth";
 import type { IntakeRun } from "@/src/domain/schemas";
+import { launchRunProcessing } from "@/src/server/run-executor";
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? "nadimul96@gmail.com";
 
@@ -146,6 +147,7 @@ export async function POST(request: Request) {
           mustInclude: Array.isArray(q.mustInclude) ? q.mustInclude : [],
           mustAvoid: Array.isArray(q.mustAvoid) ? q.mustAvoid : [],
           extraInstructions: q.extraInstructions || undefined,
+          customArchetypePrompt: q.customArchetypePrompt || undefined,
           customTone: q.customTone || undefined,
           customVisualStyle: q.customVisualStyle || undefined,
           visualContentTypes: q.visualContentTypes ?? [],
@@ -179,30 +181,12 @@ export async function POST(request: Request) {
 
     const runId = await createRun(intakeRun, session.user.id);
     const shouldLaunch = body.autoLaunch !== false; // Default to auto-launch
-    if (shouldLaunch) {
-      // Fire-and-forget: kick off the step-based pipeline
-      // Each step is a separate HTTP request with its own 300s budget
-      const origin = request.headers.get("origin")
-        || (request.headers.get("x-forwarded-proto") && `${request.headers.get("x-forwarded-proto")}://${request.headers.get("host")}`)
-        || `https://${request.headers.get("host") || "localhost:3000"}`;
-      const INTERNAL_SECRET = process.env.INTERNAL_PIPELINE_SECRET || process.env.BETTER_AUTH_SECRET || "internal";
-
-      fetch(`${origin}/api/runs/${runId}/step`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-internal-secret": INTERNAL_SECRET,
-        },
-        body: JSON.stringify({ step: "prepare" }),
-      }).catch((err) => {
-        console.error(`[runs] Failed to kick off pipeline for run ${runId}:`, err);
-      });
-    }
+    const launched = shouldLaunch ? launchRunProcessing(runId) : false;
 
     return NextResponse.json({
       ok: true,
       runId,
-      launched: shouldLaunch,
+      launched,
       creditsUsed: isAdmin ? 0 : targetCount,
     });
   } catch (error) {

@@ -914,7 +914,7 @@ function SlidePreview({
 
   return (
     <div
-      className="relative aspect-[16/9] w-full overflow-hidden rounded-xl shadow-2xl"
+      className="relative h-full w-full overflow-hidden rounded-xl shadow-2xl"
       style={bgStyle}
     >
       {/* Dark mode dot-grid texture */}
@@ -1346,50 +1346,52 @@ export function ArchetypePreviewModal({ archetype, open, onClose }: ArchetypePre
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
         <DialogPrimitive.Content
-          className="fixed left-[50%] top-[50%] z-50 w-full max-w-[1400px] -translate-x-[50%] -translate-y-[50%] px-4 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95"
+          className="fixed inset-4 z-50 flex flex-col outline-none sm:inset-6 lg:inset-8 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95"
         >
           <DialogPrimitive.Title className="sr-only">
             {example.title} quick preview
           </DialogPrimitive.Title>
-          <div className="mb-4 rounded-[28px] border border-white/[0.08] bg-white/[0.04] p-4 shadow-[0_28px_120px_rgba(0,0,0,0.35)]">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+
+          {/* Header — fixed at top */}
+          <div className="shrink-0 rounded-t-[20px] border border-b-0 border-white/[0.08] bg-white/[0.04] px-4 py-3 shadow-[0_28px_120px_rgba(0,0,0,0.35)]">
+            <div className="flex items-center justify-between gap-4">
               <div className="min-w-0">
-                <div className="flex items-center gap-2.5">
-                  <div className="size-2 rounded-full" style={{ background: accent }} />
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/45">
-                    Quick preview
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <div className="size-2 rounded-full" style={{ background: accent }} />
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/45">
+                      Quick preview
+                    </p>
+                  </div>
+                  <p className="text-sm font-semibold text-white">{example.title}</p>
+                  <p className="hidden text-[12px] text-white/40 lg:block">
+                    {example.scenario}
                   </p>
                 </div>
-                <p className="mt-2 text-lg font-semibold text-white">{example.title}</p>
-                <p className="mt-1 max-w-2xl text-sm leading-relaxed text-white/55">{example.scenario}</p>
-                <p className="mt-2 text-[11px] leading-relaxed text-white/38">
-                  Deck arc stays fixed. Switch themes to compare treatment without leaving the archetype flow.
-                </p>
               </div>
-              <div className="flex items-center gap-2 self-start">
-                <span className="rounded-full border border-white/[0.08] bg-white/[0.05] px-3 py-1 text-[11px] font-medium text-white/55">
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="rounded-full border border-white/[0.08] bg-white/[0.05] px-2.5 py-0.5 text-[10px] font-medium text-white/55">
                   {themeStatusLabel}
                 </span>
-                <span className="rounded-full border border-white/[0.08] bg-white/[0.05] px-3 py-1 text-[11px] font-medium tabular-nums text-white/55">
+                <span className="rounded-full border border-white/[0.08] bg-white/[0.05] px-2.5 py-0.5 text-[10px] font-medium tabular-nums text-white/55">
                   {currentSlide + 1} / {total}
                 </span>
                 <DialogPrimitive.Close
-                  className="flex size-9 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.05] text-white/55 transition-colors hover:bg-white/[0.12] hover:text-white"
+                  className="flex size-7 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.05] text-white/55 transition-colors hover:bg-white/[0.12] hover:text-white"
                   aria-label="Close"
                 >
-                  <X className="size-4" />
+                  <X className="size-3.5" />
                 </DialogPrimitive.Close>
               </div>
             </div>
-
           </div>
 
-          {/* Horizontal split: slide preview (left) + sidebar (right) */}
-          <div className="mt-4 flex gap-4">
-            {/* Left: slide preview + navigation + slide thumbnails */}
-            <div className="min-w-0 flex-1 flex flex-col gap-3">
-              {/* Slide */}
-              <div className="relative overflow-hidden rounded-[28px] border border-white/[0.08] bg-[#05070B] p-3 shadow-[0_32px_120px_rgba(0,0,0,0.55)]">
+          {/* Body — fills remaining viewport height */}
+          <div className="flex min-h-0 flex-1 gap-0 rounded-b-[20px] border border-t-0 border-white/[0.08] bg-[#0A0C10] overflow-hidden">
+            {/* Left: slide preview + navigation + slide pills */}
+            <div className="min-w-0 flex-1 flex flex-col">
+              {/* Slide — fills available space */}
+              <div className="relative flex-1 min-h-0 overflow-hidden border-b border-white/[0.06] p-3">
                 <div
                   className="pointer-events-none absolute inset-0 opacity-90"
                   style={{
@@ -1409,9 +1411,9 @@ export function ArchetypePreviewModal({ archetype, open, onClose }: ArchetypePre
                 <button onClick={goNext} disabled={currentSlide === total - 1} className="absolute bottom-0 right-0 top-0 w-[18%] cursor-e-resize opacity-0 disabled:cursor-default" aria-label="Next slide" />
               </div>
 
-              {/* Controls */}
-              <div className="flex items-center justify-between">
-                <div className="flex flex-1 items-center gap-1 pr-4">
+              {/* Progress bar + arrows — fixed at bottom of slide area */}
+              <div className="shrink-0 flex items-center gap-3 border-t border-white/[0.06] px-3 py-2">
+                <div className="flex flex-1 items-center gap-1">
                   {example.slides.map((s, i) => (
                     <button
                       key={i}
@@ -1426,37 +1428,37 @@ export function ArchetypePreviewModal({ archetype, open, onClose }: ArchetypePre
                     </button>
                   ))}
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <button onClick={goPrev} disabled={currentSlide === 0} className="flex size-8 items-center justify-center rounded-full bg-white/[0.07] text-white/55 transition-colors hover:bg-white/[0.14] hover:text-white disabled:cursor-default disabled:opacity-25">
-                    <ChevronLeft className="size-4" />
+                <div className="flex items-center gap-1">
+                  <button onClick={goPrev} disabled={currentSlide === 0} className="flex size-7 items-center justify-center rounded-full bg-white/[0.07] text-white/55 transition-colors hover:bg-white/[0.14] hover:text-white disabled:cursor-default disabled:opacity-25">
+                    <ChevronLeft className="size-3.5" />
                   </button>
-                  <button onClick={goNext} disabled={currentSlide === total - 1} className="flex size-8 items-center justify-center rounded-full bg-white/[0.07] text-white/55 transition-colors hover:bg-white/[0.14] hover:text-white disabled:cursor-default disabled:opacity-25">
-                    <ChevronRight className="size-4" />
+                  <button onClick={goNext} disabled={currentSlide === total - 1} className="flex size-7 items-center justify-center rounded-full bg-white/[0.07] text-white/55 transition-colors hover:bg-white/[0.14] hover:text-white disabled:cursor-default disabled:opacity-25">
+                    <ChevronRight className="size-3.5" />
                   </button>
                 </div>
               </div>
 
-              {/* Slide thumbnails — horizontal scrollable row */}
-              <div className="flex gap-2 overflow-x-auto pb-1">
+              {/* Slide pills — fixed at bottom */}
+              <div className="shrink-0 flex gap-1.5 overflow-x-auto border-t border-white/[0.06] px-3 py-2">
                 {example.slides.map((slide, i) => (
                   <button
                     key={i}
                     type="button"
                     onClick={() => { setDirection(i > currentSlide ? "right" : "left"); setCurrentSlide(i); }}
                     className={cn(
-                      "flex shrink-0 items-center gap-2 rounded-xl border px-3 py-2 text-left transition-all",
+                      "flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-left transition-all",
                       currentSlide === i
                         ? "border-white/[0.14] bg-white/[0.08]"
                         : "border-white/[0.06] bg-black/[0.16] hover:border-white/[0.12] hover:bg-white/[0.05]",
                     )}
                   >
                     <span className={cn(
-                      "flex size-5 items-center justify-center rounded text-[10px] font-bold",
+                      "flex size-4 items-center justify-center rounded text-[9px] font-bold",
                       currentSlide === i ? "bg-white/[0.12] text-white" : "bg-white/[0.06] text-white/40",
                     )}>
                       {i + 1}
                     </span>
-                    <span className="text-[11px] font-medium text-white/60 whitespace-nowrap">
+                    <span className="text-[10px] font-medium text-white/60 whitespace-nowrap">
                       {slide.type.toUpperCase()}
                     </span>
                   </button>
@@ -1464,8 +1466,8 @@ export function ArchetypePreviewModal({ archetype, open, onClose }: ArchetypePre
               </div>
             </div>
 
-            {/* Right: themes only */}
-            <div className="w-[220px] shrink-0 flex flex-col gap-1.5 overflow-y-auto" style={{ maxHeight: "calc(80vh - 120px)" }}>
+            {/* Right: themes sidebar */}
+            <div className="w-[200px] shrink-0 flex flex-col gap-1.5 overflow-y-auto border-l border-white/[0.06] p-3">
               <p className="text-[11px] font-medium uppercase tracking-wider text-white/40">Themes</p>
 
               <div className="flex flex-col gap-1.5">

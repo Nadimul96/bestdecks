@@ -914,7 +914,7 @@ function SlidePreview({
 
   return (
     <div
-      className="relative h-full w-full overflow-hidden rounded-xl shadow-2xl"
+      className="relative aspect-[16/9] w-full max-h-full overflow-hidden rounded-xl shadow-2xl"
       style={bgStyle}
     >
       {/* Dark mode dot-grid texture */}
@@ -1391,14 +1391,14 @@ export function ArchetypePreviewModal({ archetype, open, onClose }: ArchetypePre
             {/* Left: slide preview + navigation + slide pills */}
             <div className="min-w-0 flex-1 flex flex-col">
               {/* Slide — fills available space */}
-              <div className="relative flex-1 min-h-0 overflow-hidden border-b border-white/[0.06] p-3">
+              <div className="relative flex-1 min-h-0 overflow-hidden border-b border-white/[0.06] flex items-center justify-center p-3">
                 <div
                   className="pointer-events-none absolute inset-0 opacity-90"
                   style={{
                     background: `radial-gradient(circle at top right, ${selectedTheme.surfaceGlow} 0%, transparent 34%), radial-gradient(circle at bottom left, ${selectedTheme.accent}18 0%, transparent 28%)`,
                   }}
                 />
-                <div key={currentSlide} className={cn("relative", direction === "right" ? "animate-slide-in-right" : "animate-slide-in-left")}>
+                <div key={currentSlide} className={cn("relative w-full", direction === "right" ? "animate-slide-in-right" : "animate-slide-in-left")}>
                   <SlidePreview
                     slide={example.slides[currentSlide]}
                     theme={selectedTheme}

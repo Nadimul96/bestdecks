@@ -200,7 +200,7 @@ export function OverviewView({ currentUser }: { currentUser: CurrentUser }) {
                 </p>
                 <p className="text-[13px] text-muted-foreground">
                   {credits
-                    ? `${credits.balance} credit${credits.balance !== 1 ? "s" : ""} available`
+                    ? `${credits.balance} deck${credits.balance !== 1 ? "s" : ""} available`
                     : "Start generating decks for your targets"}
                 </p>
               </div>
@@ -378,7 +378,7 @@ export function OverviewView({ currentUser }: { currentUser: CurrentUser }) {
               icon: CheckCircle2,
             },
             {
-              label: "Credits",
+              label: "Decks",
               value: credits?.balance ?? 0,
               icon: Sparkles,
             },

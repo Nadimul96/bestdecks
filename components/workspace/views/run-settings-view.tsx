@@ -567,11 +567,20 @@ export function RunSettingsView() {
                 {archetypeOptions.map((opt) => {
                   const isSelected = form.archetype === opt.value;
                   const accent = archetypeAccents[opt.value] ?? archetypeAccents.cold_outreach;
+                  const previewExample = archetypeExamples[opt.value];
                   return (
-                    <button
+                    <div
                       key={opt.value}
-                      type="button"
+                      role="button"
+                      tabIndex={0}
+                      aria-pressed={isSelected}
                       onClick={() => update("archetype", opt.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          update("archetype", opt.value);
+                        }
+                      }}
                       className={cn(
                         "group relative overflow-hidden rounded-2xl border p-4 text-left transition-all duration-300 focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2",
                         isSelected
@@ -596,21 +605,32 @@ export function RunSettingsView() {
                           <p className="text-[13px] font-semibold text-foreground pr-6">
                             {opt.label}
                           </p>
-                          <p className="mt-0.5 text-[11.5px] leading-relaxed text-muted-foreground line-clamp-2">
+                          <p className="mt-0.5 min-h-[2.9rem] text-[11.5px] leading-relaxed text-muted-foreground">
                             {opt.description}
                           </p>
-                          {archetypeExamples[opt.value] && (
-                            <span
-                              role="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setPreviewArchetype(opt.value);
-                              }}
-                              className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-primary/80 hover:text-primary transition-colors cursor-pointer"
-                            >
-                              <Eye className="size-3" />
-                              See example
-                            </span>
+
+                          {previewExample && (
+                            <div className="mt-3 flex flex-wrap items-center gap-2.5">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="rounded-full border border-border/40 bg-muted/30 px-2 py-1 text-[10px] font-medium text-muted-foreground">
+                                  {previewExample.slides.length} slides
+                                </span>
+                              </div>
+                              <div className="h-4 w-px bg-border/50" />
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setPreviewArchetype(opt.value);
+                                  }}
+                                  className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/[0.08] px-3 py-1.5 text-[11px] font-semibold text-primary transition-all hover:-translate-y-0.5 hover:border-primary/35 hover:bg-primary/[0.12]"
+                                >
+                                  <Eye className="size-3" />
+                                  Quick preview
+                                </button>
+                              </div>
+                            </div>
                           )}
                         </div>
                       </div>
@@ -639,7 +659,7 @@ export function RunSettingsView() {
                           </TooltipContent>
                         </Tooltip>
                       )}
-                    </button>
+                    </div>
                   );
                 })}
               </div>

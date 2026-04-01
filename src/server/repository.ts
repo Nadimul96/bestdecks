@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { intakeRunSchema, type IntakeRun } from "@/src/domain/schemas";
+import { intakeRunSchema, type IntakeRun, type SellerKnowledge } from "@/src/domain/schemas";
 import { encryptSecret } from "@/src/server/crypto";
 import { getDb } from "@/src/server/db";
 import {
@@ -39,18 +39,19 @@ function parseJson<T>(value: string | null) {
   return value ? (JSON.parse(value) as T) : undefined;
 }
 
-export async function saveOnboarding(payload: OnboardingPayload) {
+export async function saveOnboarding(payload: OnboardingPayload, userId: string = "default") {
   const db = await getDb();
   const timestamp = now();
 
   await db.run(
     `
       INSERT INTO workspace_state (
-        id, owner_name, owner_email, company_name, website_url, timezone, default_signature,
+        id, user_id, owner_name, owner_email, company_name, website_url, timezone, default_signature,
         seller_context_json, questionnaire_json, draft_websites_text, draft_contacts_csv_text,
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
+        user_id = COALESCE(excluded.user_id, workspace_state.user_id),
         owner_name = COALESCE(excluded.owner_name, workspace_state.owner_name),
         owner_email = COALESCE(excluded.owner_email, workspace_state.owner_email),
         company_name = COALESCE(excluded.company_name, workspace_state.company_name),
@@ -58,13 +59,15 @@ export async function saveOnboarding(payload: OnboardingPayload) {
         timezone = COALESCE(excluded.timezone, workspace_state.timezone),
         default_signature = COALESCE(excluded.default_signature, workspace_state.default_signature),
         seller_context_json = COALESCE(excluded.seller_context_json, workspace_state.seller_context_json),
+        seller_knowledge_json = CASE WHEN excluded.seller_context_json IS NOT NULL THEN NULL ELSE workspace_state.seller_knowledge_json END,
         questionnaire_json = COALESCE(excluded.questionnaire_json, workspace_state.questionnaire_json),
         draft_websites_text = COALESCE(excluded.draft_websites_text, workspace_state.draft_websites_text),
         draft_contacts_csv_text = COALESCE(excluded.draft_contacts_csv_text, workspace_state.draft_contacts_csv_text),
         updated_at = excluded.updated_at
     `,
     [
-      "default",
+      userId,
+      userId,
       payload.profile.ownerName ?? null,
       payload.profile.ownerEmail ?? null,
       payload.profile.companyName ?? null,
@@ -85,73 +88,78 @@ export async function saveOnboarding(payload: OnboardingPayload) {
     (payload.integrations ?? []).map((integration) =>
       db.run(
         `
-          INSERT INTO integration_settings (provider, display_name, config_json, secret_ciphertext, updated_at)
-          VALUES (?, ?, ?, ?, ?)
-          ON CONFLICT(provider) DO UPDATE SET
-            display_name = excluded.display_name,
-            config_json = excluded.config_json,
-            secret_ciphertext = COALESCE(excluded.secret_ciphertext, integration_settings.secret_ciphertext),
-            updated_at = excluded.updated_at
+          DELETE FROM integration_settings WHERE provider = ? AND user_id = ?
         `,
-        [
-          integration.provider,
-          integration.displayName ?? null,
-          integration.config ? JSON.stringify(integration.config) : null,
-          integration.secret ? encryptSecret(integration.secret) : null,
-          timestamp,
-        ],
+        [integration.provider, userId],
+      ).then(() =>
+        db.run(
+          `
+            INSERT INTO integration_settings (provider, user_id, display_name, config_json, secret_ciphertext, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `,
+          [
+            integration.provider,
+            userId,
+            integration.displayName ?? null,
+            integration.config ? JSON.stringify(integration.config) : null,
+            integration.secret ? encryptSecret(integration.secret) : null,
+            timestamp,
+          ],
+        ),
       ),
     ),
   );
 }
 
-export async function saveSellerBriefMd(markdown: string) {
+export async function saveSellerBriefMd(markdown: string, userId: string = "default") {
   const db = await getDb();
   const timestamp = now();
 
   await db.run(
     `
-      INSERT INTO workspace_state (id, seller_brief_md, created_at, updated_at)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO workspace_state (id, user_id, seller_brief_md, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
+        user_id = COALESCE(excluded.user_id, workspace_state.user_id),
         seller_brief_md = excluded.seller_brief_md,
         updated_at = excluded.updated_at
     `,
-    ["default", markdown, timestamp, timestamp],
+    [userId, userId, markdown, timestamp, timestamp],
   );
 }
 
-export async function getSellerBriefMd(): Promise<string | null> {
+export async function getSellerBriefMd(userId: string = "default"): Promise<string | null> {
   const db = await getDb();
   const row = await db.execute(
-    "SELECT seller_brief_md FROM workspace_state WHERE id = ? LIMIT 1",
-    ["default"],
+    "SELECT seller_brief_md FROM workspace_state WHERE id = ? OR user_id = ? LIMIT 1",
+    [userId, userId],
   ) as { seller_brief_md: string | null } | undefined;
 
   return row?.seller_brief_md ?? null;
 }
 
-export async function saveAudienceContext(context: Record<string, unknown>) {
+export async function saveAudienceContext(context: Record<string, unknown>, userId: string = "default") {
   const db = await getDb();
   const timestamp = now();
 
   await db.run(
     `
-      INSERT INTO workspace_state (id, audience_context_json, created_at, updated_at)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO workspace_state (id, user_id, audience_context_json, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
+        user_id = COALESCE(excluded.user_id, workspace_state.user_id),
         audience_context_json = excluded.audience_context_json,
         updated_at = excluded.updated_at
     `,
-    ["default", JSON.stringify(context), timestamp, timestamp],
+    [userId, userId, JSON.stringify(context), timestamp, timestamp],
   );
 }
 
-export async function getAudienceContext(): Promise<Record<string, unknown> | null> {
+export async function getAudienceContext(userId: string = "default"): Promise<Record<string, unknown> | null> {
   const db = await getDb();
   const row = await db.execute(
-    "SELECT audience_context_json FROM workspace_state WHERE id = ? LIMIT 1",
-    ["default"],
+    "SELECT audience_context_json FROM workspace_state WHERE id = ? OR user_id = ? LIMIT 1",
+    [userId, userId],
   ) as { audience_context_json: string | null } | undefined;
 
   if (!row?.audience_context_json) return null;
@@ -162,12 +170,91 @@ export async function getAudienceContext(): Promise<Record<string, unknown> | nu
   }
 }
 
-export async function getOnboarding() {
+/* ─────────────────────────────────────────────
+   Seller Knowledge (rich context — superset of SellerContext)
+   ───────────────────────────────────────────── */
+
+export async function saveSellerKnowledge(knowledge: SellerKnowledge, userId: string = "default") {
   const db = await getDb();
-  const resolved = await resolveIntegrationConfig();
+  const timestamp = now();
+
+  const backwardCompat: IntakeRun["sellerContext"] = {
+    websiteUrl: knowledge.websiteUrl,
+    companyName: knowledge.companyName,
+    offerSummary: knowledge.offerSummary,
+    services: knowledge.services,
+    differentiators: knowledge.differentiators,
+    targetCustomer: knowledge.targetCustomer,
+    desiredOutcome: knowledge.desiredOutcome,
+    proofPoints: knowledge.proofPoints,
+    constraints: knowledge.constraints,
+  };
+
+  await db.run(
+    `
+      INSERT INTO workspace_state (id, user_id, seller_knowledge_json, seller_context_json, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        user_id = COALESCE(excluded.user_id, workspace_state.user_id),
+        seller_knowledge_json = excluded.seller_knowledge_json,
+        seller_context_json = excluded.seller_context_json,
+        updated_at = excluded.updated_at
+    `,
+    [userId, userId, JSON.stringify(knowledge), JSON.stringify(backwardCompat), timestamp, timestamp],
+  );
+}
+
+export async function getSellerKnowledge(userId: string = "default"): Promise<SellerKnowledge | null> {
+  const db = await getDb();
   const row = await db.execute(
-    "SELECT * FROM workspace_state WHERE id = ? LIMIT 1",
-    ["default"],
+    "SELECT seller_knowledge_json, seller_context_json FROM workspace_state WHERE id = ? OR user_id = ? LIMIT 1",
+    [userId, userId],
+  ) as { seller_knowledge_json: string | null; seller_context_json: string | null } | undefined;
+
+  if (!row) return null;
+
+  // Prefer rich knowledge if it exists
+  if (row.seller_knowledge_json) {
+    try {
+      return JSON.parse(row.seller_knowledge_json) as SellerKnowledge;
+    } catch {
+      // fall through to legacy
+    }
+  }
+
+  // Fall back to old sellerContext shape, augmenting with empty defaults for new fields
+  if (row.seller_context_json) {
+    try {
+      const legacy = JSON.parse(row.seller_context_json) as IntakeRun["sellerContext"];
+      return {
+        websiteUrl: legacy.websiteUrl,
+        companyName: legacy.companyName,
+        offerSummary: legacy.offerSummary,
+        services: legacy.services,
+        differentiators: legacy.differentiators,
+        targetCustomer: legacy.targetCustomer,
+        desiredOutcome: legacy.desiredOutcome,
+        proofPoints: legacy.proofPoints ?? [],
+        constraints: legacy.constraints ?? [],
+        caseStudies: [],
+        clientLogos: [],
+        awards: [],
+        commonObjections: [],
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
+export async function getOnboarding(userId: string = "default") {
+  const db = await getDb();
+  const resolved = await resolveIntegrationConfig(userId);
+  const row = await db.execute(
+    "SELECT * FROM workspace_state WHERE id = ? OR user_id = ? LIMIT 1",
+    [userId, userId],
   ) as
     | {
         owner_name: string | null;
@@ -181,6 +268,7 @@ export async function getOnboarding() {
         draft_websites_text: string | null;
         draft_contacts_csv_text: string | null;
         seller_brief_md: string | null;
+        seller_knowledge_json: string | null;
       }
     | undefined;
 
@@ -188,8 +276,10 @@ export async function getOnboarding() {
     `
       SELECT provider, display_name, config_json, secret_ciphertext
       FROM integration_settings
+      WHERE user_id = ?
       ORDER BY provider
     `,
+    [userId],
   ) as unknown as Array<{
     provider: string;
     display_name: string | null;
@@ -294,6 +384,7 @@ export async function getOnboarding() {
     sellerContext: parseJson<IntakeRun["sellerContext"]>(row?.seller_context_json ?? null),
     questionnaire: parseJson<IntakeRun["questionnaire"]>(row?.questionnaire_json ?? null),
     sellerBriefMd: row?.seller_brief_md ?? undefined,
+    sellerKnowledge: parseJson<SellerKnowledge>(row?.seller_knowledge_json ?? null),
     intakeDraft: {
       websitesText: row?.draft_websites_text ?? undefined,
       contactsCsvText: row?.draft_contacts_csv_text ?? undefined,
@@ -368,7 +459,7 @@ export async function createRun(input: IntakeRun, userId?: string) {
   return runId;
 }
 
-export async function getRun(runId: string) {
+export async function getRun(runId: string, userId?: string, opts?: { isAdmin?: boolean }) {
   const db = await getDb();
   const run = await db.execute("SELECT * FROM runs WHERE id = ? LIMIT 1", [runId]) as
     | {
@@ -388,6 +479,14 @@ export async function getRun(runId: string) {
 
   if (!run) {
     return null;
+  }
+
+  // Ownership check: verify the requesting user owns this run
+  if (userId && !opts?.isAdmin) {
+    const runUserId = (run as Record<string, unknown>).user_id as string | null;
+    if (runUserId && runUserId !== userId) {
+      return null; // Treat as "not found" to prevent enumeration
+    }
   }
 
   // Fetch targets, artifacts, and events in parallel for faster loading
@@ -430,8 +529,16 @@ export async function getRun(runId: string) {
   };
 }
 
-export async function listRuns() {
+export async function listRuns(userId?: string) {
   const db = await getDb();
+  if (userId) {
+    return db.executeAll(
+      `SELECT r.id, r.status, r.target_count, r.delivery_format, r.created_at, r.updated_at,
+              (SELECT rt.website_url FROM run_targets rt WHERE rt.run_id = r.id ORDER BY rt.created_at ASC LIMIT 1) AS first_target_url
+       FROM runs r WHERE r.user_id = ? ORDER BY r.created_at DESC`,
+      [userId],
+    );
+  }
   return db.executeAll(
     `SELECT r.id, r.status, r.target_count, r.delivery_format, r.created_at, r.updated_at,
             (SELECT rt.website_url FROM run_targets rt WHERE rt.run_id = r.id ORDER BY rt.created_at ASC LIMIT 1) AS first_target_url
@@ -440,8 +547,12 @@ export async function listRuns() {
 }
 
 /** Lightweight count query — avoids fetching full run data just for a count. */
-export async function countRuns(): Promise<number> {
+export async function countRuns(userId?: string): Promise<number> {
   const db = await getDb();
+  if (userId) {
+    const row = await db.execute("SELECT COUNT(*) AS cnt FROM runs WHERE user_id = ?", [userId]) as { cnt: number } | undefined;
+    return row?.cnt ?? 0;
+  }
   const row = await db.execute("SELECT COUNT(*) AS cnt FROM runs") as { cnt: number } | undefined;
   return row?.cnt ?? 0;
 }
@@ -454,15 +565,18 @@ export async function countRuns(): Promise<number> {
  * their targets and delivery artifacts (skipping crawl/enrichment artifacts
  * which aren't needed for the delivery gallery).
  */
-export async function listDeliveryDecks() {
+export async function listDeliveryDecks(userId?: string) {
   const db = await getDb();
 
   // 1. Get all runs that are relevant for delivery
+  const userFilter = userId ? " AND r.user_id = ?" : "";
+  const userArgs = userId ? [userId] : [];
   const runs = await db.executeAll(
     `SELECT r.id, r.status, r.delivery_format, r.created_at
      FROM runs r
-     WHERE r.status IN ('completed', 'partially_completed', 'running')
+     WHERE r.status IN ('completed', 'partially_completed', 'running')${userFilter}
      ORDER BY r.created_at DESC`,
+    userArgs,
   ) as unknown as Array<{
     id: string;
     status: string;
@@ -665,28 +779,22 @@ export async function addRunEvent(runId: string, input: {
    Credit operations
    ───────────────────────────────────────────── */
 
-/** Deduct credits from a user. Returns false if insufficient balance. */
+/** Deduct credits from a user. Returns false if insufficient balance.
+ *  Uses a single atomic UPDATE to prevent race conditions (TOCTOU). */
 export async function deductCredits(userId: string, amount: number): Promise<boolean> {
   const db = await getDb();
 
-  // Check balance first
-  const row = await db.execute(
-    'SELECT "balance" FROM "user_credits" WHERE "user_id" = ?',
-    [userId],
-  ) as { balance: number } | undefined;
-
-  if (!row || row.balance < amount) {
-    return false;
-  }
-
-  await db.run(
+  // Atomic: deduct only if balance is sufficient, in a single query
+  const result = await db.execute(
     `UPDATE "user_credits"
      SET "balance" = "balance" - ?, "updated_at" = datetime('now')
-     WHERE "user_id" = ?`,
-    [amount, userId],
+     WHERE "user_id" = ? AND "balance" >= ?
+     RETURNING "balance"`,
+    [amount, userId, amount],
   );
 
-  return true;
+  // If no row was returned, either user doesn't exist or insufficient balance
+  return result !== undefined;
 }
 
 /** Refund credits to a user (e.g. when targets fail). */

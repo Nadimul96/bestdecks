@@ -360,7 +360,7 @@ function SortableSlideCard({
             className="scale-75"
           />
           <span className="text-[9px] text-muted-foreground">
-            {slide.includeVisual ? `${VISUAL_CREDIT_COST} cr` : "No img"}
+            {slide.includeVisual ? `+img` : "No img"}
           </span>
 
           {/* Remove button — not shown for required slides */}
@@ -642,8 +642,8 @@ export function StructureView() {
                     visuals
                   </p>
                   <p className="text-[11px] text-muted-foreground">
-                    {VISUAL_CREDIT_COST} credits each &middot; {visualCreditCost}{" "}
-                    credits for visuals
+                    {VISUAL_CREDIT_COST} per visual &middot; {visualCreditCost}{" "}
+                    total for visuals
                   </p>
                 </div>
               </div>
@@ -697,7 +697,7 @@ export function StructureView() {
             <div className="flex items-center gap-4">
               <p className="text-[13px] text-muted-foreground">
                 {slides.length} slides &middot; {visualCount} visuals
-                &middot; ~{(1 + visualCreditCost).toFixed(2)} credits/deck
+                &middot; ~{(1 + visualCreditCost).toFixed(2)} cost/deck
               </p>
             </div>
             <div className="flex items-center gap-2">

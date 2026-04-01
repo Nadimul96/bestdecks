@@ -313,9 +313,9 @@ const viewMeta: Record<
   },
   pricing: {
     eyebrow: "Pricing",
-    title: "Plans & credits",
+    title: "Plans & decks",
     description:
-      "Choose a plan that fits your volume. 1 credit = 1 deck, end to end.",
+      "Choose a plan that fits your volume. Pick a tier, start generating.",
   },
 };
 

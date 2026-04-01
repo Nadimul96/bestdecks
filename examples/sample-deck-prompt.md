@@ -3,7 +3,7 @@
 ## Slide 1: Built for NxGen Fitness
 Purpose: hook
 
-- Prepared by ClearPath AI
+- A custom operations brief for your 2-location fitness operation
 
 Speaker notes: This deck is specifically tailored to NxGen Fitness based on research into their two Portland locations, class-based model, and mobile app ecosystem. It is not a generic pitch — every insight references their actual business.
 

@@ -46,8 +46,8 @@ export async function POST(
 
   if (authHeader !== INTERNAL_SECRET) {
     // Fallback: check user session
-    const { getAdminSession } = await import("@/src/server/auth");
-    const session = await getAdminSession();
+    const { getSession } = await import("@/src/server/auth");
+    const session = await getSession();
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -69,12 +69,13 @@ export async function POST(
 
   const origin = resolveRequestOrigin(request);
   const stepUrl = `${origin}/api/runs/${runId}/step`;
+  const { userId: runUserId } = await getRunOwner(runId);
 
   try {
     if (step === "prepare") {
-      await runPrepareStep(runId, run, stepUrl, INTERNAL_SECRET);
+      await runPrepareStep(runId, run, stepUrl, INTERNAL_SECRET, runUserId ?? undefined);
     } else if (step === "target") {
-      await runTargetStep(runId, run, targetIndex, stepUrl, INTERNAL_SECRET);
+      await runTargetStep(runId, run, targetIndex, stepUrl, INTERNAL_SECRET, runUserId ?? undefined);
     } else {
       return NextResponse.json({ error: `Unknown step: ${step}` }, { status: 400 });
     }
@@ -110,32 +111,69 @@ export async function POST(
    Fire-and-forget: call the next step
    ───────────────────────────────────────────── */
 
+const CHAIN_MAX_RETRIES = 3;
+const CHAIN_BASE_DELAY_MS = 2_000;
+
 function chainNextStep(
+  runId: string,
   stepUrl: string,
   body: Record<string, unknown>,
   secret: string,
   origin: string,
 ) {
   after(async () => {
-    try {
-      const response = await fetch(stepUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-internal-secret": secret,
-          [INTERNAL_ORIGIN_HEADER]: origin,
-        },
-        body: JSON.stringify(body),
-      });
+    let lastError: string | undefined;
 
-      if (!response.ok) {
+    for (let attempt = 0; attempt < CHAIN_MAX_RETRIES; attempt++) {
+      try {
+        const response = await fetch(stepUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-internal-secret": secret,
+            [INTERNAL_ORIGIN_HEADER]: origin,
+          },
+          body: JSON.stringify(body),
+        });
+
+        if (response.ok) return; // Success — done
+
         const text = await response.text();
-        console.error(
-          `[step-runner] Failed to chain next step: HTTP ${response.status}: ${text.slice(0, 500)}`,
-        );
+        lastError = `HTTP ${response.status}: ${text.slice(0, 500)}`;
+
+        // Don't retry client errors (except 408/429)
+        if (response.status >= 400 && response.status < 500 && response.status !== 408 && response.status !== 429) {
+          console.error(`[step-runner] Non-retryable error chaining step: ${lastError}`);
+          break;
+        }
+      } catch (err) {
+        lastError = err instanceof Error ? err.message : String(err);
       }
-    } catch (err) {
-      console.error("[step-runner] Failed to chain next step:", err);
+
+      if (attempt < CHAIN_MAX_RETRIES - 1) {
+        const delay = CHAIN_BASE_DELAY_MS * (attempt + 1);
+        console.warn(`[step-runner] Chain attempt ${attempt + 1} failed for run ${runId}. Retrying in ${delay}ms...`);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+
+    // All retries exhausted — mark run as failed and refund
+    console.error(`[step-runner] All ${CHAIN_MAX_RETRIES} chain attempts failed for run ${runId}: ${lastError}`);
+    try {
+      await updateRun(runId, { status: "failed", lastError: `Pipeline stalled: ${lastError}` });
+      await addRunEvent(runId, { level: "error", stage: "chain_failed", message: `Step chaining failed after ${CHAIN_MAX_RETRIES} attempts: ${lastError}` });
+
+      const { userId, creditsCharged } = await getRunOwner(runId);
+      if (userId && creditsCharged > 0) {
+        await refundCredits(userId, creditsCharged);
+        await addRunEvent(runId, {
+          level: "info",
+          stage: "credit_refund",
+          message: `${creditsCharged} credit${creditsCharged !== 1 ? "s" : ""} refunded — pipeline could not continue.`,
+        });
+      }
+    } catch (refundErr) {
+      console.error(`[step-runner] Failed to handle chain failure for run ${runId}:`, refundErr);
     }
   });
 }
@@ -178,11 +216,12 @@ async function runPrepareStep(
   run: NonNullable<Awaited<ReturnType<typeof getRun>>>,
   stepUrl: string,
   secret: string,
+  userId?: string,
 ) {
   await updateRun(runId, { status: "running", lastError: null });
   await addRunEvent(runId, { level: "info", stage: "run_started", message: "Run processing started." });
 
-  const settings = await resolveIntegrationConfig();
+  const settings = await resolveIntegrationConfig(userId);
   if (!settings.cloudflareAccountId || !settings.cloudflareApiToken) {
     throw new Error("Cloudflare configuration is missing.");
   }
@@ -279,7 +318,7 @@ async function runPrepareStep(
   }
 
   // Chain to target step 0
-  chainNextStep(stepUrl, { step: "target", targetIndex: 0 }, secret, new URL(stepUrl).origin);
+  chainNextStep(runId, stepUrl, { step: "target", targetIndex: 0 }, secret, new URL(stepUrl).origin);
 }
 
 /* ─────────────────────────────────────────────
@@ -292,8 +331,9 @@ async function runTargetStep(
   targetIndex: number,
   stepUrl: string,
   secret: string,
+  userId?: string,
 ) {
-  const settings = await resolveIntegrationConfig();
+  const settings = await resolveIntegrationConfig(userId);
 
   const persistedTargets = run.targets as unknown as PersistedRunTarget[];
   // Filter to only targets that have brief_ready status (successfully prepared)
@@ -319,6 +359,7 @@ async function runTargetStep(
     await addRunEvent(runId, { targetId: targetRow.id, level: "error", stage: "target_failed", message: "Company brief not found." });
     // Continue to next target
     chainNextStep(
+      runId,
       stepUrl,
       { step: "target", targetIndex: targetIndex + 1 },
       secret,
@@ -451,6 +492,7 @@ async function runTargetStep(
   // Chain to next target or finalize
   if (targetIndex + 1 < readyTargets.length) {
     chainNextStep(
+      runId,
       stepUrl,
       { step: "target", targetIndex: targetIndex + 1 },
       secret,

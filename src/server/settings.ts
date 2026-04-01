@@ -19,10 +19,19 @@ export interface IntegrationRecord {
   secret?: string;
 }
 
-export async function listIntegrationRecords(): Promise<IntegrationRecord[]> {
+export async function listIntegrationRecords(userId?: string): Promise<IntegrationRecord[]> {
   const db = await getDb();
+
+  // When no userId is provided, skip DB lookup entirely to avoid leaking
+  // another tenant's secrets. Callers without user context will fall back
+  // to env-var–only config via resolveIntegrationConfig().
+  if (!userId) {
+    return [];
+  }
+
   const rows = await db.executeAll(
-    "SELECT provider, display_name, config_json, secret_ciphertext FROM integration_settings ORDER BY provider",
+    "SELECT provider, display_name, config_json, secret_ciphertext FROM integration_settings WHERE user_id = ? ORDER BY provider",
+    [userId],
   ) as unknown as Array<{
     provider: IntegrationProviderKey;
     display_name: string | null;
@@ -38,9 +47,9 @@ export async function listIntegrationRecords(): Promise<IntegrationRecord[]> {
   }));
 }
 
-export async function resolveIntegrationConfig() {
+export async function resolveIntegrationConfig(userId?: string) {
   const env = loadEnv();
-  const records = new Map((await listIntegrationRecords()).map((record) => [record.provider, record]));
+  const records = new Map((await listIntegrationRecords(userId)).map((record) => [record.provider, record]));
   const cloudflare = records.get("cloudflare");
   const presenton = records.get("presenton");
 

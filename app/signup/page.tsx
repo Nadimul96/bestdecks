@@ -48,7 +48,7 @@ export default async function SignupPage({
           </p>
           {referralCode && (
             <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-700">
-              🎁 Referral bonus: +20 extra credits on your first plan
+              🎁 Referral bonus: +20 extra decks on your first plan
             </div>
           )}
         </div>

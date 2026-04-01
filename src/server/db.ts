@@ -50,12 +50,37 @@ export interface DbWrapper {
   batch(sql: string): Promise<void>;
 }
 
+const SCHEMA_VERSION = "9"; // v9: multi-tenancy (user_id on workspace_state, integration_settings) // Bump when adding new migrations
+
 export async function getDb(): Promise<DbWrapper> {
   const c = getClient();
 
   if (!migrated) {
-    await migrate(c);
-    migrated = true;
+    // Check persistent migration marker to skip redundant DDL on cold starts
+    try {
+      const marker = await c.execute({
+        sql: "SELECT value FROM _migration_state WHERE key = 'schema_version' LIMIT 1",
+        args: [],
+      });
+      if (marker.rows[0] && (marker.rows[0] as Record<string, unknown>).value === SCHEMA_VERSION) {
+        migrated = true;
+      }
+    } catch {
+      // Table doesn't exist yet — first ever migration
+    }
+
+    if (!migrated) {
+      await migrate(c);
+      // Persist the migration marker
+      await c.executeMultiple(`
+        CREATE TABLE IF NOT EXISTS _migration_state (key TEXT PRIMARY KEY, value TEXT);
+      `);
+      await c.execute({
+        sql: "INSERT OR REPLACE INTO _migration_state (key, value) VALUES ('schema_version', ?)",
+        args: [SCHEMA_VERSION],
+      });
+      migrated = true;
+    }
   }
 
   return {
@@ -116,6 +141,9 @@ async function ensureColumn(
 }
 
 async function migrate(c: Client) {
+  // Enable foreign key enforcement
+  await c.execute("PRAGMA foreign_keys = ON");
+
   await c.executeMultiple(`
     CREATE TABLE IF NOT EXISTS workspace_state (
       id TEXT PRIMARY KEY,
@@ -225,6 +253,7 @@ async function migrate(c: Client) {
   await ensureColumn(c, "workspace_state", "draft_contacts_csv_text", "TEXT");
   await ensureColumn(c, "workspace_state", "seller_brief_md", "TEXT");
   await ensureColumn(c, "workspace_state", "audience_context_json", "TEXT");
+  await ensureColumn(c, "workspace_state", "seller_knowledge_json", "TEXT");
 
   // Track which user created each run (for credit deduction/refund)
   await ensureColumn(c, "runs", "user_id", "TEXT");
@@ -237,4 +266,44 @@ async function migrate(c: Client) {
   await ensureColumn(c, "user_credits", "reset_date", "TEXT");
   await ensureColumn(c, "user_credits", "stripe_customer_id", "TEXT");
   await ensureColumn(c, "user_credits", "stripe_subscription_id", "TEXT");
+
+  // ── Multi-tenancy: scope workspace_state + integration_settings to user ──
+  await ensureColumn(c, "workspace_state", "user_id", "TEXT");
+  await ensureColumn(c, "integration_settings", "user_id", "TEXT");
+
+  // Create indexes for user-scoped queries
+  await c.executeMultiple(`
+    CREATE INDEX IF NOT EXISTS idx_workspace_state_user_id ON workspace_state(user_id);
+    CREATE INDEX IF NOT EXISTS idx_runs_user_id ON runs(user_id);
+    CREATE INDEX IF NOT EXISTS idx_integration_settings_user_id ON integration_settings(user_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_integration_settings_provider_user ON integration_settings(provider, user_id);
+  `);
+
+  // Migrate legacy data: assign existing unscoped rows to admin user
+  try {
+    const adminRow = await c.execute({
+      sql: 'SELECT "id" FROM "user" WHERE "role" = ? LIMIT 1',
+      args: ["admin"],
+    });
+    const adminId = adminRow.rows[0]
+      ? String((adminRow.rows[0] as Record<string, unknown>).id)
+      : null;
+
+    if (adminId) {
+      await c.execute({
+        sql: 'UPDATE workspace_state SET user_id = ? WHERE user_id IS NULL',
+        args: [adminId],
+      });
+      await c.execute({
+        sql: 'UPDATE integration_settings SET user_id = ? WHERE user_id IS NULL',
+        args: [adminId],
+      });
+      await c.execute({
+        sql: 'UPDATE runs SET user_id = ? WHERE user_id IS NULL',
+        args: [adminId],
+      });
+    }
+  } catch {
+    // Auth tables may not exist yet on first run — safe to skip
+  }
 }

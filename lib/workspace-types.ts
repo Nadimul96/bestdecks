@@ -60,16 +60,20 @@ export interface InfoRequest {
    Credit & Pricing Types
    ───────────────────────────────────────────── */
 
-export type PlanTier = "starter" | "growth" | "scale" | "enterprise";
+export type PlanTier = "free" | "starter" | "growth" | "scale" | "enterprise";
 
-export interface UserCredits {
+export interface UserDecks {
   userId: string;
   balance: number;
   monthlyAllowance: number;
-  bonusCredits: number;
+  bonusDecks: number;
   planTier: PlanTier;
+  planVolume: number;
   resetDate: string;
 }
+
+/** @deprecated Use UserDecks instead */
+export type UserCredits = UserDecks;
 
 export interface PricingPlan {
   tier: PlanTier;
@@ -81,6 +85,67 @@ export interface PricingPlan {
   addonPricePerCredit: number;
   features: string[];
 }
+
+/* ─────────────────────────────────────────────
+   Volume-Based Pricing (Slider Model)
+   ───────────────────────────────────────────── */
+
+export const VOLUME_SNAP_POINTS = [50, 100, 250, 500, 1000, 2500, 5000] as const;
+export type VolumeSnapPoint = (typeof VOLUME_SNAP_POINTS)[number];
+
+export interface VolumeTier {
+  volume: number;
+  perDeckPrice: number;
+  monthlyPrice: number;
+  annualMonthlyPrice: number;
+  label: string;
+  popular?: boolean;
+}
+
+const VOLUME_PRICING: Record<number, { perDeck: number; label: string; popular?: boolean }> = {
+  50: { perDeck: 1.40, label: "Starter" },
+  100: { perDeck: 1.10, label: "Growth" },
+  250: { perDeck: 0.80, label: "Pro", popular: true },
+  500: { perDeck: 0.60, label: "Scale", popular: true },
+  1000: { perDeck: 0.40, label: "Business" },
+  2500: { perDeck: 0.25, label: "Agency" },
+  5000: { perDeck: 0.15, label: "Enterprise" },
+};
+
+export function getVolumeTier(volume: number): VolumeTier {
+  const pricing = VOLUME_PRICING[volume];
+  if (!pricing) {
+    // Interpolate for non-snap values (shouldn't happen with slider, but safety)
+    const lower = VOLUME_SNAP_POINTS.filter((v) => v <= volume).at(-1) ?? 50;
+    const upper = VOLUME_SNAP_POINTS.find((v) => v >= volume) ?? 5000;
+    const lowerPrice = VOLUME_PRICING[lower].perDeck;
+    const upperPrice = VOLUME_PRICING[upper].perDeck;
+    const ratio = upper === lower ? 0 : (volume - lower) / (upper - lower);
+    const perDeck = lowerPrice - ratio * (lowerPrice - upperPrice);
+    return {
+      volume,
+      perDeckPrice: Math.round(perDeck * 100) / 100,
+      monthlyPrice: Math.round(volume * perDeck),
+      annualMonthlyPrice: Math.round(volume * perDeck * 0.8),
+      label: "Custom",
+    };
+  }
+  const monthlyPrice = Math.round(volume * pricing.perDeck);
+  return {
+    volume,
+    perDeckPrice: pricing.perDeck,
+    monthlyPrice,
+    annualMonthlyPrice: Math.round(monthlyPrice * 0.8),
+    label: pricing.label,
+    popular: pricing.popular,
+  };
+}
+
+export function getAllVolumeTiers(): VolumeTier[] {
+  return VOLUME_SNAP_POINTS.map(getVolumeTier);
+}
+
+export const SIGNUP_FREE_DECKS = 10;
 
 export const pricingPlans: PricingPlan[] = [
   {
@@ -631,6 +696,80 @@ export function defaultSellerContext(): SellerContextForm {
   };
 }
 
+/* ─────────────────────────────────────────────
+   Seller Knowledge Form (rich context — superset)
+   ───────────────────────────────────────────── */
+
+export interface CaseStudyForm {
+  id: string;
+  clientName: string;
+  industry: string;
+  challenge: string;
+  solution: string;
+  results: string;
+  metricsText: string;
+  testimonialQuote: string;
+}
+
+export interface ObjectionForm {
+  objection: string;
+  response: string;
+}
+
+export interface SellerKnowledgeForm {
+  websiteUrl: string;
+  companyName: string;
+  logoUrl: string;
+  logoFile?: File | null;
+  tagline: string;
+  foundedYear: string;
+  teamSize: string;
+  headquarters: string;
+  offerSummary: string;
+  servicesText: string;
+  differentiatorsText: string;
+  targetCustomer: string;
+  desiredOutcome: string;
+  pricingModel: string;
+  pricingContext: string;
+  proofPointsText: string;
+  caseStudies: CaseStudyForm[];
+  clientLogosText: string;
+  awardsText: string;
+  commonObjections: ObjectionForm[];
+  competitorNotes: string;
+  salesPlaybook: string;
+  constraintsText: string;
+  facebookUrl: string;
+  twitterUrl: string;
+  instagramUrl: string;
+  tiktokUrl: string;
+}
+
+export const pricingModelOptions = [
+  { value: "", label: "Select pricing model…" },
+  { value: "subscription", label: "Subscription / SaaS" },
+  { value: "one_time", label: "One-time / project-based" },
+  { value: "retainer", label: "Monthly retainer" },
+  { value: "usage_based", label: "Usage-based / pay-per-use" },
+  { value: "freemium", label: "Freemium" },
+  { value: "custom", label: "Custom / negotiated" },
+] as const;
+
+export function defaultSellerKnowledge(): SellerKnowledgeForm {
+  return {
+    websiteUrl: "", companyName: "", logoUrl: "", logoFile: null,
+    tagline: "", foundedYear: "", teamSize: "", headquarters: "",
+    offerSummary: "", servicesText: "", differentiatorsText: "",
+    targetCustomer: "", desiredOutcome: "",
+    pricingModel: "", pricingContext: "",
+    proofPointsText: "", caseStudies: [], clientLogosText: "", awardsText: "",
+    commonObjections: [], competitorNotes: "", salesPlaybook: "",
+    constraintsText: "",
+    facebookUrl: "", twitterUrl: "", instagramUrl: "", tiktokUrl: "",
+  };
+}
+
 export function defaultQuestionnaire(): QuestionnaireForm {
   return {
     archetype: "cold_outreach",
@@ -676,57 +815,48 @@ export const viewMeta: Record<
   { eyebrow: string; title: string; description: string }
 > = {
   overview: {
-    eyebrow: "Overview",
-    title: "Your workspace at a glance",
-    description:
-      "Track readiness, recent runs, and what still needs your attention.",
+    eyebrow: "COMMAND CENTER",
+    title: "Everything that moves your pipeline",
+    description: "The 30-second view of what\u2019s working, what\u2019s stuck, and what to do next.",
   },
   onboarding: {
-    eyebrow: "Get Started",
-    title: "Let\u2019s set you up",
-    description:
-      "Three quick steps and you\u2019re ready to generate your first deck.",
+    eyebrow: "LAUNCH SEQUENCE",
+    title: "90 seconds to your first killer deck",
+    description: "Every field you fill here compounds into better personalization. Skip nothing.",
   },
   "seller-context": {
-    eyebrow: "Your Business",
-    title: "What do you sell?",
-    description:
-      "The deck quality depends on this step. Help us understand your offer, services, and intended outcome.",
+    eyebrow: "YOUR BUSINESS",
+    title: "Your Offer",
+    description: "Every field here becomes a slide. Vague input = vague decks. Specific input = decks that close.",
   },
   "run-settings": {
-    eyebrow: "Deck Style",
-    title: "Design your deck blueprint",
-    description:
-      "Define the archetype, audience, tone, visuals, and export format that shape every deck you generate.",
+    eyebrow: "DECK BLUEPRINT",
+    title: "Control exactly how your decks land",
+    description: "These settings shape every slide. Dial them in once, then every deck comes out on-brand and on-target.",
   },
   "deck-structure": {
-    eyebrow: "Structure",
-    title: "Slide-by-slide outline",
-    description:
-      "Preview the content structure of your decks. Each slide is customized per target at generation time.",
+    eyebrow: "SLIDE ARCHITECTURE",
+    title: "Engineer the exact story your deck tells",
+    description: "Reorder, add, and remove slides. Each one becomes a prompt for the AI \u2014 the more specific, the sharper the output.",
   },
   "target-intake": {
-    eyebrow: "Targets",
-    title: "Who are you reaching out to?",
-    description:
-      "Paste website URLs or upload a CSV with company and contact details.",
+    eyebrow: "TARGET LIST",
+    title: "Feed the machine your hit list",
+    description: "Every URL you add becomes a fully researched, personalized deck. More targets = more pipeline.",
   },
   pipeline: {
-    eyebrow: "Pipeline",
-    title: "Generation progress",
-    description:
-      "Track research, enrichment, and deck assembly across all targets.",
+    eyebrow: "LIVE PIPELINE",
+    title: "Watch your decks get built in real-time",
+    description: "Each target goes through research, enrichment, and assembly. You\u2019ll see exactly where every deck is.",
   },
   delivery: {
-    eyebrow: "Delivery",
-    title: "Review & download",
-    description:
-      "Access completed decks, review quality gates, and download your personalized proposals.",
+    eyebrow: "DECK VAULT",
+    title: "Your finished decks, ready to close deals",
+    description: "Every deck has been researched, personalized, and quality-scored. Download, review, and send.",
   },
   pricing: {
-    eyebrow: "Pricing",
-    title: "Plans & credits",
-    description:
-      "Choose a plan that fits your volume. 1 credit = 1 deck, end to end.",
+    eyebrow: "PRICING",
+    title: "More decks, lower price. Simple.",
+    description: "Every deck is fully researched and personalized. Slide to match your outbound volume.",
   },
 };

@@ -6,6 +6,9 @@ import type {
   CrawlResult,
 } from "./providers";
 
+const CRAWL_MAX_RETRIES = 2;
+const CRAWL_RETRY_DELAY_MS = 3_000;
+
 interface CloudflareEnvelope<T> {
   success: boolean;
   errors?: Array<{ code: number; message: string }>;
@@ -127,24 +130,45 @@ export class CloudflareCrawler implements CrawlProvider {
         : { rejectResourceTypes: request.rejectResourceTypes }),
     };
 
-    const response = await requestJson<
-      CloudflareEnvelope<string | { id?: string; jobId?: string }>
-    >(this.buildBaseUrl(), {
-      method: "POST",
-      headers: this.buildHeaders(),
-      body: payload,
-    });
+    let lastError: Error | undefined;
 
-    if (typeof response.result === "string") {
-      return response.result;
+    for (let attempt = 0; attempt <= CRAWL_MAX_RETRIES; attempt++) {
+      try {
+        const response = await requestJson<
+          CloudflareEnvelope<string | { id?: string; jobId?: string }>
+        >(this.buildBaseUrl(), {
+          method: "POST",
+          headers: this.buildHeaders(),
+          body: payload,
+        });
+
+        if (typeof response.result === "string") {
+          return response.result;
+        }
+
+        const jobId = response.result.id ?? response.result.jobId;
+        if (!jobId) {
+          throw new Error("Cloudflare did not return a crawl job ID.");
+        }
+
+        return jobId;
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+
+        // Don't retry client errors (4xx) except 429 rate limiting
+        if (error instanceof HttpError && error.status >= 400 && error.status < 500 && error.status !== 429) {
+          throw lastError;
+        }
+
+        if (attempt < CRAWL_MAX_RETRIES) {
+          const delay = CRAWL_RETRY_DELAY_MS * (attempt + 1);
+          console.warn(`[cloudflare] Crawl start attempt ${attempt + 1} failed: ${lastError.message}. Retrying in ${delay}ms...`);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+      }
     }
 
-    const jobId = response.result.id ?? response.result.jobId;
-    if (!jobId) {
-      throw new Error("Cloudflare did not return a crawl job ID.");
-    }
-
-    return jobId;
+    throw new Error(`Cloudflare crawl start failed after ${CRAWL_MAX_RETRIES + 1} attempts: ${lastError?.message}`);
   }
 
   private async waitForCompletion(jobId: string) {

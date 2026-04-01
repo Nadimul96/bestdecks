@@ -106,7 +106,8 @@ async function processRun(runId: string) {
   await updateRun(runId, { status: "running", lastError: null });
   await addRunEvent(runId, { level: "info", stage: "run_started", message: "Run processing started." });
 
-  const settings = await resolveIntegrationConfig();
+  const { userId: runUserId } = await getRunOwner(runId);
+  const settings = await resolveIntegrationConfig(runUserId ?? undefined);
   if (!settings.cloudflareAccountId || !settings.cloudflareApiToken) {
     throw new Error("Cloudflare configuration is missing.");
   }

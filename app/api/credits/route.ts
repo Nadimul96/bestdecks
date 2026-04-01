@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/src/server/auth";
 import { getDb } from "@/src/server/db";
 
-const SIGNUP_CREDITS = 3;
+const SIGNUP_DECKS = 10;
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? "nadimul96@gmail.com";
 
 /* ─────────────────────────────────────────────
@@ -23,14 +23,16 @@ export async function GET() {
       session.user.email === ADMIN_EMAIL ||
       (session.user as Record<string, unknown>).role === "admin";
 
-    // Admin gets unlimited credits — no DB lookup needed
+    // Admin gets unlimited decks — no DB lookup needed
     if (isAdmin) {
       return NextResponse.json({
         userId: session.user.id,
         balance: 999999,
         monthlyAllowance: 999999,
-        bonusCredits: 0,
+        bonusDecks: 0,
+        bonusCredits: 0, // deprecated compat
         planTier: "enterprise" as const,
+        planVolume: 5000,
         resetDate: new Date(
           Date.now() + 30 * 24 * 60 * 60 * 1000,
         ).toISOString(),
@@ -62,7 +64,7 @@ export async function GET() {
       await db.run(
         `INSERT INTO "user_credits" ("user_id", "balance", "total_earned", "referral_code")
          VALUES (?, ?, ?, ?)`,
-        [userId, SIGNUP_CREDITS, SIGNUP_CREDITS, refCode],
+        [userId, SIGNUP_DECKS, SIGNUP_DECKS, refCode],
       );
 
       credits = await db.execute(
@@ -75,8 +77,10 @@ export async function GET() {
       userId: credits!.user_id,
       balance: credits!.balance,
       monthlyAllowance: credits!.monthly_allowance || credits!.balance,
-      bonusCredits: credits!.bonus_credits || 0,
+      bonusDecks: credits!.bonus_credits || 0,
+      bonusCredits: credits!.bonus_credits || 0, // deprecated compat
       planTier: credits!.plan_tier || "starter",
+      planVolume: credits!.monthly_allowance || 0,
       resetDate: credits!.reset_date || new Date(
         Date.now() + 30 * 24 * 60 * 60 * 1000,
       ).toISOString(),

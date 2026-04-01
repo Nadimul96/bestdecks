@@ -46,24 +46,28 @@ export async function POST(request: NextRequest) {
 
       if (!userId || !tier) break;
 
-      const credits = PLAN_CREDITS[tier] ?? 0;
+      // Prefer deckAllowance from metadata (volume-based); fall back to legacy PLAN_CREDITS
+      const credits = session.metadata?.deckAllowance
+        ? Number(session.metadata.deckAllowance)
+        : (PLAN_CREDITS[tier] ?? 0);
       const customerId = resolveId(session.customer as string | { id: string } | null);
       const subId = resolveId(session.subscription as string | { id: string } | null);
 
       // Update or insert user credits
       await db.run(`
-        INSERT INTO "user_credits" ("user_id", "balance", "total_earned", "plan_tier", "stripe_customer_id", "stripe_subscription_id", "updated_at")
-        VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+        INSERT INTO "user_credits" ("user_id", "balance", "total_earned", "plan_tier", "monthly_allowance", "stripe_customer_id", "stripe_subscription_id", "updated_at")
+        VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
         ON CONFLICT("user_id") DO UPDATE SET
           "balance" = "balance" + ?,
           "total_earned" = "total_earned" + ?,
           "plan_tier" = ?,
+          "monthly_allowance" = ?,
           "stripe_customer_id" = ?,
           "stripe_subscription_id" = ?,
           "updated_at" = datetime('now')
       `, [
-        userId, credits, credits, tier, customerId, subId,
-        credits, credits, tier, customerId, subId,
+        userId, credits, credits, tier, credits, customerId, subId,
+        credits, credits, tier, credits, customerId, subId,
       ]);
 
       // If user was referred, award referral bonus to referrer
@@ -96,12 +100,12 @@ export async function POST(request: NextRequest) {
       if (!subId) break;
 
       const userRow = await db.execute(
-        'SELECT "user_id", "plan_tier" FROM "user_credits" WHERE "stripe_subscription_id" = ?',
+        'SELECT "user_id", "plan_tier", "monthly_allowance" FROM "user_credits" WHERE "stripe_subscription_id" = ?',
         [subId],
-      ) as { user_id: string; plan_tier: string } | undefined;
+      ) as { user_id: string; plan_tier: string; monthly_allowance: number | null } | undefined;
 
       if (userRow) {
-        const credits = PLAN_CREDITS[userRow.plan_tier] ?? 0;
+        const credits = userRow.monthly_allowance ?? PLAN_CREDITS[userRow.plan_tier] ?? 0;
         await db.run(`
           UPDATE "user_credits"
           SET "balance" = "balance" + ?,

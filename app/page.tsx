@@ -616,10 +616,10 @@ function Pricing() {
             Simple pricing
           </p>
           <h2 className="mt-3 text-3xl font-bold tracking-tight text-white sm:text-4xl lg:text-5xl">
-            1 credit = 1 deck, end to end
+            Simple, transparent pricing
           </h2>
           <p className="mt-4 text-lg text-white/60">
-            No hidden fees. No per-slide charges. One credit covers research, generation, scoring, and delivery.
+            No hidden fees. No per-slide charges. One deck covers research, generation, scoring, and delivery.
           </p>
 
           {/* Annual toggle */}
@@ -775,8 +775,8 @@ function ReferralCTA() {
               </h2>
               <p className="mt-4 text-[17px] leading-relaxed text-muted-foreground">
                 Share your referral link with a friend. When they become a paid customer,
-                they get <strong className="font-semibold text-foreground">3 sign-up credits + 20 bonus credits</strong>.
-                You get <strong className="font-semibold text-foreground">20 free credits</strong> too.
+                they get <strong className="font-semibold text-foreground">3 sign-up decks + 20 bonus decks</strong>.
+                You get <strong className="font-semibold text-foreground">20 free decks</strong> too.
                 Everyone wins.
               </p>
             </div>
@@ -792,12 +792,12 @@ function ReferralCTA() {
                 {
                   icon: Users,
                   title: "Friend signs up & subscribes",
-                  desc: "They get 3 free credits instantly + 20 bonus on first plan",
+                  desc: "They get 3 free decks instantly + 20 bonus on first plan",
                 },
                 {
                   icon: Gift,
-                  title: "You earn 20 credits",
-                  desc: "Credited to your account automatically",
+                  title: "You earn 20 decks",
+                  desc: "Added to your account automatically",
                 },
               ].map(({ icon: Icon, title, desc }) => (
                 <div

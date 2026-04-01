@@ -22,14 +22,14 @@ export function CreditCounter() {
       <Button variant="outline" size="sm" className="gap-1.5 text-xs" asChild>
         <a href="#pricing">
           <Zap className="size-3 text-amber-500" />
-          <span>Get credits</span>
+          <span>Get decks</span>
         </a>
       </Button>
     );
   }
 
-  const used = credits.monthlyAllowance - credits.balance + credits.bonusCredits;
-  const total = credits.monthlyAllowance + credits.bonusCredits;
+  const used = credits.monthlyAllowance - credits.balance + credits.bonusDecks;
+  const total = credits.monthlyAllowance + credits.bonusDecks;
   const usagePercent = total > 0 ? Math.round((used / total) * 100) : 0;
   const isLow = usagePercent >= 80;
 
@@ -60,11 +60,11 @@ export function CreditCounter() {
         </TooltipTrigger>
         <TooltipContent side="bottom">
           <p className="text-xs">
-            {credits.balance} credit{credits.balance !== 1 ? "s" : ""} remaining
+            {credits.balance} deck{credits.balance !== 1 ? "s" : ""} remaining
             {isLow && " — running low!"}
           </p>
           <p className="text-[11px] text-muted-foreground">
-            1 credit = 1 deck. Click to manage plan.
+            Click to manage plan.
           </p>
         </TooltipContent>
       </Tooltip>

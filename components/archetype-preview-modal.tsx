@@ -134,7 +134,7 @@ const coldOutreachExample: ArchetypeExample = {
     },
     // ── Slide 3: Pain — Churn Bleeding Revenue ──
     {
-      title: "You're Losing $240K/Year to\nMembers You Could Have Saved",
+      title: "You're Losing $240K/Year\nto Members You Could Have Saved",
       subtitle:
         "Acquiring each replacement costs 5–7× more than retaining the one who left.",
       stat: "$240K",
@@ -532,15 +532,15 @@ function VisualElement({
       { Icon: Zap, label: "Payroll" },
     ];
     return (
-      <div className={cn(ptr, "grid grid-cols-2 gap-2 w-full")}>
+      <div className={cn(ptr, "grid grid-cols-4 gap-1.5 w-full")}>
         {items.map(({ Icon, label }, i) => (
           <div
             key={i}
-            className="flex flex-col items-center gap-1.5 rounded-lg py-3"
+            className="flex flex-col items-center gap-1 rounded-lg py-2"
             style={{ background: `${accent}12`, border: `1px solid ${accent}25` }}
           >
-            <Icon className="size-6" style={{ color: accent }} />
-            <span className="text-[11px] font-medium text-white/55">{label}</span>
+            <Icon className="size-4" style={{ color: accent }} />
+            <span className="text-[9px] font-medium text-white/55">{label}</span>
           </div>
         ))}
       </div>
@@ -1080,10 +1080,10 @@ function SlidePreview({
         {slide.layout === "stat-left" && (
           <>
             {/* Left: stat only */}
-            <div className={cn("flex w-[38%] flex-col items-center justify-center border-r px-6 sm:px-8", dividerCls)}>
+            <div className={cn("flex w-[32%] flex-col items-center justify-center border-r px-5", dividerCls)}>
               {slide.stat && (
                 <div className="text-center">
-                  <p className="text-5xl font-black tracking-tighter sm:text-6xl" style={{ color: accent }}>
+                  <p className="text-5xl font-black tracking-tighter" style={{ color: accent }}>
                     {slide.stat}
                   </p>
                   {slide.statLabel && (
@@ -1095,20 +1095,20 @@ function SlidePreview({
               )}
             </div>
             {/* Right: content + visual + callout */}
-            <div className="flex w-[62%] flex-col justify-start pt-6 pb-4 px-6 sm:px-9 sm:pt-8 sm:pb-6">
-              <h3 className={cn("text-lg font-bold leading-tight tracking-tight whitespace-pre-line sm:text-xl", headingCls)}>
+            <div className="flex w-[68%] flex-col justify-start overflow-hidden pt-5 pb-3 px-5 sm:px-7 sm:pt-6 sm:pb-4">
+              <h3 className={cn("text-base font-bold leading-tight tracking-tight whitespace-pre-line sm:text-lg", headingCls)}>
                 {slide.title}
               </h3>
               {slide.subtitle && (
-                <p className={cn("mt-2 text-[12px] leading-relaxed", subtitleCls)}>
+                <p className={cn("mt-1.5 text-[11px] leading-relaxed", subtitleCls)}>
                   {renderHighlight(slide.subtitle, accent)}
                 </p>
               )}
               {slide.bullets && (
-                <ul className="mt-2.5 space-y-1.5">
+                <ul className="mt-2 space-y-1">
                   {slide.bullets.map((b, i) => (
-                    <li key={i} className={cn("flex items-start gap-2 text-[11px] leading-relaxed", bulletCls)}>
-                      <span className="mt-[5px] size-1.5 shrink-0 rounded-full" style={{ background: accent }} />
+                    <li key={i} className={cn("flex items-start gap-2 text-[11px] leading-snug", bulletCls)}>
+                      <span className="mt-[4px] size-1.5 shrink-0 rounded-full" style={{ background: accent }} />
                       {renderHighlight(b, accent)}
                     </li>
                   ))}
@@ -1116,7 +1116,7 @@ function SlidePreview({
               )}
               {slide.callout && (
                 <div
-                  className="mt-3 rounded-r-lg border-l-2 px-3 py-2"
+                  className="mt-2 rounded-r-lg border-l-2 px-3 py-1.5"
                   style={{
                     borderColor: accent,
                     background: isLight ? `${accent}08` : `${accent}10`,
@@ -1128,7 +1128,7 @@ function SlidePreview({
                 </div>
               )}
               {slide.visual && slide.visual !== "none" && (
-                <div className="mt-2">
+                <div className="mt-auto pt-2">
                   <VisualElement type={slide.visual} accent={accent} theme={surfaceTheme} />
                 </div>
               )}
@@ -1139,20 +1139,20 @@ function SlidePreview({
         {/* ─── SPLIT ─── */}
         {slide.layout === "split" && (
           <>
-            <div className="flex w-[48%] flex-col justify-start pt-7 pb-5 px-6 sm:px-9 sm:pt-9 sm:pb-6">
-              <h3 className={cn("text-lg font-bold leading-tight tracking-tight whitespace-pre-line sm:text-xl", headingCls)}>
+            <div className="flex w-[48%] flex-col justify-start overflow-hidden pt-5 pb-4 px-5 sm:px-7 sm:pt-7 sm:pb-5">
+              <h3 className={cn("text-base font-bold leading-tight tracking-tight whitespace-pre-line sm:text-lg", headingCls)}>
                 {slide.title}
               </h3>
               {slide.subtitle && (
-                <p className={cn("mt-2 text-[12px] leading-relaxed", subtitleCls)}>
+                <p className={cn("mt-1.5 text-[11px] leading-relaxed", subtitleCls)}>
                   {renderHighlight(slide.subtitle, accent)}
                 </p>
               )}
               {slide.bullets && (
-                <ul className="mt-3 space-y-2">
+                <ul className="mt-2 space-y-1">
                   {slide.bullets.map((b, i) => (
-                    <li key={i} className={cn("flex items-start gap-2 text-[11px] leading-relaxed", bulletCls)}>
-                      <span className="mt-[5px] size-1.5 shrink-0 rounded-full" style={{ background: accent }} />
+                    <li key={i} className={cn("flex items-start gap-2 text-[11px] leading-snug", bulletCls)}>
+                      <span className="mt-[4px] size-1.5 shrink-0 rounded-full" style={{ background: accent }} />
                       {renderHighlight(b, accent)}
                     </li>
                   ))}
@@ -1346,7 +1346,7 @@ export function ArchetypePreviewModal({ archetype, open, onClose }: ArchetypePre
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
         <DialogPrimitive.Content
-          className="fixed left-[50%] top-[50%] z-50 w-full max-w-5xl -translate-x-[50%] -translate-y-[50%] px-4 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95"
+          className="fixed left-[50%] top-[50%] z-50 w-full max-w-[1400px] -translate-x-[50%] -translate-y-[50%] px-4 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95"
         >
           <DialogPrimitive.Title className="sr-only">
             {example.title} quick preview
@@ -1465,10 +1465,10 @@ export function ArchetypePreviewModal({ archetype, open, onClose }: ArchetypePre
             </div>
 
             {/* Right: themes only */}
-            <div className="w-[260px] shrink-0 flex flex-col gap-2 overflow-y-auto" style={{ maxHeight: "calc(80vh - 120px)" }}>
+            <div className="w-[220px] shrink-0 flex flex-col gap-1.5 overflow-y-auto" style={{ maxHeight: "calc(80vh - 120px)" }}>
               <p className="text-[11px] font-medium uppercase tracking-wider text-white/40">Themes</p>
 
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-1.5">
                 {availableThemes.map((theme) => {
                   const selected = theme.key === selectedTheme.key;
                   return (
@@ -1477,21 +1477,21 @@ export function ArchetypePreviewModal({ archetype, open, onClose }: ArchetypePre
                       type="button"
                       onClick={() => setSelectedThemeKey(theme.key)}
                       className={cn(
-                        "w-full rounded-2xl border px-3.5 py-3 text-left transition-all",
+                        "w-full rounded-xl border px-3 py-2 text-left transition-all",
                         selected
                           ? "border-white/[0.14] bg-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
                           : "border-white/[0.06] bg-black/[0.16] hover:border-white/[0.12] hover:bg-white/[0.05]",
                       )}
                     >
                       <div className="flex items-center gap-1.5">
-                        <span className="size-2.5 rounded-full" style={{ background: theme.accent }} />
+                        <span className="size-2 rounded-full" style={{ background: theme.accent }} />
                         <span
-                          className="h-2 w-7 rounded-full"
+                          className="h-1.5 w-5 rounded-full"
                           style={{ background: `linear-gradient(90deg, ${theme.accent} 0%, ${theme.accentSoft} 100%)` }}
                         />
                         <span
                           className={cn(
-                            "ml-auto rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em]",
+                            "ml-auto rounded-full px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.14em]",
                             theme.family === "light"
                               ? "bg-white text-slate-700"
                               : "bg-white/[0.08] text-white/55",
@@ -1500,8 +1500,7 @@ export function ArchetypePreviewModal({ archetype, open, onClose }: ArchetypePre
                           {theme.family}
                         </span>
                       </div>
-                      <p className="mt-2 text-sm font-semibold text-white">{theme.name}</p>
-                      <p className="mt-1 text-[11px] leading-relaxed text-white/45">{theme.description}</p>
+                      <p className="mt-1 text-[13px] font-semibold text-white">{theme.name}</p>
                     </button>
                   );
                 })}

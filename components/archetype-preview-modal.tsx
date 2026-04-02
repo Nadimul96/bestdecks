@@ -485,11 +485,16 @@ function VisualElement({
     );
   }
 
+  /* ── Theme-aware text helpers for visual elements ── */
+  const vizText = theme === "light" ? "text-gray-700" : "text-white/65";
+  const vizMuted = theme === "light" ? "text-gray-400" : "text-white/40";
+  const vizSubtle = theme === "light" ? "text-gray-500" : "text-white/50";
+
   /* ── Churn member grid ── */
   if (type === "churn-grid") {
     return (
       <div className={cn(ptr, "w-full space-y-2.5")}>
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-white/45">
+        <p className={cn("text-[10px] font-semibold uppercase tracking-widest", vizMuted)}>
           Of every 10 members…
         </p>
         <div className="grid grid-cols-5 gap-2">
@@ -514,14 +519,14 @@ function VisualElement({
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-1.5">
             <div className="size-2 rounded-full" style={{ background: accent }} />
-            <span className="text-[10px] text-white/50">Retained (5)</span>
+            <span className={cn("text-[10px]", vizSubtle)}>Retained (5)</span>
           </div>
           <div className="flex items-center gap-1.5">
             <div className="size-2 rounded-full bg-red-500/60" />
-            <span className="text-[10px] text-white/50">Lost (5)</span>
+            <span className={cn("text-[10px]", vizSubtle)}>Lost (5)</span>
           </div>
         </div>
-        <p className="text-[9px] italic text-white/30">Source: IHRSA Retention Study, 2025</p>
+        <p className={cn("text-[9px] italic", vizMuted)}>Source: IHRSA Retention Study, 2025</p>
       </div>
     );
   }
@@ -543,14 +548,14 @@ function VisualElement({
             style={{ background: `${accent}12`, border: `1px solid ${accent}25` }}
           >
             <Icon className="size-4" style={{ color: accent }} />
-            <span className="text-[9px] font-medium text-white/55">{label}</span>
+            <span className={cn("text-[9px] font-medium", vizSubtle)}>{label}</span>
           </div>
         ))}
       </div>
     );
   }
 
-  /* ── Metrics row (dark mode solution slide) ── */
+  /* ── Metrics row ── */
   if (type === "metrics-row") {
     const metrics = [
       { label: "Attendance", value: "94%", trend: "+12%" },
@@ -561,9 +566,9 @@ function VisualElement({
       <div className={cn(ptr, "flex flex-col gap-2 w-full")}>
         {metrics.map((m, i) => (
           <div key={i} className="flex items-center justify-between rounded-lg px-3 py-2.5" style={{ background: `${accent}15`, border: `1px solid ${accent}30` }}>
-            <span className="text-[11px] font-medium text-white/55">{m.label}</span>
+            <span className={cn("text-[11px] font-medium", vizSubtle)}>{m.label}</span>
             <div className="flex items-center gap-2.5">
-              <span className="text-[14px] font-bold text-white">{m.value}</span>
+              <span className={cn("text-[14px] font-bold", theme === "light" ? "text-gray-900" : "text-white")}>{m.value}</span>
               <span className="text-[10px] font-semibold" style={{ color: accent }}>{m.trend}</span>
             </div>
           </div>
@@ -578,7 +583,7 @@ function VisualElement({
       <div className={cn(ptr, "w-full space-y-3")}>
         <div className="rounded-xl px-5 py-4" style={{ background: `${accent}12`, borderTop: `3px solid ${accent}`, borderLeft: `1px solid ${accent}20`, borderRight: `1px solid ${accent}20`, borderBottom: `1px solid ${accent}20` }}>
           <div className="text-3xl font-light leading-none mb-2" style={{ color: `${accent}60` }}>&ldquo;</div>
-          <p className="text-[13px] italic leading-relaxed text-white/75">
+          <p className={cn("text-[13px] italic leading-relaxed", vizText)}>
             ClearPath gave us the operational confidence to open our fourth location. We couldn&apos;t have scaled without it.
           </p>
           <p className="mt-3 text-[11px] font-semibold" style={{ color: accent }}>
@@ -587,7 +592,7 @@ function VisualElement({
         </div>
         <div className="flex items-center gap-3 rounded-lg px-4 py-2" style={{ background: `${accent}08`, border: `1px solid ${accent}15` }}>
           <span className="text-[18px] font-black" style={{ color: accent }}>31%</span>
-          <span className="text-[10px] font-medium uppercase tracking-wider text-white/40">less churn in 90 days</span>
+          <span className={cn("text-[10px] font-medium uppercase tracking-wider", vizMuted)}>less churn in 90 days</span>
         </div>
       </div>
     );

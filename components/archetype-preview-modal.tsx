@@ -1387,7 +1387,7 @@ export function ArchetypePreviewModal({ archetype, open, onClose }: ArchetypePre
           </div>
 
           {/* Body — fills remaining viewport height */}
-          <div className="flex min-h-0 flex-1 gap-0 rounded-b-[20px] border border-t-0 border-white/[0.08] bg-[#0A0C10] overflow-hidden">
+          <div className="flex min-h-0 flex-1 gap-0 rounded-b-[20px] border border-t-0 border-white/[0.08] bg-white/[0.04] backdrop-blur-xl overflow-hidden">
             {/* Left: slide preview + navigation + slide pills */}
             <div className="min-w-0 flex-1 flex flex-col">
               {/* Slide — fills available space */}

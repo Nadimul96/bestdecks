@@ -934,7 +934,7 @@ function SlidePreview({
         )}
         style={isLight ? {} : { color: accent, background: `${accent}18`, border: `1px solid ${accent}28` }}
       >
-        {slide.type}
+        {slide.type === "cta" ? "next step" : slide.type}
       </span>
 
       {/* Watermark — bottom right */}
@@ -1089,7 +1089,7 @@ function SlidePreview({
               )}
             </div>
             {/* Right: content + visual + callout */}
-            <div className="flex w-[68%] flex-col justify-start overflow-hidden pt-5 pb-3 px-5 sm:px-7 sm:pt-6 sm:pb-4">
+            <div className="flex w-[68%] flex-col justify-start overflow-hidden pt-10 pb-3 px-5 sm:px-7 sm:pb-4">
               <h3 className={cn("text-base font-bold leading-tight tracking-tight whitespace-pre-line sm:text-lg", headingCls)}>
                 {slide.title}
               </h3>
@@ -1133,7 +1133,7 @@ function SlidePreview({
         {/* ─── SPLIT ─── */}
         {slide.layout === "split" && (
           <>
-            <div className="flex w-[48%] flex-col justify-start overflow-hidden pt-5 pb-4 px-5 sm:px-7 sm:pt-7 sm:pb-5">
+            <div className="flex w-[48%] flex-col justify-start overflow-hidden pt-10 pb-4 px-5 sm:px-7 sm:pb-5">
               <h3 className={cn("text-base font-bold leading-tight tracking-tight whitespace-pre-line sm:text-lg", headingCls)}>
                 {slide.title}
               </h3>
@@ -1453,7 +1453,7 @@ export function ArchetypePreviewModal({ archetype, open, onClose }: ArchetypePre
                       {i + 1}
                     </span>
                     <span className="text-[10px] font-medium text-white/60 whitespace-nowrap">
-                      {slide.type.toUpperCase()}
+                      {slide.type === "cta" ? "NEXT STEP" : slide.type.toUpperCase()}
                     </span>
                   </button>
                 ))}

@@ -247,113 +247,157 @@ const investorPitchExample: ArchetypeExample = {
   coverEyebrow: "Investor Deck",
   watermark: "Meridian",
   slides: [
+    // ── Slide 1: Cover — name + one-liner + proof point ──
     {
       title: "Meridian",
       subtitle: "**AI-native contract intelligence** for enterprise legal teams.",
-      statLabel: "Series A · Raising $8M · March 2026",
+      statLabel: "$2.1M ARR · 138% NRR · Series A",
       type: "cover",
       layout: "centered",
       visual: "none",
       bg: "light",
     },
+    // ── Slide 2: Problem — one pain, quantified ──
     {
-      title: "Legal Teams Are Buried in Contracts They Can't Read Fast Enough",
+      title: "73% of Legal Time Is Spent\nReading Contracts Manually",
       subtitle:
-        "The average Fortune 1000 company processes **20,000–40,000 contracts per year.** Each one reviewed manually — in Word, with tracked changes and email threads.",
+        "Fortune 1000 companies process 20,000+ contracts per year. Each one reviewed in Word, with tracked changes and email threads.",
       stat: "73%",
       statLabel: "of legal time on manual review",
       bullets: [
-        "Missed clauses cost companies **$28M per incident** on average",
-        "Existing CLM tools digitize the workflow — they don't understand the contracts",
-        "AI-powered contract review has been a promise. Until now.",
+        "Missed clauses cost **$28M per incident** on average",
+        "CLM tools digitize the workflow — they don't understand the contracts",
+        "One bad clause in one deal can wipe out an entire quarter",
       ],
-      callout: "These are **primary blockers** to enterprise scale — and no existing tool addresses all three.",
       type: "tension",
       layout: "stat-left",
       visual: "none",
       bg: "light",
     },
+    // ── Slide 3: Traction — front-loaded, the money slide ──
     {
-      title: "Meridian Reads Every Contract. In Seconds.",
+      title: "$2.1M ARR. 47 Customers.\n340% YoY Growth.",
       subtitle:
-        "The first AI layer that sits between legal teams and their contract stack — **extracting clauses, scoring risk, and flagging anomalies in real time.**",
-      bullets: [
-        "**Instant extraction** → every clause, obligation, and deadline indexed on upload",
-        "**Risk scoring** → every contract scored against your playbook automatically",
-        "**Comparison engine** → deviations from standard terms flagged before you sign",
-      ],
-      callout: "The result: **legal reviews that take minutes, not days** — with cryptographic audit trails.",
-      type: "data",
-      layout: "split",
-      visual: "metric-grid",
-      bg: "light",
-    },
-    {
-      title: "From Zero to $2.1M ARR in 18 Months",
-      subtitle:
-        "**47 enterprise customers.** Net revenue retention of **138%.** CAC payback in 4 months.",
+        "18 months from first line of code to enterprise traction. The product sells itself — our customers expand faster than we can acquire.",
       stat: "$2.1M",
       statLabel: "ARR · March 2026",
       bullets: [
-        "340% year-over-year growth",
-        "8 Fortune 500 customers signed in Q1 2026",
-        "Average contract value $44K/year — expanding to $67K at 12 months",
+        "**138% net revenue retention** — customers expand 38% in year one",
+        "**8 Fortune 500** logos signed in Q1 2026 alone",
+        "**$44K ACV** expanding to $67K at 12 months — 52% net expansion",
       ],
-      callout: "**NRR of 138%** means our existing customers are growing faster than we are adding new ones.",
       type: "proof",
       layout: "stat-left",
       visual: "bar-chart",
       bg: "light-accent",
     },
+    // ── Slide 4: Solution — show the product, not features ──
     {
-      title: "A $22B Market Waiting for Its AI Moment",
+      title: "Upload a Contract.\nGet a Risk Report in 90 Seconds.",
       subtitle:
-        "The contract lifecycle management market is **$22B and growing at 14% CAGR** — but every existing solution was built before large language models existed.",
+        "Meridian reads, extracts, scores, and compares every clause against your playbook — automatically.",
       bullets: [
-        "**TAM $22B** — full legal tech and contract lifecycle market",
-        "**SAM $4.8B** — mid-market and enterprise contract intelligence",
-        "**SOM $620M** — our addressable segment over 36 months",
+        "Every clause, obligation, and deadline indexed on upload",
+        "Risk scored against your legal playbook — deviations flagged instantly",
+        "Reviews that took 4 hours now take 90 seconds with full audit trail",
       ],
-      callout: "The market didn't need AI — it needed AI that **actually understands legal language.**",
+      type: "data",
+      layout: "split",
+      visual: "metric-grid",
+      bg: "light",
+    },
+    // ── Slide 5: Why Now? — the unlock ──
+    {
+      title: "This Company Was Impossible\n2 Years Ago.",
+      subtitle:
+        "Three shifts converged in 2024–2025 that made AI contract intelligence viable at enterprise scale for the first time.",
+      bullets: [
+        "**LLM context windows** hit 128K tokens — a full contract fits in one pass",
+        "**Fine-tuning costs** dropped 90% — domain-specific legal AI is now affordable",
+        "**Enterprise AI budgets** tripled — legal teams have buy-in to adopt",
+      ],
+      type: "vision",
+      layout: "centered",
+      visual: "none",
+      bg: "light-accent",
+    },
+    // ── Slide 6: Market — bottom-up, not Gartner ──
+    {
+      title: "$4.8B Addressable.\nGrowing 14% Per Year.",
+      subtitle:
+        "The $22B legal tech market was built before LLMs existed. Every incumbent is retrofitting AI. We're built on it.",
+      bullets: [
+        "**TAM $22B** — global legal tech and contract lifecycle",
+        "**SAM $4.8B** — mid-market + enterprise contract intelligence",
+        "**SOM $620M** — our segment over 36 months",
+      ],
       type: "data",
       layout: "split",
       visual: "market-bars",
       bg: "light",
     },
+    // ── Slide 7: Business Model — how we make money ──
     {
-      title: "Every Competitor Solves Half the Problem",
+      title: "$44K ACV. 4-Month Payback.\n80% Gross Margins.",
       subtitle:
-        "The CLM category digitizes contracts. AI add-ons add search. **None deliver real-time risk intelligence at enterprise scale.**",
-      callout: "Meridian is the only platform with **end-to-end AI understanding** — from ingestion to signed risk report.",
+        "Land with legal ops, expand to procurement and compliance. Every department that touches a contract is a new seat.",
+      stat: "4 mo",
+      statLabel: "CAC payback period",
+      bullets: [
+        "Per-seat pricing with volume tiers — $800–1,200/user/month",
+        "**LTV:CAC of 8.2x** — best-in-class for enterprise SaaS",
+        "3 expansion vectors: seats, departments, contract volume",
+      ],
+      type: "solution",
+      layout: "stat-left",
+      visual: "none",
+      bg: "light",
+    },
+    // ── Slide 8: Competition — different category ──
+    {
+      title: "Every Competitor\nSolves Half the Problem.",
+      subtitle:
+        "CLM tools digitize workflows. AI add-ons add search. None deliver real-time risk intelligence at enterprise scale.",
+      callout: "Meridian is the only platform built on AI from day one — not bolted on after.",
       type: "data",
       layout: "split",
       visual: "dot-table",
       bg: "light",
     },
+    // ── Slide 9: Team — names and credentials ──
     {
-      title: "Built by People Who Have Lived This Problem",
+      title: "3 Exits. 40 Years in Legal Tech.\nThis Isn't Our First Time.",
       subtitle:
-        "Our founders spent a combined **40 years in enterprise legal, AI, and SaaS GTM** — and this isn't the first time we've scaled a category.",
-      callout: "3 of 6 founders have **previously exited companies** in legal tech or enterprise SaaS.",
+        "The founding team built and sold two legal SaaS companies before starting Meridian. We know this market because we've lived in it.",
+      callout: "Backed by Sequoia Scout, First Round Capital, and angels from Ironclad, DocuSign, and Relativity.",
       type: "proof",
       layout: "split",
       visual: "team-grid",
       bg: "light",
     },
+    // ── Slide 10: The Ask — surgical ──
     {
-      title: "Raising $8M to Own Enterprise Legal AI",
-      subtitle: "18-month runway to $8M ARR, 120 enterprise customers, and **Series B readiness.**",
+      title: "Raising $8M to Hit\n$8M ARR by Q4 2027.",
+      subtitle:
+        "18-month runway. Clear milestones. Series B readiness by month 14.",
       bullets: [
-        "**Engineering (40%)** — model fine-tuning, platform scaling, 6 new engineers",
-        "**Sales & Marketing (30%)** — 4 AEs, 2 SDRs, legal conference presence",
-        "**Infrastructure (20%)** — SOC 2 Type II, enterprise security, 99.9% SLA",
-        "**G&A (10%)** — legal, finance, and operational overhead",
+        "**Engineering (40%)** — model fine-tuning, 6 new engineers, SOC 2 Type II",
+        "**Go-to-Market (35%)** — 4 AEs, 2 SDRs, legal conference presence",
+        "**Infrastructure (25%)** — enterprise security, 99.9% SLA, EU expansion",
       ],
-      callout: "At our current trajectory, this round gets Meridian to **$8M ARR and Series B territory** — with 18 months of runway to prove it.",
       type: "cta",
       layout: "split",
       visual: "fund-bars",
       bg: "light-accent",
+    },
+    // ── Slide 11: Contact ──
+    {
+      title: "Meridian",
+      subtitle: "AI-native contract intelligence for enterprise legal teams.",
+      type: "contact",
+      layout: "centered",
+      visual: "none",
+      bg: "light",
     },
   ],
 };
@@ -988,8 +1032,8 @@ function SlidePreview({
                   </p>
                 )}
                 <div className={cn("mt-8 space-y-2 text-[13px]", mutedCls)}>
-                  <p>clearpath.ai</p>
-                  <p>hello@clearpath.ai</p>
+                  <p>{watermark ? `${watermark.toLowerCase().replace(/\s+/g, "")}.ai` : "bestdecks.co"}</p>
+                  <p>{watermark ? `hello@${watermark.toLowerCase().replace(/\s+/g, "")}.ai` : "hello@bestdecks.co"}</p>
                 </div>
                 {coverFooter && (
                   <p className={cn("mt-6 text-[10px] font-medium uppercase tracking-[0.18em]", mutedCls)} style={{ opacity: 0.6 }}>

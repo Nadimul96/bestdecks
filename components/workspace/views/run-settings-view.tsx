@@ -809,6 +809,34 @@ export function RunSettingsView() {
                 onCustomChange={(v) => update("customTone", v)}
                 customPlaceholder="e.g., Warm but data-driven, like a smart friend who did the research..."
               />
+
+              {/* Persona quick-fills */}
+              <div className="mt-4 border-t border-border/40 pt-4">
+                <p className="text-[11px] font-medium text-muted-foreground mb-2.5">
+                  Or write like a persona — click to fill:
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { label: "Alex Hormozi", value: "Direct, specific, zero filler. Every sentence earns the next. Lead with numbers, name the problem better than they can, conviction over hedging. Third-grade reading level." },
+                    { label: "Peter Thiel", value: "Contrarian and definite. Challenge conventional wisdom. Frame the opportunity as inevitable for those who see it clearly. Intellectual confidence, not aggression." },
+                    { label: "Steve Jobs", value: "Simple, aspirational, dramatic. Short sentences. One idea per slide. Build tension, then reveal. Make the audience feel they're witnessing something important." },
+                    { label: "McKinsey", value: "Structured, evidence-driven, executive-ready. MECE frameworks. Every claim supported by data. Professional but never warm. Authority through rigor." },
+                    { label: "Y Combinator", value: "Brutally concise. No jargon, no fluff. Lead with traction. Say what you do in one sentence. If it needs explaining, simplify it." },
+                  ].map((persona) => (
+                    <button
+                      key={persona.label}
+                      type="button"
+                      onClick={() => {
+                        update("tone", "custom");
+                        update("customTone", persona.value);
+                      }}
+                      className="rounded-full border border-border/50 bg-muted/30 px-3 py-1.5 text-[11px] font-medium text-muted-foreground transition-all hover:border-primary/40 hover:bg-primary/5 hover:text-foreground"
+                    >
+                      {persona.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </SectionCard>
 
             {/* Visual style */}

@@ -403,12 +403,649 @@ const investorPitchExample: ArchetypeExample = {
 };
 
 /* ══════════════════════════════════════════════════════════════════
+   Warm Intro Example — Bridgepoint Analytics → DTC brand
+   ══════════════════════════════════════════════════════════════════ */
+
+const warmIntroExample: ArchetypeExample = {
+  archetype: "warm_intro",
+  title: "Warm Intro",
+  scenario: "Bridgepoint Analytics pitching Luma Home — introduced by shared board advisor",
+  defaultThemeKey: "simple-dark",
+  coverEyebrow: "Luma Home · Denver, CO",
+  coverFooter: "BRIDGEPOINT ANALYTICS",
+  slides: [
+    {
+      title: "Sarah Chen Thought\nWe Should Talk.",
+      subtitle: "She mentioned you're rebuilding your demand forecasting stack after expanding to 500+ SKUs. We've helped 3 brands navigate that exact transition.",
+      type: "cover",
+      layout: "centered",
+      visual: "gradient-orb",
+      bg: "dark-mesh",
+    },
+    {
+      title: "What We Noticed\nAbout Luma's Growth",
+      subtitle: "You've 4×'d your SKU count in 18 months. Your Shopify reviews mention inconsistent shipping times — a classic signal that forecasting hasn't kept up with catalog expansion.",
+      stat: "4×",
+      statLabel: "SKU growth in 18 months",
+      bullets: [
+        "12 new product lines since Q3 2025 — fastest catalog expansion in DTC home",
+        "Shipping complaints up 34% in the last 90 days (Trustpilot data)",
+        "Your competitor AllHaus solved the same problem at this exact stage",
+      ],
+      type: "tension",
+      layout: "stat-left",
+      visual: "bar-chart",
+      bg: "dark",
+    },
+    {
+      title: "The Pattern:\nCatalog Grows, Forecasting Breaks.",
+      subtitle: "Every DTC brand that scales past 200 SKUs hits the same wall — demand planning tools built for 50 products can't handle 500.",
+      bullets: [
+        "Overstock on slow movers locks up $200K+ in working capital",
+        "Stockouts on top sellers cost 2-3× the margin of the lost sale",
+        "Manual forecasting takes 15+ hours/week at your current catalog size",
+      ],
+      type: "data",
+      layout: "split",
+      visual: "churn-grid",
+      bg: "subtle",
+    },
+    {
+      title: "AllHaus Had the Same Problem.\nThey Fixed It in 6 Weeks.",
+      subtitle: "450-SKU DTC brand. Same growth stage. We deployed predictive inventory and they recaptured $1.2M in working capital within one quarter.",
+      stat: "$1.2M",
+      statLabel: "working capital recovered in 90 days",
+      bullets: [
+        "Stockouts dropped 71% in the first 60 days",
+        "Overstock reduced by $340K — freed up warehouse space for new lines",
+        "Forecast accuracy jumped from 62% to 91%",
+      ],
+      type: "proof",
+      layout: "stat-left",
+      visual: "metrics-row",
+      bg: "dark",
+    },
+    {
+      title: "What Working Together\nLooks Like for Luma",
+      subtitle: "A focused 6-week engagement. We connect to your Shopify and warehouse data, build a predictive model, and hand you a live dashboard.",
+      bullets: [
+        "Week 1-2: Data integration + baseline forecast accuracy audit",
+        "Week 3-4: Custom model trained on Luma's sales patterns",
+        "Week 5-6: Live dashboard deployed — your team owns it from day one",
+      ],
+      type: "solution",
+      layout: "stat-left",
+      visual: "icon-grid",
+      bg: "dark-mesh",
+    },
+    {
+      title: "One Ask:\nLet Us Run Your Q3 Data.",
+      subtitle: "We'll put your last 90 days through our model and show you exactly where you're bleeding margin. Takes us 48 hours. Costs you nothing.",
+      type: "cta",
+      layout: "centered",
+      visual: "none",
+      bg: "accent-gradient",
+    },
+    {
+      title: "Bridgepoint Analytics",
+      subtitle: "Predictive inventory intelligence for high-growth DTC brands.",
+      type: "contact",
+      layout: "centered",
+      visual: "none",
+      bg: "dark-mesh",
+    },
+  ],
+};
+
+/* ══════════════════════════════════════════════════════════════════
+   Agency Proposal Example — Redhawk Creative → hospital network
+   ══════════════════════════════════════════════════════════════════ */
+
+const agencyProposalExample: ArchetypeExample = {
+  archetype: "agency_proposal",
+  title: "Agency Proposal",
+  scenario: "Redhawk Creative proposing a patient acquisition strategy for Pinnacle Health (12 facilities)",
+  defaultThemeKey: "simple-light",
+  coverEyebrow: "Proposal for Pinnacle Health",
+  watermark: "Redhawk",
+  slides: [
+    {
+      title: "Redhawk × Pinnacle Health",
+      subtitle: "A unified patient acquisition strategy for 12 facilities.",
+      statLabel: "Proposal · April 2026",
+      type: "cover",
+      layout: "centered",
+      visual: "none",
+      bg: "light",
+    },
+    {
+      title: "Your Challenge, As We\nUnderstand It",
+      subtitle: "12 facilities. 12 marketing strategies. Zero shared performance data. Pinnacle is spending $4.2M/year on patient acquisition with no visibility into which channels actually convert.",
+      stat: "$4.2M",
+      statLabel: "annual patient acquisition spend",
+      bullets: [
+        "Each facility runs its own Google Ads — bidding against each other on the same keywords",
+        "No shared attribution model — you can't tell which dollar drives a booked appointment",
+        "Brand consistency varies wildly between your Denver and Colorado Springs locations",
+      ],
+      type: "tension",
+      layout: "stat-left",
+      visual: "none",
+      bg: "light",
+    },
+    {
+      title: "What We Think Is\nReally Going On",
+      subtitle: "This isn't a branding problem. It's a measurement problem. Pinnacle doesn't need 12 better campaigns — it needs one system that tells you what's working.",
+      type: "vision",
+      layout: "centered",
+      visual: "none",
+      bg: "light-accent",
+    },
+    {
+      title: "The 3-Phase Approach",
+      subtitle: "Audit → Consolidate → Scale. 90 days to unified performance data, 180 days to optimized cost-per-acquisition across all 12 facilities.",
+      bullets: [
+        "**Phase 1 (Days 1-30):** Full channel audit. What's working, what's wasting money, and where",
+        "**Phase 2 (Days 30-90):** Consolidate into one acquisition engine with shared attribution",
+        "**Phase 3 (Days 90-180):** Optimize per-facility spend based on real conversion data",
+      ],
+      type: "solution",
+      layout: "split",
+      visual: "metric-grid",
+      bg: "light",
+    },
+    {
+      title: "We Did This for\nSummit Medical Group.",
+      subtitle: "8-facility network in Arizona. Same fragmented marketing. Same wasted spend. We unified their acquisition in 4 months.",
+      stat: "38%",
+      statLabel: "lower cost-per-acquisition in 6 months",
+      bullets: [
+        "Consolidated 8 separate Google Ads accounts into one managed platform",
+        "Cost-per-booked-appointment dropped from $127 to $79",
+        "Patient volume up 22% with 15% less total ad spend",
+      ],
+      type: "proof",
+      layout: "stat-left",
+      visual: "bar-chart",
+      bg: "light-accent",
+    },
+    {
+      title: "Your Team. Named.",
+      subtitle: "These are the people who will actually work on Pinnacle's account — not a B-team after the pitch.",
+      callout: "Led by **Maya Torres** (12 years in healthcare marketing, former VP at HCA Healthcare) and **David Park** (performance media lead, managed $30M+ in healthcare ad spend).",
+      type: "proof",
+      layout: "split",
+      visual: "team-grid",
+      bg: "light",
+    },
+    {
+      title: "Investment: $28K/Month.\nFirst Results in 30 Days.",
+      subtitle: "All-in: strategy, media management, creative, reporting, and a dedicated Slack channel. No hidden fees. 90-day initial commitment.",
+      bullets: [
+        "Monthly performance reviews with your CMO and facility directors",
+        "Real-time dashboard — patient volume, CPA, and ROAS by facility",
+        "30-day exit clause after the initial 90 days — we earn your renewal",
+      ],
+      type: "cta",
+      layout: "split",
+      visual: "fund-bars",
+      bg: "light-accent",
+    },
+    {
+      title: "Redhawk Creative",
+      subtitle: "Performance marketing for multi-location healthcare.",
+      type: "contact",
+      layout: "centered",
+      visual: "none",
+      bg: "light",
+    },
+  ],
+};
+
+/* ══════════════════════════════════════════════════════════════════
+   Case Study Example — Vaultline → aerospace company
+   ══════════════════════════════════════════════════════════════════ */
+
+const caseStudyExample: ArchetypeExample = {
+  archetype: "case_study",
+  title: "Case Study",
+  scenario: "Vaultline showing how they cut procurement cycles 62% for a Fortune 500 auto parts manufacturer",
+  defaultThemeKey: "simple-dark",
+  coverEyebrow: "Customer Story",
+  coverFooter: "VAULTLINE",
+  slides: [
+    {
+      title: "How Autoforge Cut\nProcurement Time by 62%",
+      subtitle: "A Fortune 500 auto parts manufacturer went from 11-hour weekly PO reconciliation to real-time procurement — in 5 months.",
+      type: "cover",
+      layout: "centered",
+      visual: "gradient-orb",
+      bg: "dark-mesh",
+    },
+    {
+      title: "Why This Story\nMatters to You",
+      subtitle: "Like your team, Autoforge manages 4,000+ SKUs across 3 continents with mixed ERP systems. They were drowning in the same complexity you're facing right now.",
+      stat: "4,000+",
+      statLabel: "SKUs across 3 continents",
+      type: "tension",
+      layout: "stat-left",
+      visual: "none",
+      bg: "dark",
+    },
+    {
+      title: "The Starting Point:\n11 Hours/Week on Manual POs",
+      subtitle: "Autoforge's procurement team spent every Monday reconciling purchase orders across SAP, Oracle, and a homegrown Access database that no one fully understood.",
+      stat: "11 hrs",
+      statLabel: "per week on manual reconciliation",
+      bullets: [
+        "3 disconnected ERP systems — no single source of truth",
+        "Average PO cycle time: 14 days (industry benchmark: 5 days)",
+        "2 full-time staff dedicated entirely to data entry and reconciliation",
+      ],
+      type: "data",
+      layout: "stat-left",
+      visual: "bar-chart",
+      bg: "dark",
+    },
+    {
+      title: "They'd Already Tried\nTwo Other Solutions.",
+      subtitle: "A custom integration project (failed after 8 months and $400K). An off-the-shelf connector tool (handled 60% of their SKUs, broke on the rest). The problem was genuinely hard.",
+      type: "vision",
+      layout: "centered",
+      visual: "none",
+      bg: "subtle",
+    },
+    {
+      title: "What Vaultline Did Differently",
+      subtitle: "Instead of connecting their ERPs, we built an intelligence layer that sits above them — reading from all three, writing to one unified procurement ledger.",
+      bullets: [
+        "Mapped 4,200 SKUs across all 3 systems in 3 weeks — including the Access edge cases",
+        "Deployed parallel-run for 30 days so the team could validate before switching",
+        "PO routing automated for 94% of standard orders by month 2",
+      ],
+      type: "solution",
+      layout: "split",
+      visual: "icon-grid",
+      bg: "dark-mesh",
+    },
+    {
+      title: "62% Faster Procurement.\n$1.8M in Savings.",
+      subtitle: "PO cycle time dropped from 14 days to 5.3 days. The two full-time reconciliation roles were redeployed to strategic sourcing.",
+      stat: "62%",
+      statLabel: "reduction in procurement cycle time",
+      bullets: [
+        "Cycle time: 14 days → 5.3 days",
+        "$1.8M saved annually in labor and error correction",
+        "2 FTEs redeployed from reconciliation to strategic sourcing",
+      ],
+      type: "proof",
+      layout: "stat-left",
+      visual: "metrics-row",
+      bg: "dark",
+    },
+    {
+      title: "\"Monday Mornings Used to Be\nAbout Firefighting. Now They're\nAbout Planning.\"",
+      subtitle: "— Kira Tanaka, VP Procurement, Autoforge",
+      type: "proof",
+      layout: "quote",
+      visual: "none",
+      bg: "accent-gradient",
+    },
+    {
+      title: "You're Managing Similar\nComplexity Right Now.",
+      subtitle: "Would cutting your PO cycle time by even half of what Autoforge saw change how you allocate your Q3 budget?",
+      type: "cta",
+      layout: "centered",
+      visual: "none",
+      bg: "dark-mesh",
+    },
+    {
+      title: "Vaultline",
+      subtitle: "Supply chain intelligence for complex, multi-system enterprises.",
+      type: "contact",
+      layout: "centered",
+      visual: "none",
+      bg: "dark-mesh",
+    },
+  ],
+};
+
+/* ══════════════════════════════════════════════════════════════════
+   Competitive Swap Example — Canopy HR → mid-market HRIS switch
+   ══════════════════════════════════════════════════════════════════ */
+
+const competitiveSwapExample: ArchetypeExample = {
+  archetype: "competitive_displacement",
+  title: "Competitive Swap",
+  scenario: "Canopy HR pitching mid-market companies to switch from legacy HRIS to a modern platform",
+  defaultThemeKey: "aurora-flux",
+  coverEyebrow: "The Modern HRIS",
+  coverFooter: "CANOPY HR",
+  slides: [
+    {
+      title: "Your Workforce Changed.\nYour HR Stack Didn't.",
+      subtitle: "Remote-first teams, global contractors, async workflows. The tools built for single-office companies in 2015 weren't designed for how you work today.",
+      type: "cover",
+      layout: "centered",
+      visual: "gradient-orb",
+      bg: "dark-mesh",
+    },
+    {
+      title: "What Modern HR Teams\nActually Need",
+      subtitle: "A single system that handles a full-time employee in Austin, a contractor in Berlin, and an intern in Lagos — without three different workflows.",
+      bullets: [
+        "Compliance that updates automatically when regulations change",
+        "Onboarding that works across time zones, not just office locations",
+        "Compensation data that's real-time, not quarterly spreadsheet exports",
+      ],
+      type: "vision",
+      layout: "centered",
+      visual: "none",
+      bg: "accent-gradient",
+    },
+    {
+      title: "The Hidden Cost of\nStanding Still",
+      subtitle: "Legacy HRIS platforms aren't free — even if they're paid for. They cost you in workarounds, manual processes, and the senior HR time spent on tasks that should be automated.",
+      stat: "6 hrs",
+      statLabel: "per week on tasks your HRIS should handle",
+      bullets: [
+        "Average mid-market HR team spends 6 hrs/week on manual data entry and exports",
+        "68% of HR leaders say their current system can't handle distributed teams",
+        "Compliance gaps in legacy systems cost mid-market companies $127K/year on average",
+      ],
+      type: "data",
+      layout: "stat-left",
+      visual: "bar-chart",
+      bg: "dark",
+    },
+    {
+      title: "Same Outcome. Completely\nDifferent Experience.",
+      subtitle: "We built Canopy on the assumption that your workforce is distributed, your compliance needs are dynamic, and your HR team is too small for the work being asked of it.",
+      bullets: [
+        "PTO request: 4 clicks and 30 seconds. Not a form, an email, and a spreadsheet update.",
+        "Onboarding: one workflow handles US W-2s and German contracts — no switching tools",
+        "Compensation review: real-time benchmarking, not last quarter's data in a PDF",
+      ],
+      type: "solution",
+      layout: "split",
+      visual: "metric-grid",
+      bg: "subtle",
+    },
+    {
+      title: "Migration Takes 3 Weeks.\nWe Handle All of It.",
+      subtitle: "The #1 reason companies stay on legacy systems is fear of switching pain. We've migrated 200+ companies — the average timeline is 18 business days.",
+      stat: "18",
+      statLabel: "business days average migration",
+      bullets: [
+        "Automated data migration from every major HRIS — including custom fields",
+        "Parallel-run period so your team validates before you cut over",
+        "Dedicated migration specialist assigned to your account for 60 days",
+      ],
+      type: "solution",
+      layout: "stat-left",
+      visual: "none",
+      bg: "dark-mesh",
+    },
+    {
+      title: "Nextera Made the Switch.\n90 Days Later, They Wish\nThey'd Done It Sooner.",
+      subtitle: "\"We spent 18 months saying 'next quarter.' The actual migration took 14 days. The only regret is not switching earlier.\" — Lisa Morales, VP People, Nextera (340 employees)",
+      stat: "14",
+      statLabel: "days to full migration",
+      bullets: [
+        "HR admin time dropped 40% in the first month",
+        "First international contractor onboarded in 2 hours (was 2 weeks)",
+        "Zero compliance incidents since migration — down from 3/quarter",
+      ],
+      type: "proof",
+      layout: "stat-left",
+      visual: "testimonial",
+      bg: "dark",
+    },
+    {
+      title: "15 Minutes. Your Data.\nA Side-by-Side You Can Feel.",
+      subtitle: "We'll run your current top 3 HR workflows through Canopy — live. You'll see the difference in experience, not just features.",
+      type: "cta",
+      layout: "centered",
+      visual: "none",
+      bg: "accent-gradient",
+    },
+    {
+      title: "Canopy HR",
+      subtitle: "The modern HRIS for distributed, growing teams.",
+      type: "contact",
+      layout: "centered",
+      visual: "none",
+      bg: "dark-mesh",
+    },
+  ],
+};
+
+/* ══════════════════════════════════════════════════════════════════
+   Thought Leadership Example — Meridian Carbon → CFOs
+   ══════════════════════════════════════════════════════════════════ */
+
+const thoughtLeadershipExample: ArchetypeExample = {
+  archetype: "thought_leadership",
+  title: "Thought Leadership",
+  scenario: "Meridian Carbon presenting to manufacturing CFOs on Scope 3 emissions as a procurement blocker",
+  defaultThemeKey: "simple-light",
+  coverEyebrow: "Research Brief · Q2 2026",
+  watermark: "Meridian Carbon",
+  slides: [
+    {
+      title: "Scope 3 Is No Longer Optional.\nIt's a Procurement Qualifier.",
+      subtitle: "23% of enterprise procurement RFPs now require Scope 3 emissions data. In 2023, it was 4%. If you can't report it, you can't bid.",
+      type: "cover",
+      layout: "centered",
+      visual: "none",
+      bg: "light",
+    },
+    {
+      title: "3 Forces Are Making This\nUnavoidable in 2026",
+      subtitle: "This isn't driven by one regulation or one customer. It's a convergence that's making Scope 3 reporting a gating function for enterprise procurement.",
+      bullets: [
+        "**EU CSRD** now requires Scope 3 reporting for 50,000+ companies — including US suppliers",
+        "**Apple, Microsoft, and Walmart** added Scope 3 to supplier scorecards in 2025",
+        "**Institutional investors** managing $18T in assets now require climate disclosure",
+      ],
+      type: "tension",
+      layout: "split",
+      visual: "line-chart",
+      bg: "light",
+    },
+    {
+      title: "The Misconception:\n\"This Is a Compliance Exercise.\"",
+      subtitle: "Most CFOs treat Scope 3 as a box to check. The companies getting ahead see it differently — it's becoming a competitive qualification for their largest contracts.",
+      stat: "23%",
+      statLabel: "of RFPs now require Scope 3 data",
+      type: "data",
+      layout: "stat-left",
+      visual: "none",
+      bg: "light-accent",
+    },
+    {
+      title: "Where Does Your Company\nSit Right Now?",
+      subtitle: "Most manufacturers fall into one of four stages. The gap between Stage 2 and Stage 3 is where deals start getting lost.",
+      bullets: [
+        "**Stage 1:** No measurement. Reporting is manual or nonexistent.",
+        "**Stage 2:** Estimated data. Using industry averages, not actual supplier data.",
+        "**Stage 3:** Primary data. Collecting from suppliers, but not automated.",
+        "**Stage 4:** Real-time. Automated collection, audit-ready, embedded in procurement.",
+      ],
+      type: "vision",
+      layout: "centered",
+      visual: "none",
+      bg: "light",
+    },
+    {
+      title: "What Leaders Are\nDoing Differently",
+      subtitle: "Three manufacturers moved from Stage 2 to Stage 4 in under 6 months. The common thread wasn't budget — it was treating emissions data as a supply chain signal, not a compliance report.",
+      bullets: [
+        "Continental AG automated Scope 3 collection from 400+ suppliers — bid-win rate up 18%",
+        "A US aerospace manufacturer embedded emissions data into supplier scoring — saved $3.2M in carbon offsets",
+        "All three started with their top 20 suppliers, not a company-wide rollout",
+      ],
+      type: "proof",
+      layout: "split",
+      visual: "metric-grid",
+      bg: "light",
+    },
+    {
+      title: "If You Do Nothing Else,\nDo These 3 Things in Q3.",
+      subtitle: "Regardless of what tools you use, these three actions will move you from Stage 2 to Stage 3 — where contracts stop being at risk.",
+      bullets: [
+        "**Map your top 20 suppliers** by emissions impact — 80% of Scope 3 lives in 20% of suppliers",
+        "**Request primary data** from your 5 largest — a simple email template works",
+        "**Add emissions to your supplier scorecard** — even directionally, it signals intent to buyers",
+      ],
+      type: "solution",
+      layout: "split",
+      visual: "icon-grid",
+      bg: "light-accent",
+    },
+    {
+      title: "Where Companies Get Stuck\n(And How We Help)",
+      subtitle: "The manual approach works until you hit 50+ suppliers. After that, collection, normalization, and audit-readiness require automation. That's exactly what Meridian Carbon does.",
+      type: "solution",
+      layout: "centered",
+      visual: "none",
+      bg: "light",
+    },
+    {
+      title: "One Thought to Leave With",
+      subtitle: "The question isn't whether Scope 3 reporting matters. It's whether your competitors will be ready before you are.",
+      type: "cta",
+      layout: "centered",
+      visual: "none",
+      bg: "light-accent",
+    },
+    {
+      title: "Meridian Carbon",
+      subtitle: "Automated Scope 3 intelligence for manufacturing supply chains.",
+      type: "contact",
+      layout: "centered",
+      visual: "none",
+      bg: "light",
+    },
+  ],
+};
+
+/* ══════════════════════════════════════════════════════════════════
+   Product Launch Example — Stackmesh AI Code Review
+   ══════════════════════════════════════════════════════════════════ */
+
+const productLaunchExample: ArchetypeExample = {
+  archetype: "product_launch",
+  title: "Product Launch",
+  scenario: "Stackmesh announcing an AI-powered code review agent to 8,000 engineering teams",
+  defaultThemeKey: "midnight-ember",
+  coverEyebrow: "New from Stackmesh",
+  coverFooter: "STACKMESH",
+  slides: [
+    {
+      title: "Code Review Is the Last\nManual Bottleneck in CI/CD.",
+      subtitle: "Your senior engineers spend 8-12 hours per week reviewing pull requests. That's an entire engineering headcount reading diffs instead of shipping features.",
+      type: "cover",
+      layout: "centered",
+      visual: "gradient-orb",
+      bg: "dark-mesh",
+    },
+    {
+      title: "The Old Way:\n8 Hours/Week Reading Diffs.",
+      subtitle: "Pull requests sit for hours. Context gets lost. Your best engineers become bottlenecks instead of builders.",
+      stat: "8 hrs",
+      statLabel: "per senior engineer per week on code review",
+      bullets: [
+        "Average PR wait time: 4.2 hours — longer than the code took to write",
+        "Senior engineers context-switch 11× per day between writing and reviewing",
+        "60% of review comments are style/formatting — not logic or architecture",
+      ],
+      type: "tension",
+      layout: "stat-left",
+      visual: "bar-chart",
+      bg: "dark",
+    },
+    {
+      title: "What Changed:\nLLMs Can Finally Read Code.",
+      subtitle: "Until 2025, AI code analysis was limited to linting and pattern matching. Models with 128K context windows can now understand entire codebases — not just individual files.",
+      type: "vision",
+      layout: "centered",
+      visual: "none",
+      bg: "accent-gradient",
+    },
+    {
+      title: "Introducing Stackmesh\nCode Agent.",
+      subtitle: "An AI reviewer that reads your PRs, understands your codebase conventions, and delivers review-quality feedback before a human ever looks at it.",
+      bullets: [
+        "Understands your team's style guide, architecture patterns, and naming conventions",
+        "Catches logic bugs, security issues, and performance regressions — not just formatting",
+        "Reviews in 90 seconds. Humans focus on design decisions, not nitpicks.",
+      ],
+      type: "solution",
+      layout: "split",
+      visual: "icon-grid",
+      bg: "dark-mesh",
+    },
+    {
+      title: "Beta Results:\n4.2 Hours → 22 Minutes.",
+      subtitle: "140 teams. 47,000 PRs reviewed. Median time from PR open to first actionable feedback dropped by 94%.",
+      stat: "94%",
+      statLabel: "faster time-to-first-review",
+      bullets: [
+        "Median review time: 4.2 hours → 22 minutes",
+        "False positive rate: 3.1% — lower than most human reviewers",
+        "87% of teams reported senior engineers reclaimed 5+ hours per week",
+      ],
+      type: "proof",
+      layout: "stat-left",
+      visual: "metrics-row",
+      bg: "dark",
+    },
+    {
+      title: "Works With Your Stack.\nChanges Nothing Else.",
+      subtitle: "GitHub, GitLab, and Bitbucket. Drops into your existing PR workflow as a reviewer — no new tools, no migration, no training.",
+      bullets: [
+        "One-click install via GitHub App or GitLab integration",
+        "Respects your existing CODEOWNERS and branch protection rules",
+        "Python, Go, TypeScript, Java, Rust — with more languages shipping monthly",
+      ],
+      type: "solution",
+      layout: "split",
+      visual: "metric-grid",
+      bg: "subtle",
+    },
+    {
+      title: "Available Now.\nFree for Teams Under 10.",
+      subtitle: "Start in 2 minutes. No credit card. No sales call. Install the GitHub App and your next PR gets reviewed automatically.",
+      type: "cta",
+      layout: "centered",
+      visual: "none",
+      bg: "accent-gradient",
+    },
+    {
+      title: "Stackmesh",
+      subtitle: "AI-native developer tools for modern engineering teams.",
+      type: "contact",
+      layout: "centered",
+      visual: "none",
+      bg: "dark-mesh",
+    },
+  ],
+};
+
+/* ══════════════════════════════════════════════════════════════════
    Registry
    ══════════════════════════════════════════════════════════════════ */
 
 export const archetypeExamples: Record<string, ArchetypeExample> = {
   cold_outreach: coldOutreachExample,
+  warm_intro: warmIntroExample,
+  agency_proposal: agencyProposalExample,
   investor_pitch: investorPitchExample,
+  case_study: caseStudyExample,
+  competitive_displacement: competitiveSwapExample,
+  thought_leadership: thoughtLeadershipExample,
+  product_launch: productLaunchExample,
 };
 
 /* ══════════════════════════════════════════════════════════════════

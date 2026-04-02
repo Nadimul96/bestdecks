@@ -34,7 +34,7 @@ export interface ExampleSlide {
   callout?: string;
   stat?: string;
   statLabel?: string;
-  type: "cover" | "tension" | "data" | "vision" | "solution" | "proof" | "cta";
+  type: "cover" | "tension" | "data" | "vision" | "solution" | "proof" | "cta" | "contact";
   layout: "centered" | "split" | "stat-left" | "icon-list" | "quote";
   visual?:
     | "gradient-orb"
@@ -219,8 +219,17 @@ const coldOutreachExample: ArchetypeExample = {
         "We'll pull NxGen's real data into a working dashboard while you watch. No contracts. No commitment. Just clarity.",
       type: "cta",
       layout: "centered",
-      visual: "metrics-row",
+      visual: "none",
       bg: "accent-gradient",
+    },
+    // ── Slide 9: Contact — closing slide ──
+    {
+      title: "ClearPath AI",
+      subtitle: "Operations intelligence for multi-location fitness brands.",
+      type: "contact",
+      layout: "centered",
+      visual: "none",
+      bg: "dark-mesh",
     },
   ],
 };
@@ -934,7 +943,7 @@ function SlidePreview({
         )}
         style={isLight ? {} : { color: accent, background: `${accent}18`, border: `1px solid ${accent}28` }}
       >
-        {slide.type === "cta" ? "next step" : slide.type}
+        {slide.type === "cta" ? "next step" : slide.type === "contact" ? "contact" : slide.type}
       </span>
 
       {/* Watermark — bottom right */}
@@ -958,7 +967,32 @@ function SlidePreview({
           <div className="flex h-full w-full flex-col items-center justify-center px-12 text-center sm:px-20">
             <VisualElement type={slide.visual} accent={accent} theme={surfaceTheme} />
 
-            {slide.type === "cover" ? (
+            {slide.type === "contact" ? (
+              /* ── Contact / closing slide ── */
+              <>
+                <div className="mb-3 flex items-center gap-2.5">
+                  <div className="size-3 rounded-sm" style={{ background: accent }} />
+                  <div className="h-[2px] w-8 rounded-full" style={{ background: accent }} />
+                </div>
+                <h3 className="text-4xl font-black tracking-tight text-white sm:text-5xl">
+                  {slide.title}
+                </h3>
+                {slide.subtitle && (
+                  <p className="mt-3 max-w-md text-sm leading-relaxed text-white/50">
+                    {slide.subtitle}
+                  </p>
+                )}
+                <div className="mt-8 space-y-2 text-[13px] text-white/40">
+                  <p>clearpath.ai</p>
+                  <p>hello@clearpath.ai</p>
+                </div>
+                {coverFooter && (
+                  <p className="mt-6 text-[10px] font-medium uppercase tracking-[0.18em] text-white/25">
+                    {coverFooter}
+                  </p>
+                )}
+              </>
+            ) : slide.type === "cover" ? (
               /* ── Cover slide ── */
               isLight ? (
                 /* Light-mode investor pitch cover */
@@ -1089,20 +1123,20 @@ function SlidePreview({
               )}
             </div>
             {/* Right: content + visual + callout */}
-            <div className="flex w-[68%] flex-col justify-start overflow-hidden pt-10 pb-3 px-5 sm:px-7 sm:pb-4">
-              <h3 className={cn("text-base font-bold leading-tight tracking-tight whitespace-pre-line sm:text-lg", headingCls)}>
+            <div className="flex w-[68%] flex-col justify-center overflow-hidden py-6 px-6 sm:px-8">
+              <h3 className={cn("text-xl font-bold leading-tight tracking-tight whitespace-pre-line sm:text-2xl", headingCls)}>
                 {slide.title}
               </h3>
               {slide.subtitle && (
-                <p className={cn("mt-1.5 text-[11px] leading-relaxed", subtitleCls)}>
+                <p className={cn("mt-2 text-[13px] leading-relaxed", subtitleCls)}>
                   {renderHighlight(slide.subtitle, accent)}
                 </p>
               )}
               {slide.bullets && (
-                <ul className="mt-2 space-y-1">
+                <ul className="mt-3 space-y-1.5">
                   {slide.bullets.map((b, i) => (
-                    <li key={i} className={cn("flex items-start gap-2 text-[11px] leading-snug", bulletCls)}>
-                      <span className="mt-[4px] size-1.5 shrink-0 rounded-full" style={{ background: accent }} />
+                    <li key={i} className={cn("flex items-start gap-2.5 text-[12px] leading-snug", bulletCls)}>
+                      <span className="mt-[5px] size-1.5 shrink-0 rounded-full" style={{ background: accent }} />
                       {renderHighlight(b, accent)}
                     </li>
                   ))}
@@ -1133,20 +1167,20 @@ function SlidePreview({
         {/* ─── SPLIT ─── */}
         {slide.layout === "split" && (
           <>
-            <div className="flex w-[48%] flex-col justify-start overflow-hidden pt-10 pb-4 px-5 sm:px-7 sm:pb-5">
-              <h3 className={cn("text-base font-bold leading-tight tracking-tight whitespace-pre-line sm:text-lg", headingCls)}>
+            <div className="flex w-[48%] flex-col justify-center overflow-hidden py-6 px-6 sm:px-8">
+              <h3 className={cn("text-xl font-bold leading-tight tracking-tight whitespace-pre-line sm:text-2xl", headingCls)}>
                 {slide.title}
               </h3>
               {slide.subtitle && (
-                <p className={cn("mt-1.5 text-[11px] leading-relaxed", subtitleCls)}>
+                <p className={cn("mt-2 text-[13px] leading-relaxed", subtitleCls)}>
                   {renderHighlight(slide.subtitle, accent)}
                 </p>
               )}
               {slide.bullets && (
-                <ul className="mt-2 space-y-1">
+                <ul className="mt-3 space-y-1.5">
                   {slide.bullets.map((b, i) => (
-                    <li key={i} className={cn("flex items-start gap-2 text-[11px] leading-snug", bulletCls)}>
-                      <span className="mt-[4px] size-1.5 shrink-0 rounded-full" style={{ background: accent }} />
+                    <li key={i} className={cn("flex items-start gap-2.5 text-[12px] leading-snug", bulletCls)}>
+                      <span className="mt-[5px] size-1.5 shrink-0 rounded-full" style={{ background: accent }} />
                       {renderHighlight(b, accent)}
                     </li>
                   ))}
@@ -1453,7 +1487,7 @@ export function ArchetypePreviewModal({ archetype, open, onClose }: ArchetypePre
                       {i + 1}
                     </span>
                     <span className="text-[10px] font-medium text-white/60 whitespace-nowrap">
-                      {slide.type === "cta" ? "NEXT STEP" : slide.type.toUpperCase()}
+                      {slide.type === "cta" ? "NEXT STEP" : slide.type === "contact" ? "CONTACT" : slide.type.toUpperCase()}
                     </span>
                   </button>
                 ))}

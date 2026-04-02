@@ -112,16 +112,16 @@ function SlidingTabs<T extends string>({
 }
 
 /* ─── Archetype accent colors for ChromaGrid-inspired cards ─── */
-const archetypeAccents: Record<string, { gradient: string; border: string; glow: string }> = {
-  cold_outreach: { gradient: "from-blue-600/20 to-transparent", border: "hover:border-blue-500/40", glow: "group-hover:shadow-blue-500/10" },
-  warm_intro: { gradient: "from-amber-500/20 to-transparent", border: "hover:border-amber-500/40", glow: "group-hover:shadow-amber-500/10" },
-  agency_proposal: { gradient: "from-violet-600/20 to-transparent", border: "hover:border-violet-500/40", glow: "group-hover:shadow-violet-500/10" },
-  investor_pitch: { gradient: "from-emerald-600/20 to-transparent", border: "hover:border-emerald-500/40", glow: "group-hover:shadow-emerald-500/10" },
-  case_study: { gradient: "from-cyan-600/20 to-transparent", border: "hover:border-cyan-500/40", glow: "group-hover:shadow-cyan-500/10" },
-  competitive_displacement: { gradient: "from-rose-600/20 to-transparent", border: "hover:border-rose-500/40", glow: "group-hover:shadow-rose-500/10" },
-  thought_leadership: { gradient: "from-indigo-600/20 to-transparent", border: "hover:border-indigo-500/40", glow: "group-hover:shadow-indigo-500/10" },
-  product_launch: { gradient: "from-orange-500/20 to-transparent", border: "hover:border-orange-500/40", glow: "group-hover:shadow-orange-500/10" },
-  custom: { gradient: "from-fuchsia-600/20 to-transparent", border: "hover:border-fuchsia-500/40", glow: "group-hover:shadow-fuchsia-500/10" },
+const archetypeAccents: Record<string, { gradient: string; restGradient: string; border: string; restBorder: string; glow: string; restGlow: string }> = {
+  cold_outreach:            { gradient: "from-blue-600/20 to-transparent",    restGradient: "from-blue-500/[0.06] to-transparent",    border: "hover:border-blue-500/40",    restBorder: "border-blue-400/20",    glow: "group-hover:shadow-blue-500/10",    restGlow: "shadow-blue-500/[0.04]" },
+  warm_intro:               { gradient: "from-amber-500/20 to-transparent",   restGradient: "from-amber-400/[0.06] to-transparent",   border: "hover:border-amber-500/40",   restBorder: "border-amber-400/20",   glow: "group-hover:shadow-amber-500/10",   restGlow: "shadow-amber-500/[0.04]" },
+  agency_proposal:          { gradient: "from-violet-600/20 to-transparent",  restGradient: "from-violet-500/[0.06] to-transparent",  border: "hover:border-violet-500/40",  restBorder: "border-violet-400/20",  glow: "group-hover:shadow-violet-500/10",  restGlow: "shadow-violet-500/[0.04]" },
+  investor_pitch:           { gradient: "from-emerald-600/20 to-transparent", restGradient: "from-emerald-500/[0.06] to-transparent", border: "hover:border-emerald-500/40", restBorder: "border-emerald-400/20", glow: "group-hover:shadow-emerald-500/10", restGlow: "shadow-emerald-500/[0.04]" },
+  case_study:               { gradient: "from-cyan-600/20 to-transparent",    restGradient: "from-cyan-500/[0.06] to-transparent",    border: "hover:border-cyan-500/40",    restBorder: "border-cyan-400/20",    glow: "group-hover:shadow-cyan-500/10",    restGlow: "shadow-cyan-500/[0.04]" },
+  competitive_displacement: { gradient: "from-rose-600/20 to-transparent",    restGradient: "from-rose-500/[0.06] to-transparent",    border: "hover:border-rose-500/40",    restBorder: "border-rose-400/20",    glow: "group-hover:shadow-rose-500/10",    restGlow: "shadow-rose-500/[0.04]" },
+  thought_leadership:       { gradient: "from-indigo-600/20 to-transparent",  restGradient: "from-indigo-500/[0.06] to-transparent",  border: "hover:border-indigo-500/40",  restBorder: "border-indigo-400/20",  glow: "group-hover:shadow-indigo-500/10",  restGlow: "shadow-indigo-500/[0.04]" },
+  product_launch:           { gradient: "from-orange-500/20 to-transparent",  restGradient: "from-orange-400/[0.06] to-transparent",  border: "hover:border-orange-500/40",  restBorder: "border-orange-400/20",  glow: "group-hover:shadow-orange-500/10",  restGlow: "shadow-orange-500/[0.04]" },
+  custom:                   { gradient: "from-fuchsia-600/20 to-transparent", restGradient: "from-fuchsia-500/[0.06] to-transparent", border: "hover:border-fuchsia-500/40", restBorder: "border-fuchsia-400/20", glow: "group-hover:shadow-fuchsia-500/10", restGlow: "shadow-fuchsia-500/[0.04]" },
 };
 
 /* ─── Visual style color swatches ─── */
@@ -585,12 +585,17 @@ export function RunSettingsView() {
                         "group relative overflow-hidden rounded-2xl border p-4 text-left transition-all duration-300 focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2",
                         isSelected
                           ? "border-primary/50 bg-primary/[0.04] ring-1 ring-primary/20 shadow-lg"
-                          : cn("border-border/30 bg-card/80", accent.border),
+                          : cn("bg-card/80", accent.restBorder, accent.border, accent.restGlow),
                         !isSelected && accent.glow,
                         !isSelected && "hover:shadow-md",
                       )}
                     >
-                      {/* Gradient accent overlay */}
+                      {/* Gradient accent overlay — visible at rest, amplified on hover */}
+                      <div className={cn(
+                        "pointer-events-none absolute inset-0 bg-gradient-to-br transition-opacity duration-500",
+                        isSelected ? "opacity-0" : "opacity-100 group-hover:opacity-100",
+                        isSelected ? accent.gradient : accent.restGradient,
+                      )} />
                       <div className={cn(
                         "pointer-events-none absolute inset-0 bg-gradient-to-br opacity-0 transition-opacity duration-500 group-hover:opacity-100",
                         accent.gradient,

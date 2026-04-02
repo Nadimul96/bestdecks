@@ -562,7 +562,7 @@ export function RunSettingsView() {
         {activeTab === "strategy" && (
           <>
             {/* Archetype — ChromaGrid-inspired */}
-            <SectionCard title="Deck archetype" description="Choose the primary framing for your outreach decks.">
+            <SectionCard title="Deck archetype" description="Choose the primary framing for your outreach decks. You can customize design, typography, and themes in the next step.">
               <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
                 {archetypeOptions.map((opt) => {
                   const isSelected = form.archetype === opt.value;

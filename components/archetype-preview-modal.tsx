@@ -914,7 +914,7 @@ function SlidePreview({
 
   return (
     <div
-      className="relative h-full w-full overflow-hidden rounded-xl shadow-2xl"
+      className="relative h-full w-full overflow-hidden rounded-xl shadow-2xl transition-all duration-500 ease-in-out"
       style={bgStyle}
     >
       {/* Dark mode dot-grid texture */}
@@ -957,7 +957,7 @@ function SlidePreview({
       )}
 
       {/* Content */}
-      <div className="relative z-10 flex h-full">
+      <div className="relative z-10 flex h-full [&_*]:transition-colors [&_*]:duration-500 [&_*]:ease-in-out">
 
         {/* ─── CENTERED ─── */}
         {slide.layout === "centered" && (
@@ -1393,7 +1393,7 @@ export function ArchetypePreviewModal({ archetype, open, onClose }: ArchetypePre
               {/* Slide — fills available space */}
               <div className="relative flex-1 min-h-0 overflow-hidden border-b border-white/[0.06] flex items-center justify-center p-2">
                 <div
-                  className="pointer-events-none absolute inset-0 opacity-90"
+                  className="pointer-events-none absolute inset-0 opacity-90 transition-all duration-500 ease-in-out"
                   style={{
                     background: `radial-gradient(circle at top right, ${selectedTheme.surfaceGlow} 0%, transparent 34%), radial-gradient(circle at bottom left, ${selectedTheme.accent}18 0%, transparent 28%)`,
                   }}

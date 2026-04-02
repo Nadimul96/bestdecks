@@ -106,123 +106,117 @@ const coldOutreachExample: ArchetypeExample = {
   coverEyebrow: "NxGen Fitness · Portland, OR",
   coverFooter: "CLEARPATH AI",
   slides: [
-    // ── Slide 1: Cover (Hook) ──
+    // ── Slide 1: Cover — personalized hook, not a document label ──
     {
-      title: "A Nerve Center for\nNxGen Fitness",
-      subtitle: "A custom operations brief for your 2-location fitness operation",
+      title: "NxGen Is Growing.\nYour Back Office Isn't.",
+      subtitle: "An operations brief built from your public data, class schedule, and review footprint.",
       type: "cover",
       layout: "centered",
       visual: "gradient-orb",
       bg: "dark-mesh",
     },
-    // ── Slide 2: Pain — Operational Chaos ──
+    // ── Slide 2: Tension — operational chaos, hyper-specific ──
     {
-      title: "400 Members. 14 Trainers.\n2 Spreadsheets Holding It Together.",
+      title: "400 Members. 14 Trainers.\n2 Spreadsheets.",
       subtitle:
-        "Back-office complexity doubles with each location — but the tools stay frozen in time.",
+        "Every new location doubles complexity. The tools don't scale with you.",
       stat: "4 hrs",
-      statLabel: "wasted every Monday on reporting",
+      statLabel: "lost every Monday to manual reporting",
       bullets: [
-        "Portland SE tracks check-ins on paper. NW uses a Google Form. Neither system talks to the other.",
-        "Trainer schedules span 3 calendars — conflicts surface only when a member shows up to an empty room",
-        "Multi-location gyms with unified systems grow 2.3× faster (IHRSA 2026)",
+        "SE tracks check-ins on paper. NW uses Google Forms. Neither talks to the other.",
+        "Trainer schedules span 3 calendars — conflicts surface when a member hits an empty room",
+        "Multi-location gyms with unified ops grow 2.3× faster (IHRSA 2026)",
       ],
       type: "tension",
       layout: "stat-left",
       visual: "bar-chart",
       bg: "dark",
     },
-    // ── Slide 3: Pain — Churn Bleeding Revenue ──
+    // ── Slide 3: Data — the reframe IS the title ──
     {
-      title: "You're Losing $240K/Year\nto Members You Could Have Saved",
+      title: "Replacing a Lost Member\nCosts 5–7× More Than Saving One",
       subtitle:
-        "Acquiring each replacement costs 5–7× more than retaining the one who left.",
+        "NxGen is spending $240K/year on churn it can't see coming.",
       stat: "$240K",
-      statLabel: "lost annually to preventable churn",
+      statLabel: "lost annually to invisible churn",
       bullets: [
-        "Members who miss 2 consecutive weeks are 4× more likely to cancel — NxGen has no system to detect this",
-        "By the time the cancellation email arrives, the member mentally left 3 weeks ago",
-        "Industry average: 50% six-month churn. Gyms with retention systems cut this to 28%",
+        "Members who miss 2 weeks are 4× more likely to cancel — NxGen has no early warning",
+        "By the cancellation email, they mentally left 3 weeks ago",
+        "Industry: 50% six-month churn. Gyms with detection systems cut it to 28%",
       ],
       type: "data",
       layout: "split",
       visual: "churn-grid",
       bg: "subtle",
     },
-    // ── Slide 4: Vision — The Reframe ──
+    // ── Slide 4: Vision — concrete promised land, NxGen-specific ──
     {
-      title: "What If Both Locations Ran\nAs One Machine?",
+      title: "Both Locations. One Pulse.\nZero Guesswork.",
       subtitle:
-        "Every check-in, every class, every dollar — visible in real time. From any device. By any staff member.",
-      stat: "1",
-      statLabel: "unified nerve center for all of NxGen",
+        "Real-time attendance, revenue, churn risk, and payroll — visible to every staff member, from any device.",
+      stat: "2→1",
+      statLabel: "systems consolidated into one nerve center",
       type: "vision",
       layout: "centered",
       visual: "gradient-orb",
       bg: "accent-gradient",
     },
-    // ── Slide 5: Solution — Unified Operations ──
+    // ── Slide 5: Solution — ClearPath as the enabler, 3 bullets max ──
     {
       title: "One Dashboard. Both Studios.\n15 Hours Back Every Week.",
       subtitle:
-        "ClearPath replaces the patchwork — attendance, revenue, scheduling, and payroll unified from day one.",
+        "ClearPath unifies attendance, revenue, scheduling, and payroll from day one.",
       stat: "15 hrs",
-      statLabel: "saved per week across locations",
+      statLabel: "saved per week across both locations",
       bullets: [
-        "Live attendance and revenue by location — no more Monday morning reporting marathons",
-        "Trainer conflicts flagged 48 hours before they create gaps in the schedule",
-        "Payroll auto-calculated from session logs — accuracy jumps from ~85% to 99.6%",
-        "End-of-month close drops from 2 days to 20 minutes",
+        "Live revenue and attendance by location — Monday reporting marathons gone",
+        "Trainer conflicts flagged 48 hours before they create empty rooms",
+        "Month-end close drops from 2 days to 20 minutes",
       ],
       type: "solution",
       layout: "stat-left",
       visual: "metrics-row",
       bg: "dark",
     },
-    // ── Slide 6: Solution — Retention Engine ──
+    // ── Slide 6: Solution — retention, outcome-first ──
     {
       title: "Stop Reacting to Cancellations.\nStart Predicting Them.",
       subtitle:
-        "ClearPath's retention engine identifies at-risk members before they ghost — and acts automatically.",
+        "Gyms using early-warning retention see 23% lower monthly churn within 90 days.",
       stat: "23%",
       statLabel: "lower monthly churn",
       bullets: [
         "Auto-flag members missing 2+ sessions — alerts go to their trainer, not a spreadsheet",
-        "Personalized win-back sequences triggered by behavior, not batch email blasts",
-        "Monthly churn reports with root-cause analysis by location, class type, and trainer",
+        "Win-back sequences triggered by behavior, not batch email blasts",
+        "Churn reports by location, class type, and trainer — root causes, not guesses",
       ],
       type: "solution",
       layout: "stat-left",
       visual: "icon-grid",
       bg: "dark-mesh",
     },
-    // ── Slide 7: Proof — Case Study ──
+    // ── Slide 7: Proof — story, not press release ──
     {
-      title: "FitHub Co Opened Location #4\n90 Days After Deploying ClearPath",
+      title: "FitHub Co Hit Location #4\n90 Days After Going Live",
       subtitle:
-        "A multi-location brand in Austin deployed ClearPath in March 2025 — and scaled with confidence.",
+        "3-location Austin gym. Same chaos NxGen has today. Deployed ClearPath — scaled in one quarter.",
       stat: "31%",
       statLabel: "less churn in 90 days",
       bullets: [
-        "Monthly churn dropped from 8.2% → 5.6% across all locations",
-        "18 staff-hours recovered per week — redirected to member experience",
-        "Expanded with full operational confidence and zero new admin hires",
+        "Churn: 8.2% → 5.6% across all locations",
+        "18 staff-hours recovered per week — reinvested in member experience",
+        "Opened a 4th location with zero new admin hires",
       ],
       type: "proof",
       layout: "split",
       visual: "testimonial",
       bg: "subtle",
     },
-    // ── Slide 8: CTA ──
+    // ── Slide 8: CTA — single ask, low friction ──
     {
-      title: "See NxGen Unified. Live.\nIn Under 30 Minutes.",
+      title: "15 Minutes. Your Data.\nLive Dashboard.",
       subtitle:
-        "No contracts. No pressure. Just clarity on what's costing you time and members.",
-      bullets: [
-        "Free ops audit across both Portland locations",
-        "Identify your 3 highest-impact automations",
-        "Watch your actual data come alive on a real dashboard",
-      ],
+        "No contracts, no pitch. We'll show you NxGen's ops on a real dashboard — and you decide if it's worth a deeper look.",
       type: "cta",
       layout: "centered",
       visual: "metrics-row",

@@ -41,6 +41,8 @@ function useActiveWorkspaceView() {
           ? resolved
           : DEFAULT_WORKSPACE_VIEW,
       );
+      // Scroll to top on every page navigation
+      window.scrollTo({ top: 0 });
     };
 
     syncHash();
@@ -67,10 +69,14 @@ export function WorkspaceShell({ currentUser }: WorkspaceShellProps) {
   // Show product tour after wizard completion (one-time)
   const [showTour, setShowTour] = React.useState(false);
 
-  // Check if tour was already completed
-  const tourAlreadyDone = React.useMemo(() => {
-    if (typeof window === "undefined") return true;
-    return localStorage.getItem(TOUR_COMPLETE_KEY) === "true";
+  const [tourAlreadyDone, setTourAlreadyDone] = React.useState(true);
+
+  React.useEffect(() => {
+    try {
+      setTourAlreadyDone(localStorage.getItem(TOUR_COMPLETE_KEY) === "true");
+    } catch {
+      setTourAlreadyDone(true);
+    }
   }, []);
 
   const shouldShowWizard = !loading && !setupComplete && !wizardDismissed;

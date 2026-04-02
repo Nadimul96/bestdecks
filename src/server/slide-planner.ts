@@ -395,6 +395,11 @@ export class SlidePlanner {
       "",
     ];
 
+    if (plan.anchorMetric) {
+      lines.push(`> **Anchor Metric:** ${plan.anchorMetric}`);
+      lines.push("");
+    }
+
     // Map purpose values to narrative-arc section labels
     const sectionLabels: Record<string, string> = {
       hook: "THE HOOK",

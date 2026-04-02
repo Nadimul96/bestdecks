@@ -118,14 +118,26 @@ test("AlaiDeckProvider creates a deck with slide-plan prompt and returns URLs", 
       return createJsonResponse({ generation_id: "gen_abc123" });
     }
 
-    // Poll response — completed
+    // Poll response — completed with the current API shape
     return createJsonResponse({
       generation_id: "gen_abc123",
       status: "completed",
-      exports: {
-        link: "https://slides.getalai.com/p/gen_abc123",
-        pdf: "https://slides.getalai.com/p/gen_abc123/export/pdf",
-        ppt: "https://slides.getalai.com/p/gen_abc123/export/ppt",
+      formats: {
+        link: {
+          status: "completed",
+          url: "https://slides.getalai.com/p/gen_abc123",
+          error: null,
+        },
+        pdf: {
+          status: "completed",
+          url: "https://slides.getalai.com/p/gen_abc123/export/pdf",
+          error: null,
+        },
+        ppt: {
+          status: "completed",
+          url: "https://slides.getalai.com/p/gen_abc123/export/ppt",
+          error: null,
+        },
       },
     });
   }) as typeof fetch;

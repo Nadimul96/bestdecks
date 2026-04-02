@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getAdminSession } from "@/src/server/auth";
+import { getSession } from "@/src/server/auth";
 import { getOnboarding } from "@/src/server/repository";
 
 export const dynamic = "force-dynamic";
@@ -11,13 +11,14 @@ export const dynamic = "force-dynamic";
  * Currently supports a single "default" business derived from onboarding data.
  */
 export async function GET() {
-  const session = await getAdminSession();
-  if (!session) {
+  const session = await getSession();
+  if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
-    const data = await getOnboarding();
+    const userId = session.user.id;
+    const data = await getOnboarding(userId);
     const seller = data.sellerContext;
     const quest = data.questionnaire;
 

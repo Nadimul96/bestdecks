@@ -60,6 +60,10 @@ export interface SellerDiscoveryResult {
   offerSummary: string;
   proofPoints: string[];
   preferredAngles: string[];
+  commonObjections?: Array<{ objection: string; response: string }>;
+  pricingModel?: string;
+  pricingContext?: string;
+  bestCaseStudy?: { clientName: string; industry: string; results: string };
 }
 
 export interface EnrichmentRequest {

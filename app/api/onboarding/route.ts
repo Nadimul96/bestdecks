@@ -1,29 +1,31 @@
 import { NextResponse } from "next/server";
 
 import { saveOnboarding, getOnboarding } from "@/src/server/repository";
-import { getAdminSession } from "@/src/server/auth";
+import { getSession } from "@/src/server/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const session = await getAdminSession();
-  if (!session) {
+  const session = await getSession();
+  if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const userId = session.user.id;
 
-  return NextResponse.json(await getOnboarding());
+  return NextResponse.json(await getOnboarding(userId));
 }
 
 export async function POST(request: Request) {
-  const session = await getAdminSession();
-  if (!session) {
+  const session = await getSession();
+  if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const userId = session.user.id;
 
   try {
     const payload = await request.json();
-    await saveOnboarding(payload);
-    return NextResponse.json({ ok: true, onboarding: await getOnboarding() });
+    await saveOnboarding(payload, userId);
+    return NextResponse.json({ ok: true, onboarding: await getOnboarding(userId) });
   } catch (error) {
     return NextResponse.json(
       {

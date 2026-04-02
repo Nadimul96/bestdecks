@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getAdminSession } from "@/src/server/auth";
+import { getSession } from "@/src/server/auth";
 import { loadEnv } from "@/src/config/env";
 import { requestJson } from "@/src/integrations/http";
 import {
@@ -20,6 +20,9 @@ export const maxDuration = 120;
    Perplexity web search, and produces:
    1. A comprehensive .md business brief (persisted)
    2. Structured fields for form auto-fill
+
+   Response is streamed as Server-Sent Events (SSE)
+   so the UI can show real-time progress updates.
    ───────────────────────────────────────────── */
 
 interface PerplexityChatResponse {
@@ -267,13 +270,22 @@ async function callPerplexity(
   return { content, searchResults: response.search_results };
 }
 
-/* ── Main handler ────────────────────────────── */
+/* ── SSE streaming helpers ───────────────────── */
+
+const encoder = new TextEncoder();
+
+function sseEvent(type: string, data?: Record<string, unknown>): Uint8Array {
+  return encoder.encode(`data: ${JSON.stringify({ type, ...(data ?? {}) })}\n\n`);
+}
+
+/* ── Main handler (streaming SSE) ────────────── */
 
 export async function POST(request: Request) {
-  const session = await getAdminSession();
-  if (!session) {
+  const session = await getSession();
+  if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const userId = session.user.id;
 
   const env = loadEnv();
 
@@ -289,212 +301,199 @@ export async function POST(request: Request) {
     const body = await request.json();
     websiteUrl = body.websiteUrl;
     if (!websiteUrl || typeof websiteUrl !== "string") {
-      return NextResponse.json(
-        { error: "websiteUrl is required." },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "websiteUrl is required." }, { status: 400 });
     }
-
-    // Normalize URL — add protocol if missing
     if (!/^https?:\/\//i.test(websiteUrl)) {
       websiteUrl = `https://${websiteUrl}`;
     }
-
-    // Validate it's a proper URL
     new URL(websiteUrl);
   } catch {
-    return NextResponse.json(
-      { error: "Invalid request body or URL." },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "Invalid request body or URL." }, { status: 400 });
   }
 
-  /* ── Step 1: Crawl the seller's website ──── */
+  // Stream SSE events for each pipeline stage
+  const perplexityKey = env.PERPLEXITY_API_KEY;
+  const url = websiteUrl;
 
-  let markdownContent: string;
-  try {
-    const primary = buildCrawler("cloudflare");
-    const fallback = buildCrawler("deepcrawl");
+  const stream = new ReadableStream({
+    async start(controller) {
+      try {
+        /* ── Step 1: Crawl ──────────────────────── */
+        controller.enqueue(sseEvent("status", { step: 1, total: 5, message: "Crawling your website…", detail: "Fetching pages and extracting content" }));
 
-    const crawlResult = await crawlWithFallback(
-      {
-        websiteUrl,
-        maxPages: 8,
-        maxDepth: 2,
-        source: "all",
-        requestedFormats: ["markdown"],
-        includePatterns: undefined,
-        excludePatterns: [
-          "*/blog/*",
-          "*/news/*",
-          "*/press/*",
-          "*/careers/*",
-          "*/jobs/*",
-          "*/privacy*",
-          "*/terms*",
-          "*/cookie*",
-          "*/legal*",
-        ],
-        userApprovedException: true,
-      },
-      primary,
-      fallback,
-    );
+        let markdownContent: string;
+        try {
+          const primary = buildCrawler("cloudflare");
+          const fallback = buildCrawler("deepcrawl");
 
-    // Combine crawled pages — prioritize homepage and key business pages
-    const pages = crawlResult.pages
-      .filter((page) => page.markdown && page.markdown.trim().length > 50)
-      .sort((a, b) => {
-        const priority = (url: string) => {
-          if (url === websiteUrl || url === websiteUrl + "/") return 0;
-          if (/\/(about|services|solutions|products|what-we-do)/i.test(url)) return 1;
-          if (/\/(pricing|features|capabilities)/i.test(url)) return 2;
-          if (/\/(case-stud|portfolio|work|clients|customers)/i.test(url)) return 3;
-          return 4;
-        };
-        return priority(a.url) - priority(b.url);
-      });
+          const crawlResult = await crawlWithFallback(
+            {
+              websiteUrl: url,
+              maxPages: 8,
+              maxDepth: 2,
+              source: "all",
+              requestedFormats: ["markdown"],
+              includePatterns: undefined,
+              excludePatterns: [
+                "*/blog/*", "*/news/*", "*/press/*", "*/careers/*", "*/jobs/*",
+                "*/privacy*", "*/terms*", "*/cookie*", "*/legal*",
+              ],
+              userApprovedException: true,
+            },
+            primary,
+            fallback,
+          );
 
-    if (pages.length === 0) {
-      return NextResponse.json(
-        {
-          error:
-            "Could not extract readable content from this website. The site may block automated access.",
-        },
-        { status: 422 },
-      );
-    }
+          const pages = crawlResult.pages
+            .filter((page) => page.markdown && page.markdown.trim().length > 50)
+            .sort((a, b) => {
+              const priority = (u: string) => {
+                if (u === url || u === url + "/") return 0;
+                if (/\/(about|services|solutions|products|what-we-do)/i.test(u)) return 1;
+                if (/\/(pricing|features|capabilities)/i.test(u)) return 2;
+                if (/\/(case-stud|portfolio|work|clients|customers)/i.test(u)) return 3;
+                return 4;
+              };
+              return priority(a.url) - priority(b.url);
+            });
 
-    markdownContent = pages
-      .slice(0, 5)
-      .map((page) => `## Page: ${page.title ?? page.url}\n\n${page.markdown}`)
-      .join("\n\n---\n\n");
-  } catch (error) {
-    console.error("[crawl-seller] Crawl failed:", error);
-    return NextResponse.json(
-      {
-        error:
-          "Website crawl failed. The site may be unreachable or block automated access.",
-      },
-      { status: 422 },
-    );
-  }
+          if (pages.length === 0) {
+            controller.enqueue(sseEvent("error", { message: "Could not extract readable content from this website." }));
+            controller.close();
+            return;
+          }
 
-  /* ── Step 2: Generate comprehensive .md via Perplexity ── */
+          markdownContent = pages
+            .slice(0, 5)
+            .map((page) => `## Page: ${page.title ?? page.url}\n\n${page.markdown}`)
+            .join("\n\n---\n\n");
 
-  let sellerBriefMd: string;
-  try {
-    const briefResult = await callPerplexity(
-      env.PERPLEXITY_API_KEY,
-      BRIEF_SYSTEM_PROMPT,
-      buildBriefUserPrompt(websiteUrl, markdownContent),
-      false, // We want markdown, not JSON
-    );
+          controller.enqueue(sseEvent("status", { step: 2, total: 5, message: `Found ${pages.length} pages`, detail: "Site crawl complete" }));
+        } catch (error) {
+          console.error("[crawl-seller] Crawl failed:", error);
+          controller.enqueue(sseEvent("error", { message: "Website crawl failed. The site may be unreachable." }));
+          controller.close();
+          return;
+        }
 
-    sellerBriefMd = briefResult.content;
+        /* ── Step 2: Generate brief via Perplexity ── */
+        controller.enqueue(sseEvent("status", { step: 3, total: 5, message: "Building your business profile…", detail: "AI is researching your company across the web" }));
 
-    // Append source references if Perplexity returned search results
-    if (briefResult.searchResults?.length) {
-      const sources = briefResult.searchResults
-        .filter((s): s is { title: string; url: string } => Boolean(s.title && s.url))
-        .map((s) => `- [${s.title}](${s.url})`)
-        .join("\n");
+        let sellerBriefMd: string;
+        try {
+          const briefResult = await callPerplexity(
+            perplexityKey,
+            BRIEF_SYSTEM_PROMPT,
+            buildBriefUserPrompt(url, markdownContent),
+            false,
+          );
 
-      if (sources) {
-        sellerBriefMd += `\n\n## Sources\n${sources}`;
+          sellerBriefMd = briefResult.content;
+
+          if (briefResult.searchResults?.length) {
+            const sources = briefResult.searchResults
+              .filter((s): s is { title: string; url: string } => Boolean(s.title && s.url))
+              .map((s) => `- [${s.title}](${s.url})`)
+              .join("\n");
+            if (sources) sellerBriefMd += `\n\n## Sources\n${sources}`;
+          }
+          sellerBriefMd += `\n\n---\n*Generated on ${new Date().toISOString()} from ${url}*\n`;
+
+          if (!sellerBriefMd || sellerBriefMd.trim().length < 100) {
+            controller.enqueue(sseEvent("error", { message: "Could not generate meaningful business analysis." }));
+            controller.close();
+            return;
+          }
+        } catch (error) {
+          console.error("[crawl-seller] Perplexity brief generation failed:", error);
+          controller.enqueue(sseEvent("error", { message: "Business analysis failed. Please try again." }));
+          controller.close();
+          return;
+        }
+
+        /* ── Step 3: Extract structured fields ── */
+        controller.enqueue(sseEvent("status", { step: 4, total: 5, message: "Extracting your key details…", detail: "Pulling company name, services, proof points" }));
+
+        let sellerFields: ExtractedSellerFields;
+        try {
+          const extractionResult = await callPerplexity(
+            perplexityKey,
+            EXTRACTION_SYSTEM_PROMPT,
+            `Extract structured seller context fields from this business brief:\n\n${sellerBriefMd}`,
+            true,
+          );
+
+          sellerFields = JSON.parse(extractionResult.content) as ExtractedSellerFields;
+
+          if (!sellerFields.offerSummary && !sellerFields.companyName) {
+            controller.enqueue(sseEvent("error", { message: "Could not extract meaningful business context." }));
+            controller.close();
+            return;
+          }
+        } catch (error) {
+          console.error("[crawl-seller] Field extraction failed:", error);
+          controller.enqueue(sseEvent("error", { message: "Field extraction failed. Please try again." }));
+          controller.close();
+          return;
+        }
+
+        /* ── Step 4: Persist ── */
+        controller.enqueue(sseEvent("status", { step: 5, total: 5, message: "Saving your profile…", detail: "Persisting business intelligence" }));
+
+        try {
+          await saveSellerBriefMd(sellerBriefMd, userId);
+          await saveAudienceContext({
+            audienceIndustry: sellerFields.audienceIndustry || undefined,
+            audienceSize: sellerFields.audienceSize || undefined,
+            audiencePainPoints: sellerFields.audiencePainPoints || undefined,
+            mustInclude: sellerFields.mustInclude?.length ? sellerFields.mustInclude : undefined,
+            mustAvoid: sellerFields.mustAvoid?.length ? sellerFields.mustAvoid : undefined,
+          }, userId);
+        } catch (error) {
+          console.error("[crawl-seller] Failed to persist seller brief .md:", error);
+        }
+
+        /* ── Step 5: Send final data ── */
+        controller.enqueue(sseEvent("complete", {
+          sellerContext: {
+            companyName: sellerFields.companyName || undefined,
+            offerSummary: sellerFields.offerSummary || undefined,
+            services: sellerFields.services?.length ? sellerFields.services : undefined,
+            differentiators: sellerFields.differentiators?.length ? sellerFields.differentiators : undefined,
+            targetCustomer: sellerFields.targetCustomer || undefined,
+            desiredOutcome: sellerFields.desiredOutcome || undefined,
+            proofPoints: sellerFields.proofPoints?.length ? sellerFields.proofPoints : undefined,
+            logoUrl: sellerFields.logoUrl || undefined,
+            facebookUrl: sellerFields.facebookUrl || undefined,
+            twitterUrl: sellerFields.twitterUrl || undefined,
+            instagramUrl: sellerFields.instagramUrl || undefined,
+            tiktokUrl: sellerFields.tiktokUrl || undefined,
+          },
+          audienceContext: {
+            audienceIndustry: sellerFields.audienceIndustry || undefined,
+            audienceSize: sellerFields.audienceSize || undefined,
+            audiencePainPoints: sellerFields.audiencePainPoints || undefined,
+            mustInclude: sellerFields.mustInclude?.length ? sellerFields.mustInclude : undefined,
+            mustAvoid: sellerFields.mustAvoid?.length ? sellerFields.mustAvoid : undefined,
+          },
+          sellerBriefMd,
+        }));
+
+        controller.close();
+      } catch (error) {
+        console.error("[crawl-seller] Unexpected error:", error);
+        controller.enqueue(sseEvent("error", { message: "An unexpected error occurred." }));
+        controller.close();
       }
-    }
-
-    // Add metadata footer
-    sellerBriefMd += `\n\n---\n*Generated on ${new Date().toISOString()} from ${websiteUrl}*\n`;
-
-    if (!sellerBriefMd || sellerBriefMd.trim().length < 100) {
-      return NextResponse.json(
-        { error: "Could not generate meaningful business analysis." },
-        { status: 422 },
-      );
-    }
-  } catch (error) {
-    console.error("[crawl-seller] Perplexity brief generation failed:", error);
-    return NextResponse.json(
-      { error: "Business analysis failed. Please try again or enter details manually." },
-      { status: 502 },
-    );
-  }
-
-  /* ── Step 3: Extract structured fields from the .md ── */
-
-  let sellerFields: ExtractedSellerFields;
-  try {
-    const extractionResult = await callPerplexity(
-      env.PERPLEXITY_API_KEY,
-      EXTRACTION_SYSTEM_PROMPT,
-      `Extract structured seller context fields from this business brief:\n\n${sellerBriefMd}`,
-      true, // JSON format
-    );
-
-    sellerFields = JSON.parse(extractionResult.content) as ExtractedSellerFields;
-
-    if (!sellerFields.offerSummary && !sellerFields.companyName) {
-      return NextResponse.json(
-        { error: "Could not extract meaningful business context from the analysis." },
-        { status: 422 },
-      );
-    }
-  } catch (error) {
-    console.error("[crawl-seller] Field extraction failed:", error);
-    return NextResponse.json(
-      { error: "Field extraction failed. Please try again or enter details manually." },
-      { status: 502 },
-    );
-  }
-
-  /* ── Step 4: Persist the .md brief ─────────── */
-
-  try {
-    await saveSellerBriefMd(sellerBriefMd);
-    // Also persist audience context for run-settings autofill
-    await saveAudienceContext({
-      audienceIndustry: sellerFields.audienceIndustry || undefined,
-      audienceSize: sellerFields.audienceSize || undefined,
-      audiencePainPoints: sellerFields.audiencePainPoints || undefined,
-      mustInclude: sellerFields.mustInclude?.length ? sellerFields.mustInclude : undefined,
-      mustAvoid: sellerFields.mustAvoid?.length ? sellerFields.mustAvoid : undefined,
-    });
-  } catch (error) {
-    // Non-fatal — we still return the data even if persistence fails
-    console.error("[crawl-seller] Failed to persist seller brief .md:", error);
-  }
-
-  /* ── Step 5: Return structured data + brief ── */
-
-  return NextResponse.json({
-    sellerContext: {
-      companyName: sellerFields.companyName || undefined,
-      offerSummary: sellerFields.offerSummary || undefined,
-      services: sellerFields.services?.length ? sellerFields.services : undefined,
-      differentiators: sellerFields.differentiators?.length
-        ? sellerFields.differentiators
-        : undefined,
-      targetCustomer: sellerFields.targetCustomer || undefined,
-      desiredOutcome: sellerFields.desiredOutcome || undefined,
-      proofPoints: sellerFields.proofPoints?.length
-        ? sellerFields.proofPoints
-        : undefined,
-      logoUrl: sellerFields.logoUrl || undefined,
-      facebookUrl: sellerFields.facebookUrl || undefined,
-      twitterUrl: sellerFields.twitterUrl || undefined,
-      instagramUrl: sellerFields.instagramUrl || undefined,
-      tiktokUrl: sellerFields.tiktokUrl || undefined,
     },
-    // Extra fields for run-settings autofill
-    audienceContext: {
-      audienceIndustry: sellerFields.audienceIndustry || undefined,
-      audienceSize: sellerFields.audienceSize || undefined,
-      audiencePainPoints: sellerFields.audiencePainPoints || undefined,
-      mustInclude: sellerFields.mustInclude?.length ? sellerFields.mustInclude : undefined,
-      mustAvoid: sellerFields.mustAvoid?.length ? sellerFields.mustAvoid : undefined,
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
     },
-    sellerBriefMd: sellerBriefMd,
   });
 }

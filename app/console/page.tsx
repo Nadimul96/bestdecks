@@ -5,11 +5,11 @@ import { WorkspaceHeader } from "@/components/workspace-header";
 import { WorkspaceShell } from "@/components/workspace/workspace-shell";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { BusinessProvider } from "@/lib/business-context";
-import { getAdminSession } from "@/src/server/auth";
+import { getSession } from "@/src/server/auth";
 import { redirect } from "next/navigation";
 
 export default async function ConsolePage() {
-  const session = await getAdminSession();
+  const session = await getSession();
 
   if (!session) {
     redirect("/login");

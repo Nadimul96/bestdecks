@@ -6,13 +6,13 @@ import {
   parseTargetsFromCsvRows,
   parseTargetsFromMultilineInput,
 } from "@/src/domain/intake";
-import { getAdminSession } from "@/src/server/auth";
+import { getSession } from "@/src/server/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  const session = await getAdminSession();
-  if (!session) {
+  const session = await getSession();
+  if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

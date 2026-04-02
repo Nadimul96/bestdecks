@@ -25,6 +25,20 @@ interface AlaiCreateResponse {
   generation_id: string;
 }
 
+interface AlaiFormatArtifact {
+  status?: string;
+  url?: string;
+  error?: string | null;
+}
+
+type AlaiFormatValue = string | AlaiFormatArtifact;
+
+interface AlaiRawExports {
+  link?: AlaiFormatValue;
+  pdf?: AlaiFormatValue;
+  ppt?: AlaiFormatValue;
+}
+
 interface AlaiGenerationExports {
   link?: string;
   pdf?: string;
@@ -33,9 +47,37 @@ interface AlaiGenerationExports {
 
 interface AlaiPollResponse {
   generation_id: string;
-  status: "pending" | "processing" | "completed" | "failed";
+  status: "pending" | "processing" | "in_progress" | "completed" | "failed";
   exports?: AlaiGenerationExports;
-  error?: string;
+  formats?: AlaiRawExports; // API v1 uses "formats" instead of "exports"
+  error?: string | null;
+  presentation_id?: string;
+}
+
+interface AlaiRawPollResponse {
+  generation_id: string;
+  status: "pending" | "processing" | "in_progress" | "completed" | "failed";
+  exports?: AlaiRawExports;
+  formats?: AlaiRawExports;
+  error?: string | null;
+  presentation_id?: string;
+}
+
+function extractFormatUrl(value: AlaiFormatValue | undefined): string | undefined {
+  if (typeof value === "string") return value;
+  return value?.url;
+}
+
+function normalizeExports(raw: AlaiRawExports | undefined): AlaiGenerationExports | undefined {
+  if (!raw) return undefined;
+
+  const normalized: AlaiGenerationExports = {
+    link: extractFormatUrl(raw.link),
+    pdf: extractFormatUrl(raw.pdf),
+    ppt: extractFormatUrl(raw.ppt),
+  };
+
+  return normalized.link || normalized.pdf || normalized.ppt ? normalized : undefined;
 }
 
 /* ── Alai theme catalogue ─────────────────────────────────────── */
@@ -225,6 +267,62 @@ export class AlaiDeckProvider implements DeckProvider {
     };
   }
 
+  /**
+   * Create a deck using the Architect → Stylist pipeline.
+   * Each slide gets explicit layout instructions, alignment rules, and brand directives.
+   * This produces significantly higher quality than the generic prompt approach.
+   */
+  public async createStyledDeck(
+    styledDeck: import("@/src/server/deck-stylist-alai").StyledDeck,
+  ): Promise<PresentonResult> {
+    // Build one unified prompt from all per-slide payloads
+    const slideInstructions = styledDeck.slides.map((s) => {
+      const p = s.alai_payload;
+      return [
+        `## Slide ${s.id}: ${p.title}`,
+        p.input_text,
+        `Layout notes: ${p.additional_instructions}`,
+        "",
+      ].join("\n");
+    }).join("\n---\n\n");
+
+    const fullPrompt = truncatePrompt(
+      `Create a presentation with exactly ${styledDeck.slides.length} slides.\n\n` +
+      `Theme: ${styledDeck.theme_id}\n\n` +
+      `CRITICAL: Follow the per-slide layout instructions EXACTLY. ` +
+      `Pay special attention to vertical centering, grid alignment, and column structure on each slide.\n\n` +
+      slideInstructions,
+    );
+
+    console.log(`[alai] Styled deck prompt: ${fullPrompt.length} chars, ${styledDeck.slides.length} slides`);
+
+    // Use the first slide's text_options for global tone
+    const firstSlide = styledDeck.slides[0]?.alai_payload;
+    const body: Record<string, unknown> = {
+      input_text: fullPrompt,
+      num_slides: styledDeck.slides.length,
+      theme: styledDeck.theme_id || "Aurora Flux",
+      tone: firstSlide?.text_options?.tone === "confident" ? "AUTHORITATIVE" : "PROFESSIONAL",
+      content_mode: "preserve",
+      amount_mode: "essential",
+      include_ai_images: true,
+      image_style: "realistic",
+      export_formats: ["link", "pdf", "ppt"],
+    };
+
+    const createResponse = await this.createGeneration(body);
+    const result = await this.pollUntilDone(createResponse.generation_id);
+
+    return {
+      presentationId: result.generation_id,
+      editorUrl: result.exports?.link ?? undefined,
+      exportUrl: result.exports?.ppt ?? undefined,
+      rawPath: result.exports?.ppt ?? undefined,
+      pdfExportUrl: result.exports?.pdf ?? undefined,
+      pptxExportUrl: result.exports?.ppt ?? undefined,
+    };
+  }
+
   private async createGeneration(body: Record<string, unknown>): Promise<AlaiCreateResponse> {
     let lastError: Error | undefined;
 
@@ -289,17 +387,31 @@ export class AlaiDeckProvider implements DeckProvider {
         continue;
       }
 
-      const data = JSON.parse(response.text) as AlaiPollResponse;
+      const data = JSON.parse(response.text) as AlaiRawPollResponse;
+      let exports = normalizeExports(data.exports) ?? normalizeExports(data.formats);
 
-      if (data.status === "completed") {
-        return data;
+      // Build editor URL from presentation_id if exports.link is missing
+      if (data.presentation_id && (!exports?.link)) {
+        exports = exports ?? {};
+        exports.link = `https://app.getalai.com/presentations/${data.presentation_id}`;
       }
 
-      if (data.status === "failed") {
-        throw new Error(`Alai presentation generation failed: ${data.error ?? "unknown error"}`);
+      const normalizedData = {
+        ...data,
+        exports,
+      };
+
+      console.log(`[alai] Poll: status=${normalizedData.status}, presentation_id=${normalizedData.presentation_id ?? "none"}`);
+
+      if (normalizedData.status === "completed") {
+        return normalizedData;
       }
 
-      // Still pending/processing — keep polling
+      if (normalizedData.status === "failed") {
+        throw new Error(`Alai presentation generation failed: ${normalizedData.error ?? "unknown error"}`);
+      }
+
+      // Still pending/processing/in_progress — keep polling
     }
 
     throw new Error(`Alai generation timed out after ${POLL_TIMEOUT_MS / 1000}s.`);

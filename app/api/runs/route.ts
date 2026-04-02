@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { createRun, listRuns, getOnboarding, deductCredits } from "@/src/server/repository";
-import { getAdminSession } from "@/src/server/auth";
+import { getSession } from "@/src/server/auth";
 import type { IntakeRun } from "@/src/domain/schemas";
 import { launchRunProcessing } from "@/src/server/run-executor";
 
@@ -11,12 +11,13 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60; // Only creates the run — pipeline runs in separate chained steps
 
 export async function GET() {
-  const session = await getAdminSession();
-  if (!session) {
+  const session = await getSession();
+  if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const runs = await listRuns();
+  const userId = session.user.id;
+  const runs = await listRuns(userId);
   // Return as flat array so setup guide can check `Array.isArray(data) && data.length > 0`
   return NextResponse.json(Array.isArray(runs) ? runs : []);
 }
@@ -28,8 +29,8 @@ export async function GET() {
  * B) Full:   { run: IntakeRun, autoLaunch? } — uses the provided run directly
  */
 export async function POST(request: Request) {
-  const session = await getAdminSession();
-  if (!session) {
+  const session = await getSession();
+  if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -44,7 +45,7 @@ export async function POST(request: Request) {
     } else if (body.websitesText) {
       // Simple format: { websitesText, contactsCsvText? }
       // Build the IntakeRun from saved onboarding data + target URLs
-      const onboarding = await getOnboarding();
+      const onboarding = await getOnboarding(session.user.id);
 
       if (!onboarding.sellerContext) {
         return NextResponse.json(

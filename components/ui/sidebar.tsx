@@ -70,20 +70,23 @@ function SidebarProvider({
   const isMobile = useIsMobile()
   const [openMobile, setOpenMobile] = React.useState(false)
 
-  // This is the internal state of the sidebar.
-  // We use openProp and setOpenProp for control from outside the component.
-  // Restore persisted state from localStorage when available.
-  const [_open, _setOpen] = React.useState(() => {
-    if (typeof window === "undefined") return defaultOpen
+  // Keep the first client render aligned with the server render.
+  // Persisted state is restored after hydration.
+  const [_open, _setOpen] = React.useState(defaultOpen)
+  const open = openProp ?? _open
+
+  React.useEffect(() => {
+    if (openProp !== undefined) return
     try {
       const stored = localStorage.getItem(SIDEBAR_STORAGE_KEY)
-      if (stored !== null) return stored === "true"
+      if (stored !== null) {
+        _setOpen(stored === "true")
+      }
     } catch {
-      // localStorage unavailable — fall through
+      // localStorage unavailable — ignore
     }
-    return defaultOpen
-  })
-  const open = openProp ?? _open
+  }, [openProp])
+
   const setOpen = React.useCallback(
     (value: boolean | ((value: boolean) => boolean)) => {
       const openState = typeof value === "function" ? value(open) : value

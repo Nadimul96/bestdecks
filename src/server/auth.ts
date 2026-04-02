@@ -13,6 +13,11 @@ import { getDbConnectionInfo, getDb } from "@/src/server/db";
 
 function resolveAuthBaseUrl() {
   const env = loadEnv();
+  const localDevUrl = `http://localhost:${process.env.PORT ?? "3000"}`;
+
+  if (env.NODE_ENV === "development") {
+    return localDevUrl;
+  }
 
   if (env.BETTER_AUTH_URL) {
     return env.BETTER_AUTH_URL;
@@ -26,7 +31,7 @@ function resolveAuthBaseUrl() {
     return `https://${process.env.VERCEL_URL}`;
   }
 
-  return "http://localhost:3000";
+  return localDevUrl;
 }
 
 const env = loadEnv();
@@ -123,6 +128,13 @@ export const authHandlers = toNextJsHandler(async (request) => {
 
 let authReadyPromise: Promise<void> | null = null;
 
+// Eager warmup: start auth initialization at module load time
+// so it runs in parallel with the incoming request instead of blocking it
+const _warmup = ensureAuthReady().catch(() => {
+  // Non-fatal — will retry on next request
+  authReadyPromise = null;
+});
+
 async function migrateAuthTables() {
   const { runMigrations } = await getMigrations(authOptions);
   await runMigrations();
@@ -181,13 +193,19 @@ export async function getSession() {
   });
 }
 
+/** @deprecated Use getSession() + isAdmin() for proper role-based access */
 export async function getAdminSession() {
   const session = await getSession();
   if (!session?.user) {
     return null;
   }
-
-  // For now, allow any authenticated user to access the console
-  // Admin-only features can be gated separately
+  // Still allows any authenticated user — kept for backward compat
+  // New code should use getSession() directly
   return session;
+}
+
+/** Check if a session belongs to an admin user */
+export function isAdmin(session: { user: { email?: string | null; role?: string } }): boolean {
+  return session.user.role === "admin" ||
+    session.user.email === (loadEnv().ADMIN_EMAIL ?? "nadimul96@gmail.com");
 }

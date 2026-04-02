@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { getAdminSession } from "@/src/server/auth";
+import { getSession } from "@/src/server/auth";
 import { getDb } from "@/src/server/db";
 
 export const dynamic = "force-dynamic";
@@ -25,8 +25,8 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ deckId: string }> },
 ) {
-  const session = await getAdminSession();
-  if (!session) {
+  const session = await getSession();
+  if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

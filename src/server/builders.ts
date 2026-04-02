@@ -29,11 +29,38 @@ export class LocalSellerBriefBuilder implements SellerBriefBuilder {
       `Desired outcome: ${input.desiredOutcome}.`,
     ].join(" ");
 
+    // If input has case studies (SellerKnowledge shape), format them as proof points
+    const caseStudyProofPoints: string[] = [];
+    const inputAny = input as Record<string, unknown>;
+    const caseStudies = inputAny.caseStudies as Array<{ clientName: string; industry: string; challenge: string; results: string }> | undefined;
+    if (caseStudies && Array.isArray(caseStudies)) {
+      for (const cs of caseStudies) {
+        if (cs.clientName && cs.results) {
+          caseStudyProofPoints.push(`Case study: ${cs.clientName} (${cs.industry}) — ${cs.results}`);
+        }
+      }
+    }
+
+    // Include objections and pricing if present (SellerKnowledge enrichment)
+    const commonObjections = inputAny.commonObjections as Array<{ objection: string; response: string }> | undefined;
+    const pricingModel = inputAny.pricingModel as string | undefined;
+    const pricingContext = inputAny.pricingContext as string | undefined;
+
+    // Pick best case study (first one, or matching target industry if available)
+    let bestCaseStudy: { clientName: string; industry: string; results: string } | undefined;
+    if (caseStudies && caseStudies.length > 0) {
+      bestCaseStudy = { clientName: caseStudies[0].clientName, industry: caseStudies[0].industry, results: caseStudies[0].results };
+    }
+
     return {
       positioningSummary: sellerBriefMd ?? fallbackSummary,
       offerSummary: input.offerSummary,
-      proofPoints: input.proofPoints,
+      proofPoints: [...input.proofPoints, ...caseStudyProofPoints],
       preferredAngles: input.differentiators,
+      ...(commonObjections && commonObjections.length > 0 ? { commonObjections } : {}),
+      ...(pricingModel ? { pricingModel } : {}),
+      ...(pricingContext ? { pricingContext } : {}),
+      ...(bestCaseStudy ? { bestCaseStudy } : {}),
     };
   }
 }

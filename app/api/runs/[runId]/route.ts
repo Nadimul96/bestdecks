@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getRun, updateRun, addRunEvent, getRunOwner, refundCredits } from "@/src/server/repository";
-import { getAdminSession } from "@/src/server/auth";
+import { getSession, isAdmin } from "@/src/server/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -9,27 +9,27 @@ export async function GET(
   _request: Request,
   context: { params: Promise<{ runId: string }> },
 ) {
-  const session = await getAdminSession();
-  if (!session) {
+  const session = await getSession();
+  if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const userId = session.user.id;
+  const admin = isAdmin(session);
 
   const { runId } = await context.params;
-  const run = await getRun(runId);
+  const run = await getRun(runId, userId, { isAdmin: admin });
 
   if (!run) {
     return NextResponse.json({ error: "Run not found." }, { status: 404 });
   }
 
   // Auto-detect stuck runs: if status is "running" but last event is >6 min old, mark as failed.
-  // With step-based execution each step gets 300s, so 6 min without progress means a step died.
   if (run.status === "running" && run.events.length > 0) {
     const lastEvent = run.events[run.events.length - 1];
     const lastEventTime = new Date(String(lastEvent.created_at)).getTime();
-    const stuckThreshold = Date.now() - 6 * 60 * 1000; // 6 minutes
+    const stuckThreshold = Date.now() - 6 * 60 * 1000;
 
     if (lastEventTime < stuckThreshold) {
-      // Run timeout + credit refund in parallel where possible
       const [, ownerInfo] = await Promise.all([
         updateRun(runId, {
           status: "failed",
@@ -44,7 +44,6 @@ export async function GET(
         message: "Run timed out — a pipeline step may have been terminated. Try again with fewer targets.",
       });
 
-      // Refund credits for the stuck run
       try {
         if (ownerInfo.userId && ownerInfo.creditsCharged > 0) {
           await refundCredits(ownerInfo.userId, ownerInfo.creditsCharged);
@@ -58,8 +57,7 @@ export async function GET(
         console.error(`[stuck-detector] Credit refund failed for run ${runId}:`, refundErr);
       }
 
-      // Re-fetch to return updated data
-      const updatedRun = await getRun(runId);
+      const updatedRun = await getRun(runId, userId, { isAdmin: admin });
       return NextResponse.json(updatedRun);
     }
   }
@@ -69,19 +67,24 @@ export async function GET(
 
 /**
  * PATCH /api/runs/:runId
- * Admin endpoint to manually update a run's status (e.g. fix stuck runs)
+ * Admin-only: manually update a run's status (e.g. fix stuck runs)
  */
 export async function PATCH(
   request: Request,
   context: { params: Promise<{ runId: string }> },
 ) {
-  const session = await getAdminSession();
-  if (!session) {
+  const session = await getSession();
+  if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Only admins can PATCH runs
+  if (!isAdmin(session)) {
+    return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+  }
+
   const { runId } = await context.params;
-  const run = await getRun(runId);
+  const run = await getRun(runId, session.user.id, { isAdmin: true });
 
   if (!run) {
     return NextResponse.json({ error: "Run not found." }, { status: 404 });
@@ -105,6 +108,6 @@ export async function PATCH(
     }
   }
 
-  const updated = await getRun(runId);
+  const updated = await getRun(runId, session.user.id, { isAdmin: true });
   return NextResponse.json(updated);
 }

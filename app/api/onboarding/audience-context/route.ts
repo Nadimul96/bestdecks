@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getAdminSession } from "@/src/server/auth";
+import { getSession } from "@/src/server/auth";
 import { getAudienceContext } from "@/src/server/repository";
 
 export const dynamic = "force-dynamic";
@@ -11,13 +11,13 @@ export const dynamic = "force-dynamic";
  * extracted during the website crawl. Used by run-settings autofill.
  */
 export async function GET() {
-  const session = await getAdminSession();
-  if (!session) {
+  const session = await getSession();
+  if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
-    const data = await getAudienceContext();
+    const data = await getAudienceContext(session.user.id);
     return NextResponse.json(data ?? {});
   } catch {
     return NextResponse.json({});

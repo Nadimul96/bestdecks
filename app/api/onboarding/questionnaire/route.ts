@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getAdminSession } from "@/src/server/auth";
+import { getSession } from "@/src/server/auth";
 import { saveOnboarding, getOnboarding } from "@/src/server/repository";
 
 export const dynamic = "force-dynamic";
@@ -10,13 +10,13 @@ export const dynamic = "force-dynamic";
  * Returns saved questionnaire/run-settings so the UI can hydrate on page load.
  */
 export async function GET() {
-  const session = await getAdminSession();
-  if (!session) {
+  const session = await getSession();
+  if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
-    const data = await getOnboarding();
+    const data = await getOnboarding(session.user.id);
     return NextResponse.json(data.questionnaire ?? {});
   } catch {
     return NextResponse.json({});
@@ -29,8 +29,8 @@ export async function GET() {
  * Used by the onboarding wizard and the run-settings view.
  */
 export async function POST(request: Request) {
-  const session = await getAdminSession();
-  if (!session) {
+  const session = await getSession();
+  if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -73,7 +73,7 @@ export async function POST(request: Request) {
     await saveOnboarding({
       profile: {},
       questionnaire,
-    });
+    }, session.user.id);
 
     return NextResponse.json({ ok: true });
   } catch (error) {

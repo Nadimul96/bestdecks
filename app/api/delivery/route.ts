@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { listDeliveryDecks, countRuns } from "@/src/server/repository";
-import { getAdminSession } from "@/src/server/auth";
+import { getSession } from "@/src/server/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -13,15 +13,15 @@ export const dynamic = "force-dynamic";
  * instead of the N+1 pattern of listRuns + getRun(id) per run.
  */
 export async function GET() {
-  const session = await getAdminSession();
-  if (!session) {
+  const session = await getSession();
+  if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Use lightweight count instead of fetching all run data
+  const userId = session.user.id;
   const [decks, totalRuns] = await Promise.all([
-    listDeliveryDecks(),
-    countRuns(),
+    listDeliveryDecks(userId),
+    countRuns(userId),
   ]);
 
   return NextResponse.json({

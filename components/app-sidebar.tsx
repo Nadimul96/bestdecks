@@ -32,7 +32,7 @@ function SidebarCollapseToggle() {
       <TooltipTrigger asChild>
         <button
           onClick={toggleSidebar}
-          className="flex h-8 w-full items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          className="flex h-8 items-center rounded-md text-muted-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground px-2"
           aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           <ChevronsLeft
@@ -89,9 +89,11 @@ export function AppSidebar({
       </SidebarContent>
 
       <SidebarFooter>
-        <SidebarCollapseToggle />
-        <div className="flex items-center justify-between px-2 group-data-[collapsible=icon]:hidden">
-          <ThemeToggle />
+        <div className="flex items-center justify-between px-2">
+          <SidebarCollapseToggle />
+          <div className="group-data-[collapsible=icon]:hidden">
+            <ThemeToggle />
+          </div>
         </div>
         <NavUser user={user} />
       </SidebarFooter>

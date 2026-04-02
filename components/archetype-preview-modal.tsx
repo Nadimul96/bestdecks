@@ -106,117 +106,117 @@ const coldOutreachExample: ArchetypeExample = {
   coverEyebrow: "NxGen Fitness · Portland, OR",
   coverFooter: "CLEARPATH AI",
   slides: [
-    // ── Slide 1: Cover — personalized hook, not a document label ──
+    // ── Slide 1: Cover — hook with curiosity + personalization ──
     {
       title: "NxGen Is Growing.\nYour Back Office Isn't.",
-      subtitle: "An operations brief built from your public data, class schedule, and review footprint.",
+      subtitle: "We analyzed your locations, class schedule, and online reviews. Here's what we'd fix first.",
       type: "cover",
       layout: "centered",
       visual: "gradient-orb",
       bg: "dark-mesh",
     },
-    // ── Slide 2: Tension — operational chaos, hyper-specific ──
+    // ── Slide 2: Tension — name the problem better than they can ──
     {
       title: "400 Members. 14 Trainers.\n2 Spreadsheets.",
       subtitle:
-        "Every new location doubles complexity. The tools don't scale with you.",
+        "Your SE location tracks check-ins on paper. NW uses Google Forms. Your staff wastes Monday mornings stitching it together.",
       stat: "4 hrs",
       statLabel: "lost every Monday to manual reporting",
       bullets: [
-        "SE tracks check-ins on paper. NW uses Google Forms. Neither talks to the other.",
-        "Trainer schedules span 3 calendars — conflicts surface when a member hits an empty room",
-        "Multi-location gyms with unified ops grow 2.3× faster (IHRSA 2026)",
+        "Trainer schedules live in 3 calendars — conflicts show up as empty rooms",
+        "No single view of revenue, attendance, or payroll across locations",
+        "Gyms that fix this grow 2.3× faster (IHRSA 2026)",
       ],
       type: "tension",
       layout: "stat-left",
       visual: "bar-chart",
       bg: "dark",
     },
-    // ── Slide 3: Data — the reframe IS the title ──
+    // ── Slide 3: Data — $240K is the headline, reframe in subtitle ──
     {
-      title: "Replacing a Lost Member\nCosts 5–7× More Than Saving One",
+      title: "$240K/Year Lost\nto Members You Can't See Leaving",
       subtitle:
-        "NxGen is spending $240K/year on churn it can't see coming.",
+        "Replacing each one costs 5–7× more than catching them before they quit. Right now, NxGen has no early warning system.",
       stat: "$240K",
-      statLabel: "lost annually to invisible churn",
+      statLabel: "annual cost of invisible churn",
       bullets: [
-        "Members who miss 2 weeks are 4× more likely to cancel — NxGen has no early warning",
+        "Members who miss 2 weeks are 4× more likely to cancel",
         "By the cancellation email, they mentally left 3 weeks ago",
-        "Industry: 50% six-month churn. Gyms with detection systems cut it to 28%",
+        "Industry average: 50% six-month churn. Detection drops it to 28%",
       ],
       type: "data",
       layout: "split",
       visual: "churn-grid",
       bg: "subtle",
     },
-    // ── Slide 4: Vision — concrete promised land, NxGen-specific ──
+    // ── Slide 4: Vision — what Monday morning looks like AFTER ──
     {
-      title: "Both Locations. One Pulse.\nZero Guesswork.",
+      title: "Imagine Opening One Screen\nand Seeing Both Gyms.",
       subtitle:
-        "Real-time attendance, revenue, churn risk, and payroll — visible to every staff member, from any device.",
-      stat: "2→1",
-      statLabel: "systems consolidated into one nerve center",
+        "Every check-in, every class, every dollar — live. No stitching spreadsheets. No calling the other location. Just answers.",
+      stat: "100%",
+      statLabel: "visibility across both Portland locations",
       type: "vision",
       layout: "centered",
       visual: "gradient-orb",
       bg: "accent-gradient",
     },
-    // ── Slide 5: Solution — ClearPath as the enabler, 3 bullets max ──
+    // ── Slide 5: Solution — outcome first, mechanism second ──
     {
-      title: "One Dashboard. Both Studios.\n15 Hours Back Every Week.",
+      title: "You Get 15 Hours Back.\nEvery Single Week.",
       subtitle:
-        "ClearPath unifies attendance, revenue, scheduling, and payroll from day one.",
+        "ClearPath replaces the patchwork. Attendance, revenue, scheduling, payroll — one place, day one.",
       stat: "15 hrs",
       statLabel: "saved per week across both locations",
       bullets: [
-        "Live revenue and attendance by location — Monday reporting marathons gone",
-        "Trainer conflicts flagged 48 hours before they create empty rooms",
-        "Month-end close drops from 2 days to 20 minutes",
+        "Revenue by location, live — no more Monday morning data marathons",
+        "Trainer conflicts flagged 48 hours before they hit members",
+        "Month-end close: 2 days → 20 minutes",
       ],
       type: "solution",
       layout: "stat-left",
       visual: "metrics-row",
       bg: "dark",
     },
-    // ── Slide 6: Solution — retention, outcome-first ──
+    // ── Slide 6: Solution — conviction, not hedging ──
     {
       title: "Stop Reacting to Cancellations.\nStart Predicting Them.",
       subtitle:
-        "Gyms using early-warning retention see 23% lower monthly churn within 90 days.",
+        "You'll see 23% lower monthly churn within 90 days. Here's how it works.",
       stat: "23%",
-      statLabel: "lower monthly churn",
+      statLabel: "lower monthly churn in 90 days",
       bullets: [
-        "Auto-flag members missing 2+ sessions — alerts go to their trainer, not a spreadsheet",
-        "Win-back sequences triggered by behavior, not batch email blasts",
-        "Churn reports by location, class type, and trainer — root causes, not guesses",
+        "Members missing 2+ sessions get flagged — alerts go to their trainer",
+        "Win-back sequences fire automatically based on behavior, not guesswork",
+        "Monthly churn reports by location, class, and trainer — root causes exposed",
       ],
       type: "solution",
       layout: "stat-left",
       visual: "icon-grid",
       bg: "dark-mesh",
     },
-    // ── Slide 7: Proof — story, not press release ──
+    // ── Slide 7: Proof — mirror, not press release ──
     {
-      title: "FitHub Co Hit Location #4\n90 Days After Going Live",
+      title: "FitHub Had the Same Problem.\nThey Opened Location #4 in 90 Days.",
       subtitle:
-        "3-location Austin gym. Same chaos NxGen has today. Deployed ClearPath — scaled in one quarter.",
+        "\"We went from Sunday-night spreadsheet panic to knowing every number before coffee.\" — Jamie R., FitHub Ops Lead",
       stat: "31%",
       statLabel: "less churn in 90 days",
       bullets: [
         "Churn: 8.2% → 5.6% across all locations",
-        "18 staff-hours recovered per week — reinvested in member experience",
-        "Opened a 4th location with zero new admin hires",
+        "18 staff-hours recovered per week",
+        "Opened location #4 with zero new admin hires",
       ],
       type: "proof",
       layout: "split",
       visual: "testimonial",
       bg: "subtle",
     },
-    // ── Slide 8: CTA — single ask, low friction ──
+    // ── Slide 8: CTA — one ask, no hedging ──
     {
-      title: "15 Minutes. Your Data.\nLive Dashboard.",
+      title: "15 Minutes. Your Locations.\nA Live Dashboard.",
       subtitle:
-        "No contracts, no pitch. We'll show you NxGen's ops on a real dashboard — and you decide if it's worth a deeper look.",
+        "We'll pull NxGen's real data into a working dashboard while you watch. No contracts. No commitment. Just clarity.",
       type: "cta",
       layout: "centered",
       visual: "metrics-row",

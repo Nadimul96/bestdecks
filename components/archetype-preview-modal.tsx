@@ -974,20 +974,20 @@ function SlidePreview({
                   <div className="size-3 rounded-sm" style={{ background: accent }} />
                   <div className="h-[2px] w-8 rounded-full" style={{ background: accent }} />
                 </div>
-                <h3 className="text-4xl font-black tracking-tight text-white sm:text-5xl">
+                <h3 className={cn("text-4xl font-black tracking-tight sm:text-5xl", headingCls)}>
                   {slide.title}
                 </h3>
                 {slide.subtitle && (
-                  <p className="mt-3 max-w-md text-sm leading-relaxed text-white/50">
+                  <p className={cn("mt-3 max-w-md text-sm leading-relaxed", subtitleCls)}>
                     {slide.subtitle}
                   </p>
                 )}
-                <div className="mt-8 space-y-2 text-[13px] text-white/40">
+                <div className={cn("mt-8 space-y-2 text-[13px]", mutedCls)}>
                   <p>clearpath.ai</p>
                   <p>hello@clearpath.ai</p>
                 </div>
                 {coverFooter && (
-                  <p className="mt-6 text-[10px] font-medium uppercase tracking-[0.18em] text-white/25">
+                  <p className={cn("mt-6 text-[10px] font-medium uppercase tracking-[0.18em]", mutedCls)} style={{ opacity: 0.6 }}>
                     {coverFooter}
                   </p>
                 )}

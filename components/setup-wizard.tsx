@@ -10,6 +10,7 @@ import {
   LoaderCircle,
   PartyPopper,
   Rocket,
+  Eye,
   Sparkles,
   Target,
   Upload,
@@ -27,6 +28,7 @@ import {
   type Business,
 } from "@/lib/workspace-types";
 import { useBusinessContext } from "@/lib/business-context";
+import { archetypeExamples, ArchetypePreviewModal } from "@/components/archetype-preview-modal";
 import { dispatchRunStart } from "@/lib/run-launch";
 import { cn } from "@/lib/utils";
 
@@ -79,6 +81,21 @@ export function SetupWizard({ currentUser, onComplete }: SetupWizardProps) {
   const [crawlStatus, setCrawlStatus] = React.useState<string | null>(null);
   const [saving, setSaving] = React.useState(false);
   const [launched, setLaunched] = React.useState(false);
+  const [previewArchetype, setPreviewArchetype] = React.useState<string | null>(null);
+
+  // Map intent → archetype for preview lookup
+  const intentToArchetype: Record<string, string> = {
+    cold_pitch: "cold_outreach",
+    post_call: "warm_intro",
+    agency_rfp: "agency_proposal",
+    investor: "investor_pitch",
+    partnership: "warm_intro",
+    event_sponsor: "agency_proposal",
+    product_demo: "product_launch",
+    upsell: "warm_intro",
+    board_update: "thought_leadership",
+    custom: "cold_outreach",
+  };
 
   const [state, setState] = React.useState<WizardState>({
     websiteUrl: "",
@@ -222,12 +239,12 @@ export function SetupWizard({ currentUser, onComplete }: SetupWizardProps) {
         cold_pitch: "cold_outreach",
         post_call: "warm_intro",
         agency_rfp: "agency_proposal",
-        investor: "cold_outreach",
+        investor: "investor_pitch",
         partnership: "warm_intro",
         event_sponsor: "agency_proposal",
-        product_demo: "warm_intro",
+        product_demo: "product_launch",
         upsell: "warm_intro",
-        board_update: "agency_proposal",
+        board_update: "thought_leadership",
         custom: "cold_outreach",
       };
       await fetch("/api/onboarding/questionnaire", {
@@ -345,7 +362,7 @@ export function SetupWizard({ currentUser, onComplete }: SetupWizardProps) {
 
       {/* ── Scrollable content ── */}
       <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto flex min-h-full max-w-2xl flex-col px-6 py-12 sm:px-8">
+        <div className="mx-auto flex min-h-full max-w-3xl flex-col px-6 py-12 sm:px-8">
           {/* ── Step counter + skip ── */}
           <div className="mb-8 flex items-center justify-between text-xs text-muted-foreground animate-fade-in">
             {stepId !== "welcome" ? (
@@ -566,35 +583,53 @@ export function SetupWizard({ currentUser, onComplete }: SetupWizardProps) {
                   </p>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {intentOptions.map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => update("intent", opt.value)}
-                      className={cn(
-                        "group relative flex items-start gap-3 rounded-xl border p-4 text-left transition-all focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2",
-                        state.intent === opt.value
-                          ? "border-primary bg-primary/5 ring-1 ring-primary/20 shadow-sm"
-                          : "border-border/60 bg-card hover:border-border hover:shadow-sm",
-                      )}
-                    >
-                      <span className="mt-0.5 text-lg shrink-0">
-                        {opt.emoji}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-foreground">
-                          {opt.label}
-                        </p>
-                        <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
-                          {opt.description}
-                        </p>
-                      </div>
-                      {state.intent === opt.value && (
-                        <CheckCircle2 className="absolute right-2.5 top-2.5 size-4 text-primary" />
-                      )}
-                    </button>
-                  ))}
+                <div className="grid gap-3 grid-cols-2 lg:grid-cols-3">
+                  {intentOptions.map((opt) => {
+                    const archetype = intentToArchetype[opt.value];
+                    const example = archetype ? archetypeExamples[archetype] : undefined;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => update("intent", opt.value)}
+                        className={cn(
+                          "group relative flex items-start gap-3 rounded-xl border p-4 text-left transition-all focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2",
+                          state.intent === opt.value
+                            ? "border-primary bg-primary/5 ring-1 ring-primary/20 shadow-sm"
+                            : "border-border/60 bg-card hover:border-border hover:shadow-sm",
+                        )}
+                      >
+                        <span className="mt-0.5 text-lg shrink-0">
+                          {opt.emoji}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-foreground">
+                            {opt.label}
+                          </p>
+                          <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
+                            {opt.description}
+                          </p>
+                          {example && (
+                            <span
+                              role="button"
+                              tabIndex={-1}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPreviewArchetype(archetype);
+                              }}
+                              className="mt-2 inline-flex items-center gap-1 text-[10px] font-medium text-primary hover:underline"
+                            >
+                              <Eye className="size-3" />
+                              Preview ({example.slides.length} slides)
+                            </span>
+                          )}
+                        </div>
+                        {state.intent === opt.value && (
+                          <CheckCircle2 className="absolute right-2.5 top-2.5 size-4 text-primary" />
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -864,6 +899,13 @@ export function SetupWizard({ currentUser, onComplete }: SetupWizardProps) {
           )}
         </div>
       </div>
+
+      {/* Archetype preview modal — triggered from intent cards */}
+      <ArchetypePreviewModal
+        archetype={previewArchetype ?? ""}
+        open={previewArchetype !== null}
+        onClose={() => setPreviewArchetype(null)}
+      />
     </div>
   );
 }

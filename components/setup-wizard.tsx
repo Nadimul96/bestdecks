@@ -76,6 +76,7 @@ export function SetupWizard({ currentUser, onComplete }: SetupWizardProps) {
 
   const [step, setStep] = React.useState(0);
   const [crawling, setCrawling] = React.useState(false);
+  const [crawlStatus, setCrawlStatus] = React.useState<string | null>(null);
   const [saving, setSaving] = React.useState(false);
   const [launched, setLaunched] = React.useState(false);
 
@@ -132,35 +133,65 @@ export function SetupWizard({ currentUser, onComplete }: SetupWizardProps) {
   async function handleAutofill() {
     if (!state.websiteUrl) return;
     setCrawling(true);
+    setCrawlStatus("Crawling your website…");
     try {
       const res = await fetch("/api/onboarding/crawl-seller", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ websiteUrl: state.websiteUrl }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.sellerContext) {
-          setState((prev) => ({
-            ...prev,
-            companyName: data.sellerContext.companyName ?? prev.companyName,
-            offerSummary: data.sellerContext.offerSummary ?? prev.offerSummary,
-            targetCustomer:
-              data.sellerContext.targetCustomer ?? prev.targetCustomer,
-          }));
-          toast.success(
-            "We analyzed your website and filled in the details.",
-          );
+
+      if (!res.ok || !res.body) {
+        toast.error("Couldn\u2019t analyze that website. Fill in the fields manually.");
+        setCrawling(false);
+        setCrawlStatus(null);
+        return;
+      }
+
+      // Stream SSE events for real-time progress
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const event = JSON.parse(line.slice(6));
+
+            if (event.type === "status") {
+              setCrawlStatus(event.message ?? "Analyzing…");
+            } else if (event.type === "complete") {
+              const sc = event.sellerContext;
+              if (sc) {
+                setState((prev) => ({
+                  ...prev,
+                  companyName: sc.companyName ?? prev.companyName,
+                  offerSummary: sc.offerSummary ?? prev.offerSummary,
+                  targetCustomer: sc.targetCustomer ?? prev.targetCustomer,
+                }));
+                toast.success("We analyzed your website and filled in the details.");
+              }
+            } else if (event.type === "error") {
+              toast.error(event.message ?? "Analysis failed. Fill in the fields manually.");
+            }
+          } catch {
+            // Skip malformed SSE lines
+          }
         }
-      } else {
-        toast.error(
-          "Couldn\u2019t analyze that website. Fill in the fields manually.",
-        );
       }
     } catch {
       toast.error("Network error. Please try again.");
     } finally {
       setCrawling(false);
+      setCrawlStatus(null);
     }
   }
 
@@ -454,17 +485,18 @@ export function SetupWizard({ currentUser, onComplete }: SetupWizardProps) {
                     </div>
 
                     {crawling && (
-                      <div className="mt-3 flex items-center gap-2 text-xs text-primary animate-fade-in">
-                        <div className="h-1 flex-1 max-w-[200px] rounded-full bg-primary/10 overflow-hidden">
+                      <div className="mt-3 flex items-center gap-2 text-xs animate-fade-in">
+                        <div className="h-1.5 flex-1 max-w-[240px] rounded-full bg-primary/10 overflow-hidden">
                           <div
-                            className="h-full w-2/3 rounded-full bg-primary/50"
+                            className="h-full rounded-full bg-primary/60"
                             style={{
-                              animation: "shimmer 1.5s ease-in-out infinite",
+                              animation: "shimmer 2s ease-in-out infinite",
+                              width: "60%",
                             }}
                           />
                         </div>
-                        <span className="text-muted-foreground">
-                          Crawling site & building your profile...
+                        <span className="text-muted-foreground text-[12px]">
+                          {crawlStatus ?? "Starting…"}
                         </span>
                       </div>
                     )}

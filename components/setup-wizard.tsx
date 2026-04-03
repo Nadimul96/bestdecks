@@ -315,25 +315,46 @@ export function SetupWizard({ currentUser, onComplete }: SetupWizardProps) {
       {/* ── Scrollable content ── */}
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto flex min-h-full max-w-2xl flex-col px-6 py-12 sm:px-8">
-          {/* ── Step counter (hidden on welcome) ── */}
-          {stepId !== "welcome" && (
-            <div className="mb-8 flex items-center justify-between text-xs text-muted-foreground animate-fade-in">
-              <span>
-                Step {step + 1} of {TOTAL_STEPS}
-              </span>
-              <div className="flex items-center gap-1.5">
-                {STEPS.map((s, i) => (
-                  <div
-                    key={s.id}
-                    className={cn(
-                      "h-1.5 w-6 rounded-full transition-colors",
-                      i <= step ? "bg-primary" : "bg-muted-foreground/20",
-                    )}
-                  />
-                ))}
+          {/* ── Step counter + skip ── */}
+          <div className="mb-8 flex items-center justify-between text-xs text-muted-foreground animate-fade-in">
+            {stepId !== "welcome" ? (
+              <>
+                <span>
+                  Step {step + 1} of {TOTAL_STEPS}
+                </span>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1.5">
+                    {STEPS.map((s, i) => (
+                      <div
+                        key={s.id}
+                        className={cn(
+                          "h-1.5 w-6 rounded-full transition-colors",
+                          i <= step ? "bg-primary" : "bg-muted-foreground/20",
+                        )}
+                      />
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onComplete}
+                    className="text-[11px] text-muted-foreground/50 transition-colors hover:text-muted-foreground"
+                  >
+                    Skip for now
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="ml-auto">
+                <button
+                  type="button"
+                  onClick={onComplete}
+                  className="text-[11px] text-muted-foreground/50 transition-colors hover:text-muted-foreground"
+                >
+                  Skip setup
+                </button>
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* ── Step content ── */}
           <div className="flex-1">

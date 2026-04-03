@@ -61,11 +61,13 @@ export async function POST(request: Request) {
         );
       }
 
-      // Parse website URLs from text
-      const urls = (body.websitesText as string)
-        .split("\n")
-        .map((l: string) => l.trim())
-        .filter((l: string) => l.length > 0);
+      // Parse website URLs from text (deduplicate to prevent credit overcharge)
+      const urls = [...new Set(
+        (body.websitesText as string)
+          .split("\n")
+          .map((l: string) => l.trim())
+          .filter((l: string) => l.length > 0),
+      )];
 
       if (urls.length === 0) {
         return NextResponse.json(

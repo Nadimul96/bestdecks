@@ -113,26 +113,28 @@ const VOLUME_PRICING: Record<number, { perDeck: number; label: string; popular?:
 };
 
 export function getVolumeTier(volume: number): VolumeTier {
-  const pricing = VOLUME_PRICING[volume];
+  // Guard against invalid volumes
+  const safeVolume = Math.max(50, Math.round(volume));
+  const pricing = VOLUME_PRICING[safeVolume];
   if (!pricing) {
     // Interpolate for non-snap values (shouldn't happen with slider, but safety)
-    const lower = VOLUME_SNAP_POINTS.filter((v) => v <= volume).at(-1) ?? 50;
-    const upper = VOLUME_SNAP_POINTS.find((v) => v >= volume) ?? 5000;
+    const lower = VOLUME_SNAP_POINTS.filter((v) => v <= safeVolume).at(-1) ?? 50;
+    const upper = VOLUME_SNAP_POINTS.find((v) => v >= safeVolume) ?? 5000;
     const lowerPrice = VOLUME_PRICING[lower].perDeck;
     const upperPrice = VOLUME_PRICING[upper].perDeck;
-    const ratio = upper === lower ? 0 : (volume - lower) / (upper - lower);
+    const ratio = upper === lower ? 0 : (safeVolume - lower) / (upper - lower);
     const perDeck = lowerPrice - ratio * (lowerPrice - upperPrice);
     return {
-      volume,
+      volume: safeVolume,
       perDeckPrice: Math.round(perDeck * 100) / 100,
-      monthlyPrice: Math.round(volume * perDeck),
-      annualMonthlyPrice: Math.round(volume * perDeck * 0.8),
+      monthlyPrice: Math.round(safeVolume * perDeck),
+      annualMonthlyPrice: Math.round(safeVolume * perDeck * 0.8),
       label: "Custom",
     };
   }
-  const monthlyPrice = Math.round(volume * pricing.perDeck);
+  const monthlyPrice = Math.round(safeVolume * pricing.perDeck);
   return {
-    volume,
+    volume: safeVolume,
     perDeckPrice: pricing.perDeck,
     monthlyPrice,
     annualMonthlyPrice: Math.round(monthlyPrice * 0.8),

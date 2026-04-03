@@ -457,10 +457,20 @@ export function RunSettingsView() {
   async function handleSave() {
     setSaving(true);
     try {
+      // Transform text fields to arrays for the API
+      const payload = {
+        ...form,
+        mustInclude: form.mustIncludeText
+          ? form.mustIncludeText.split("\n").map((s: string) => s.trim()).filter(Boolean)
+          : [],
+        mustAvoid: form.mustAvoidText
+          ? form.mustAvoidText.split("\n").map((s: string) => s.trim()).filter(Boolean)
+          : [],
+      };
       const res = await fetch("/api/onboarding/questionnaire", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
       if (res.ok) {
         toast.success("Deck style saved.");

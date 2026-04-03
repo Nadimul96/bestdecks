@@ -50,7 +50,7 @@ export interface DbWrapper {
   batch(sql: string): Promise<void>;
 }
 
-const SCHEMA_VERSION = "9"; // v9: multi-tenancy (user_id on workspace_state, integration_settings) // Bump when adding new migrations
+const SCHEMA_VERSION = "10"; // v10: shareable deck links
 
 export async function getDb(): Promise<DbWrapper> {
   const c = getClient();
@@ -238,6 +238,20 @@ async function migrate(c: Client) {
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS shareable_decks (
+      id TEXT PRIMARY KEY,
+      slug TEXT UNIQUE NOT NULL,
+      run_id TEXT NOT NULL,
+      target_id TEXT NOT NULL,
+      created_by TEXT NOT NULL,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      expires_at TEXT,
+      view_count INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (run_id) REFERENCES runs(id) ON DELETE CASCADE,
+      FOREIGN KEY (target_id) REFERENCES run_targets(id) ON DELETE CASCADE
+    );
+
     CREATE INDEX IF NOT EXISTS idx_run_targets_run_id ON run_targets(run_id);
     CREATE INDEX IF NOT EXISTS idx_run_artifacts_run_id ON run_artifacts(run_id);
     CREATE INDEX IF NOT EXISTS idx_run_events_run_id ON run_events(run_id);
@@ -247,6 +261,8 @@ async function migrate(c: Client) {
     CREATE INDEX IF NOT EXISTS idx_run_targets_status ON run_targets(status);
     CREATE INDEX IF NOT EXISTS idx_run_artifacts_type ON run_artifacts(artifact_type);
     CREATE INDEX IF NOT EXISTS idx_runs_created_at ON runs(created_at);
+    CREATE INDEX IF NOT EXISTS idx_shareable_decks_slug ON shareable_decks(slug);
+    CREATE INDEX IF NOT EXISTS idx_shareable_decks_target ON shareable_decks(target_id);
   `);
 
   await ensureColumn(c, "workspace_state", "draft_websites_text", "TEXT");

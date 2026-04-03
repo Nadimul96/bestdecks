@@ -17,6 +17,7 @@ import {
   RefreshCcw,
   Search,
   Send,
+  Share2,
   Square,
   Star,
   X,
@@ -51,7 +52,26 @@ interface DeckCard {
   format: string;
   createdAt: string;
   artifacts: RunArtifactRecord[];
+  shareSlug?: string;
+  canShare?: boolean;
   score?: DeckScore;
+}
+
+async function copyToClipboard(value: string) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = value;
+  textarea.setAttribute("readonly", "true");
+  textarea.style.position = "absolute";
+  textarea.style.left = "-9999px";
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  document.body.removeChild(textarea);
 }
 
 export function DeliveryView() {
@@ -93,6 +113,8 @@ export function DeliveryView() {
         format: string;
         createdAt: string;
         artifacts: RunArtifactRecord[];
+        shareSlug?: string;
+        canShare?: boolean;
       }>).map((deck) => ({
         ...deck,
         score: (deck.status === "completed" || deck.status === "delivered")
@@ -176,6 +198,64 @@ export function DeliveryView() {
   function handleBatchSend() {
     const selected = selectableDecks.filter((d) => selectedIds.has(d.targetId));
     toast.info(`Send ${selected.length} deck${selected.length > 1 ? "s" : ""} — coming soon!`);
+  }
+
+  async function handleShare(deck: DeckCard) {
+    try {
+      const res = await fetch(`/api/delivery/${deck.targetId}/share`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({}),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          typeof data.error === "string" ? data.error : "Failed to create share link.",
+        );
+      }
+
+      await copyToClipboard(data.url);
+      setDeckCards((previous) =>
+        previous.map((card) =>
+          card.targetId === deck.targetId
+            ? { ...card, shareSlug: data.slug as string }
+            : card
+        ),
+      );
+      toast.success(deck.shareSlug ? "Share link copied." : "Share link created and copied.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to share deck.";
+      toast.error(message);
+    }
+  }
+
+  async function handleUnshare(deck: DeckCard) {
+    try {
+      const res = await fetch(`/api/delivery/${deck.targetId}/share`, {
+        method: "DELETE",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          typeof data.error === "string" ? data.error : "Failed to disable share link.",
+        );
+      }
+
+      setDeckCards((previous) =>
+        previous.map((card) =>
+          card.targetId === deck.targetId
+            ? { ...card, shareSlug: undefined }
+            : card
+        ),
+      );
+      toast.success("Share link disabled.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to disable share link.";
+      toast.error(message);
+    }
   }
 
   const completedCount = deckCards.filter((d) => d.status === "completed" || d.status === "delivered").length;
@@ -340,6 +420,8 @@ export function DeliveryView() {
               onToggleSelect={() => toggleSelect(deck.targetId)}
               onPreview={() => setPreviewDeck(deck)}
               onScoreClick={() => setScoreDetailDeck(deck)}
+              onShare={() => handleShare(deck)}
+              onUnshare={() => handleUnshare(deck)}
             />
           ))}
         </div>
@@ -384,12 +466,16 @@ function DeckCardItem({
   onToggleSelect,
   onPreview,
   onScoreClick,
+  onShare,
+  onUnshare,
 }: {
   deck: DeckCard;
   selected: boolean;
   onToggleSelect: () => void;
   onPreview: () => void;
   onScoreClick: () => void;
+  onShare: () => void;
+  onUnshare: () => void;
 }) {
   let displayName: string;
   try {
@@ -498,28 +584,62 @@ function DeckCardItem({
           />
         </div>
 
-        {isSelectable && (() => {
-          const da = deck.artifacts.find((a) => a.artifact_type === "presentation_delivery")?.artifact_json;
-          const editorUrl = da?.editorUrl as string | undefined;
-          const downloadUrl = (da?.pptxExportUrl ?? da?.download_url) as string | undefined;
-          const actionUrl = editorUrl ?? downloadUrl;
-          if (!actionUrl) return null;
-          return (
-            <a
-              href={actionUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
-              onClick={(e) => e.stopPropagation()}
+        {isSelectable && (
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant={deck.shareSlug ? "secondary" : "outline"}
+              size="xs"
+              onClick={(e) => {
+                e.stopPropagation();
+                onShare();
+              }}
+              disabled={deck.canShare === false}
+              className="h-6 gap-1.5"
             >
-              {editorUrl ? (
-                <>Edit <ExternalLink className="size-2.5" /></>
-              ) : (
-                <>Download <Download className="size-2.5" /></>
-              )}
-            </a>
-          );
-        })()}
+              <Share2 className="size-3" />
+              {deck.shareSlug ? "Copy link" : "Share"}
+            </Button>
+
+            {deck.shareSlug && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onUnshare();
+                }}
+                className="h-6 px-2 text-muted-foreground hover:text-foreground"
+              >
+                Stop sharing
+              </Button>
+            )}
+
+            {(() => {
+              const da = deck.artifacts.find((a) => a.artifact_type === "presentation_delivery")?.artifact_json;
+              const editorUrl = da?.editorUrl as string | undefined;
+              const downloadUrl = (da?.pptxExportUrl ?? da?.download_url) as string | undefined;
+              const actionUrl = editorUrl ?? downloadUrl;
+              if (!actionUrl) return null;
+              return (
+                <a
+                  href={actionUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {editorUrl ? (
+                    <>Edit <ExternalLink className="size-2.5" /></>
+                  ) : (
+                    <>Download <Download className="size-2.5" /></>
+                  )}
+                </a>
+              );
+            })()}
+          </div>
+        )}
       </div>
     </div>
   );

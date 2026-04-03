@@ -567,6 +567,7 @@ export async function countRuns(userId?: string): Promise<number> {
  */
 export async function listDeliveryDecks(userId?: string) {
   const db = await getDb();
+  const currentTime = now();
 
   // 1. Get all runs that are relevant for delivery
   const userFilter = userId ? " AND r.user_id = ?" : "";
@@ -591,11 +592,33 @@ export async function listDeliveryDecks(userId?: string) {
   const placeholders = runIds.map(() => "?").join(",");
 
   const targets = await db.executeAll(
-    `SELECT id, run_id, website_url, company_name, status, last_error, created_at
+    `SELECT
+       id,
+       run_id,
+       website_url,
+       company_name,
+       status,
+       last_error,
+       created_at,
+       (
+         SELECT sd.slug
+         FROM shareable_decks sd
+         WHERE sd.target_id = run_targets.id
+           AND sd.is_active = 1
+           AND (sd.expires_at IS NULL OR sd.expires_at > ?)
+         ORDER BY sd.created_at DESC
+         LIMIT 1
+       ) AS share_slug,
+       EXISTS(
+         SELECT 1
+         FROM run_artifacts share_slide_plan
+         WHERE share_slide_plan.target_id = run_targets.id
+           AND share_slide_plan.artifact_type = 'slide_plan'
+       ) AS has_slide_plan
      FROM run_targets
      WHERE run_id IN (${placeholders})
      ORDER BY created_at ASC`,
-    runIds,
+    [currentTime, ...runIds],
   ) as unknown as Array<{
     id: string;
     run_id: string;
@@ -604,6 +627,8 @@ export async function listDeliveryDecks(userId?: string) {
     status: string;
     last_error: string | null;
     created_at: string;
+    share_slug: string | null;
+    has_slide_plan: number;
   }>;
 
   // 3. Get only delivery artifacts (the only ones the delivery page needs)
@@ -658,6 +683,8 @@ export async function listDeliveryDecks(userId?: string) {
       format: run.delivery_format,
       createdAt: target.created_at,
       artifacts: artifactsByTarget.get(target.id) ?? [],
+      shareSlug: target.share_slug ?? undefined,
+      canShare: Boolean(target.has_slide_plan),
     };
   });
 }
@@ -821,3 +848,14 @@ export async function getRunOwner(runId: string): Promise<{ userId: string | nul
     creditsCharged: row?.credits_charged ?? 0,
   };
 }
+
+export {
+  createShareableLink,
+  deactivateShareableLink,
+  getOwnedDeliveryDeck,
+  getPublicShareableDeck,
+  getShareableLink,
+  getShareableLinkByTarget,
+  incrementShareViews,
+  mapSlidePlanToExampleSlides,
+} from "./shareable-decks";

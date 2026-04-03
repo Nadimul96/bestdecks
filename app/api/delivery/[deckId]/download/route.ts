@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getSession } from "@/src/server/auth";
-import { getDb } from "@/src/server/db";
+import { getOwnedDeliveryDeck } from "@/src/server/repository";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +14,13 @@ const EXTENSIONS: Record<string, string> = {
   pdf: "pdf",
   pptx: "pptx",
 };
+
+function getStringField(
+  value: Record<string, unknown> | undefined,
+  key: string,
+): string | undefined {
+  return typeof value?.[key] === "string" ? (value[key] as string) : undefined;
+}
 
 /**
  * GET /api/delivery/[deckId]/download?format=pdf|pptx
@@ -40,35 +47,20 @@ export async function GET(
     );
   }
 
-  // Look up the target and its presentation_delivery artifact
-  const db = await getDb();
+  const deck = await getOwnedDeliveryDeck(deckId, session.user.id);
 
-  const target = await db.execute(
-    "SELECT id, company_name FROM run_targets WHERE id = ? LIMIT 1",
-    [deckId],
-  ) as { id: string; company_name: string | null } | undefined;
-
-  if (!target) {
+  if (!deck) {
     return NextResponse.json({ error: "Deck not found." }, { status: 404 });
   }
 
-  const artifact = await db.execute(
-    `SELECT artifact_json FROM run_artifacts
-     WHERE target_id = ? AND artifact_type = 'presentation_delivery'
-     ORDER BY created_at DESC LIMIT 1`,
-    [deckId],
-  ) as { artifact_json: string } | undefined;
+  const delivery = deck.artifacts.presentationDelivery as Record<string, unknown> | undefined;
 
-  if (!artifact) {
+  if (!delivery) {
     return NextResponse.json(
       { error: "No delivery artifact found for this deck." },
       { status: 404 },
     );
   }
-
-  const delivery = typeof artifact.artifact_json === "string"
-    ? JSON.parse(artifact.artifact_json)
-    : artifact.artifact_json;
 
   // Resolve the upstream URL based on the requested format.
   // The artifact may store format-specific URLs (pdfExportUrl, pptxExportUrl)
@@ -76,9 +68,13 @@ export async function GET(
   let upstreamUrl: string | undefined;
 
   if (format === "pdf") {
-    upstreamUrl = delivery.pdfExportUrl ?? delivery.download_url ?? delivery.exportUrl;
+    upstreamUrl = getStringField(delivery, "pdfExportUrl") ??
+      getStringField(delivery, "download_url") ??
+      getStringField(delivery, "exportUrl");
   } else if (format === "pptx") {
-    upstreamUrl = delivery.pptxExportUrl ?? delivery.download_url ?? delivery.exportUrl;
+    upstreamUrl = getStringField(delivery, "pptxExportUrl") ??
+      getStringField(delivery, "download_url") ??
+      getStringField(delivery, "exportUrl");
   }
 
   if (!upstreamUrl) {
@@ -117,7 +113,7 @@ export async function GET(
   }
 
   // Build a clean filename from the company name
-  const companySlug = (target.company_name ?? "proposal")
+  const companySlug = (deck.companyName ?? "proposal")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");

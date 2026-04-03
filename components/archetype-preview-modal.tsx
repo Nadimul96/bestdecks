@@ -1576,7 +1576,7 @@ function getSlideBg(bg: ExampleSlide["bg"], theme: AlaiPreviewTheme): React.CSSP
    Slide renderer
    ══════════════════════════════════════════════════════════════════ */
 
-function SlidePreview({
+export function SlidePreview({
   slide,
   theme,
   watermark,

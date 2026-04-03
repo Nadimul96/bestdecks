@@ -107,6 +107,7 @@ test("migration creates all expected tables", async () => {
   assert.ok(tableNames.includes("run_artifacts"), "Missing run_artifacts table");
   assert.ok(tableNames.includes("run_events"), "Missing run_events table");
   assert.ok(tableNames.includes("user_credits"), "Missing user_credits table");
+  assert.ok(tableNames.includes("shareable_decks"), "Missing shareable_decks table");
 });
 
 test("migration creates expected indexes", async () => {
@@ -127,4 +128,6 @@ test("migration creates expected indexes", async () => {
   assert.ok(indexNames.includes("idx_run_targets_status"), "Missing idx_run_targets_status");
   assert.ok(indexNames.includes("idx_run_artifacts_type"), "Missing idx_run_artifacts_type");
   assert.ok(indexNames.includes("idx_runs_created_at"), "Missing idx_runs_created_at");
+  assert.ok(indexNames.includes("idx_shareable_decks_slug"), "Missing idx_shareable_decks_slug");
+  assert.ok(indexNames.includes("idx_shareable_decks_target"), "Missing idx_shareable_decks_target");
 });

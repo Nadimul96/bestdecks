@@ -122,17 +122,18 @@ function OfferStrengthGauge({ score, suggestions }: { score: number; suggestions
   const bgColor = score >= 8 ? "bg-emerald-500" : score >= 5 ? "bg-amber-500" : "bg-red-400";
 
   return (
-    <div className="rounded-xl border border-border/40 bg-card p-5">
+    <div className="relative overflow-hidden rounded-xl border border-border/40 bg-gradient-to-br from-card via-card to-primary/[0.03] p-5">
+      <div className="pointer-events-none absolute -right-10 -top-10 size-24 rounded-full opacity-20" style={{ background: `radial-gradient(circle, ${score >= 8 ? "oklch(0.7 0.18 155 / 30%)" : score >= 5 ? "oklch(0.7 0.15 85 / 30%)" : "oklch(0.65 0.2 25 / 30%)"}, transparent 70%)` }} />
       <div className="flex items-center justify-between mb-3">
         <div>
           <p className="text-[13px] font-semibold text-foreground">Offer Strength</p>
           <p className="text-[11px] text-muted-foreground">Better input = better decks</p>
         </div>
-        <div className={cn("text-2xl font-black tabular-nums", color)}>
-          {score}<span className="text-sm font-medium text-muted-foreground">/10</span>
+        <div className={cn("text-3xl font-black tabular-nums tracking-tight", color)}>
+          {score}<span className="text-sm font-medium text-muted-foreground/70">/10</span>
         </div>
       </div>
-      <div className="flex h-2 w-full rounded-full bg-muted overflow-hidden mb-3">
+      <div className="flex h-2.5 w-full rounded-full bg-muted/60 overflow-hidden mb-3">
         <div
           className={cn("h-full rounded-full transition-all duration-700", bgColor)}
           style={{ width: `${pct}%` }}
@@ -602,6 +603,7 @@ export function SellerContextView() {
       eyebrow="YOUR BUSINESS"
       title="Your Offer"
       description="Every field here becomes a slide. Vague input = vague decks. Specific input = decks that close."
+      headerGradient
       actions={
         <Button onClick={handleSave} disabled={saving}>
           {saving ? <><LoaderCircle className="size-4 animate-spin" /> Saving…</> : <><Save className="size-4" /> Save context</>}
@@ -609,8 +611,9 @@ export function SellerContextView() {
       }
     >
       {/* ═══ Hero: Auto-fill from website ═══ */}
-      <div className="relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/[0.04] via-card to-card">
+      <div className="relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/[0.06] via-blue-500/[0.03] to-violet-500/[0.04]">
         <div className="pointer-events-none absolute -right-20 -top-20 size-40 rounded-full opacity-40" style={{ background: "radial-gradient(circle, oklch(0.55 0.18 255 / 20%), transparent 70%)" }} />
+        <div className="pointer-events-none absolute -left-16 -bottom-16 size-32 rounded-full opacity-25" style={{ background: "radial-gradient(circle, oklch(0.6 0.15 290 / 25%), transparent 70%)" }} />
         <div className="relative px-6 py-6 sm:px-8 sm:py-7">
           <div className="flex items-start gap-4">
             <div className="hidden sm:flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/20">

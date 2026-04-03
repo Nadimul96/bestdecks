@@ -7,6 +7,7 @@ interface ViewLayoutProps {
   children: React.ReactNode;
   actions?: React.ReactNode;
   className?: string;
+  headerGradient?: boolean;
 }
 
 export function ViewLayout({
@@ -16,12 +17,22 @@ export function ViewLayout({
   children,
   actions,
   className,
+  headerGradient,
 }: ViewLayoutProps) {
   return (
     <div className={cn("stagger-children space-y-8 min-w-0", className)}>
       {/* View header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="space-y-1">
+      <div className={cn(
+        "flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between",
+        headerGradient && "relative overflow-hidden rounded-2xl border border-primary/10 bg-gradient-to-br from-primary/[0.05] via-background to-violet-500/[0.03] px-6 py-6 sm:px-8",
+      )}>
+        {headerGradient && (
+          <>
+            <div className="pointer-events-none absolute -right-16 -top-16 size-32 rounded-full opacity-30" style={{ background: "radial-gradient(circle, oklch(0.55 0.18 255 / 20%), transparent 70%)" }} />
+            <div className="pointer-events-none absolute -left-10 bottom-0 size-24 rounded-full opacity-20" style={{ background: "radial-gradient(circle, oklch(0.6 0.15 290 / 20%), transparent 70%)" }} />
+          </>
+        )}
+        <div className="relative space-y-1">
           <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-primary">
             {eyebrow}
           </p>
@@ -33,7 +44,7 @@ export function ViewLayout({
           </p>
         </div>
         {actions ? (
-          <div className="flex shrink-0 items-center gap-2">{actions}</div>
+          <div className="relative flex shrink-0 items-center gap-2">{actions}</div>
         ) : null}
       </div>
 

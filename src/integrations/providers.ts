@@ -125,6 +125,8 @@ export interface DeckGenerationInput {
   mustAvoid: string[];
   outputFormat: DeliveryFormat;
   imagePolicy: ImagePolicy;
+  visualContentTypes?: string[];
+  visualDensity?: string;
 }
 
 export interface ImageGenerationRequest {

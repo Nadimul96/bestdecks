@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ArrowRight, Check, Eye, Info, LoaderCircle, Save, Sparkles } from "lucide-react";
+import { ArrowRight, Building2, Check, Eye, Flame, Info, LoaderCircle, Palette, Save, Settings2, Sparkles, Target, User, Users } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 
@@ -38,10 +38,10 @@ const meta = viewMeta["run-settings"];
 /* ─── Sub-tab types ─── */
 type SettingsTab = "strategy" | "design" | "advanced";
 
-const settingsTabs: Array<{ key: SettingsTab; label: string }> = [
-  { key: "strategy", label: "Strategy" },
-  { key: "design", label: "Design" },
-  { key: "advanced", label: "Advanced" },
+const settingsTabs: Array<{ key: SettingsTab; label: string; icon: React.ElementType }> = [
+  { key: "strategy", label: "Strategy", icon: Target },
+  { key: "design", label: "Design", icon: Palette },
+  { key: "advanced", label: "Advanced", icon: Settings2 },
 ];
 
 /* ─── Sliding pill tab bar (Dribbble-inspired micro-interaction) ─── */
@@ -50,7 +50,7 @@ function SlidingTabs<T extends string>({
   activeTab,
   onTabChange,
 }: {
-  tabs: Array<{ key: T; label: string }>;
+  tabs: Array<{ key: T; label: string; icon?: React.ElementType }>;
   activeTab: T;
   onTabChange: (key: T) => void;
 }) {
@@ -91,22 +91,26 @@ function SlidingTabs<T extends string>({
           transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
         }}
       />
-      {tabs.map((tab) => (
-        <button
-          key={tab.key}
-          data-tab={tab.key}
-          type="button"
-          onClick={() => onTabChange(tab.key)}
-          className={cn(
-            "relative z-10 flex-1 rounded-xl px-6 py-2.5 text-sm font-medium transition-colors duration-200",
-            activeTab === tab.key
-              ? "text-foreground"
-              : "text-muted-foreground/60 hover:text-muted-foreground",
-          )}
-        >
-          {tab.label}
-        </button>
-      ))}
+      {tabs.map((tab) => {
+        const Icon = tab.icon;
+        return (
+          <button
+            key={tab.key}
+            data-tab={tab.key}
+            type="button"
+            onClick={() => onTabChange(tab.key)}
+            className={cn(
+              "relative z-10 flex-1 flex items-center justify-center gap-2 rounded-xl px-6 py-2.5 text-sm font-medium transition-colors duration-200",
+              activeTab === tab.key
+                ? "text-foreground"
+                : "text-muted-foreground/60 hover:text-muted-foreground",
+            )}
+          >
+            {Icon && <Icon className="size-3.5" />}
+            {tab.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -472,7 +476,16 @@ export function RunSettingsView() {
 
   async function handleSaveAndContinue() {
     await handleSave();
-    window.location.hash = "target-intake";
+    // Progress through tabs: strategy → design → advanced → target-intake
+    if (activeTab === "strategy") {
+      setActiveTab("design");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } else if (activeTab === "design") {
+      setActiveTab("advanced");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      window.location.hash = "target-intake";
+    }
   }
 
   if (loading) {
@@ -683,18 +696,24 @@ export function RunSettingsView() {
             <SectionCard title="Audience & objective" description="Define who receives these decks and what they should achieve.">
               <div className="space-y-6">
                 {hasSellerContext && (
-                  <div className="flex items-center justify-between rounded-lg border border-border/40 bg-muted/30 px-4 py-3">
-                    <div>
-                      <p className="text-[13px] font-medium text-foreground">
-                        Auto-fill from business context
-                      </p>
-                      <p className="text-[11px] text-muted-foreground">
-                        Pre-populate from your business profile.
-                      </p>
+                  <div className="flex items-center justify-between rounded-xl border border-primary/20 bg-gradient-to-r from-primary/[0.04] to-transparent px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10">
+                        <Sparkles className="size-4 text-primary" />
+                      </div>
+                      <div>
+                        <p className="text-[13px] font-medium text-foreground">
+                          Auto-fill from your business profile
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          We'll use your seller context to pre-populate these fields.
+                        </p>
+                      </div>
                     </div>
                     <Button
                       variant="outline"
                       size="sm"
+                      className="border-primary/30 hover:bg-primary/5"
                       onClick={handleAutofill}
                       disabled={autofilling}
                     >
@@ -704,65 +723,84 @@ export function RunSettingsView() {
                           Filling...
                         </>
                       ) : (
-                        <>
-                          <Sparkles className="size-3.5" />
-                          Auto-fill
-                        </>
+                        "Auto-fill"
                       )}
                     </Button>
                   </div>
                 )}
 
                 {/* ── Who are you targeting? ── */}
-                <div className="space-y-1.5">
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/60">Audience</p>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="flex size-6 items-center justify-center rounded-md bg-blue-500/10">
+                      <Users className="size-3 text-blue-500" />
+                    </div>
+                    <p className="text-[12px] font-semibold uppercase tracking-wider text-foreground/70">Who receives this deck</p>
+                  </div>
                   <div className="grid gap-4 sm:grid-cols-3">
                     <FieldGroup label="Target role">
-                      <Input
-                        value={form.audience}
-                        onChange={(e) => update("audience", e.target.value)}
-                        placeholder="VP of Marketing at mid-market SaaS"
-                        className="h-10"
-                      />
+                      <div className="relative">
+                        <User className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground/40" />
+                        <Input
+                          value={form.audience}
+                          onChange={(e) => update("audience", e.target.value)}
+                          placeholder={form.archetype === "investor_pitch" ? "Series A partner at top-tier VC" : form.archetype === "agency_proposal" ? "CMO or Head of Marketing" : "VP of Marketing at mid-market SaaS"}
+                          className="h-10 pl-9"
+                        />
+                      </div>
                     </FieldGroup>
                     <FieldGroup label="Industry">
-                      <Input
-                        value={form.audienceIndustry}
-                        onChange={(e) => update("audienceIndustry", e.target.value)}
-                        placeholder="Healthcare, FinTech, Real Estate..."
-                        className="h-10"
-                      />
+                      <div className="relative">
+                        <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground/40" />
+                        <Input
+                          value={form.audienceIndustry}
+                          onChange={(e) => update("audienceIndustry", e.target.value)}
+                          placeholder={form.archetype === "investor_pitch" ? "Enterprise SaaS, AI/ML" : "Healthcare, FinTech, Real Estate..."}
+                          className="h-10 pl-9"
+                        />
+                      </div>
                     </FieldGroup>
                     <FieldGroup label="Company size">
-                      <Input
-                        value={form.audienceSize}
-                        onChange={(e) => update("audienceSize", e.target.value)}
-                        placeholder="50-500 employees"
-                        className="h-10"
-                      />
+                      <div className="relative">
+                        <Users className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground/40" />
+                        <Input
+                          value={form.audienceSize}
+                          onChange={(e) => update("audienceSize", e.target.value)}
+                          placeholder="50-500 employees"
+                          className="h-10 pl-9"
+                        />
+                      </div>
                     </FieldGroup>
                   </div>
                   <FieldGroup label="Key pain points" hint="What keeps them up at night?">
-                    <Input
-                      value={form.audiencePainPoints}
-                      onChange={(e) => update("audiencePainPoints", e.target.value)}
-                      placeholder="Manual processes, scaling bottlenecks, tool fragmentation..."
-                      className="h-10"
-                    />
+                    <div className="relative">
+                      <Flame className="absolute left-3 top-3 size-3.5 text-muted-foreground/40" />
+                      <Input
+                        value={form.audiencePainPoints}
+                        onChange={(e) => update("audiencePainPoints", e.target.value)}
+                        placeholder={form.archetype === "competitive_displacement" ? "Stuck on legacy tools, frustrated with workarounds, migration anxiety..." : "Manual processes, scaling bottlenecks, tool fragmentation..."}
+                        className="h-10 pl-9"
+                      />
+                    </div>
                   </FieldGroup>
                 </div>
 
                 <div className="border-t border-border/30" />
 
                 {/* ── What should this deck achieve? ── */}
-                <div className="space-y-1.5">
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/60">Objective</p>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="flex size-6 items-center justify-center rounded-md bg-emerald-500/10">
+                      <Target className="size-3 text-emerald-500" />
+                    </div>
+                    <p className="text-[12px] font-semibold uppercase tracking-wider text-foreground/70">What it should achieve</p>
+                  </div>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <FieldGroup label="Goal">
                       <Input
                         value={form.objective}
                         onChange={(e) => update("objective", e.target.value)}
-                        placeholder="Get a discovery call booked"
+                        placeholder={form.archetype === "investor_pitch" ? "Secure a partner meeting" : form.archetype === "case_study" ? "Prove we can solve their exact problem" : "Get a discovery call booked"}
                         className="h-10"
                       />
                     </FieldGroup>
@@ -770,7 +808,7 @@ export function RunSettingsView() {
                       <Input
                         value={form.successMetric}
                         onChange={(e) => update("successMetric", e.target.value)}
-                        placeholder="Reply rate > 15%, meetings booked..."
+                        placeholder={form.archetype === "investor_pitch" ? "Data room request, follow-up meeting" : "Reply rate > 15%, meetings booked..."}
                         className="h-10"
                       />
                     </FieldGroup>
@@ -780,19 +818,19 @@ export function RunSettingsView() {
                       <Input
                         value={form.callToAction}
                         onChange={(e) => update("callToAction", e.target.value)}
-                        placeholder="Book a 20-minute call this week"
+                        placeholder={form.archetype === "investor_pitch" ? "Schedule a 30-minute deep dive" : "Book a 20-minute call this week"}
                         className="h-10"
                       />
                     </FieldGroup>
                     <FieldGroup label="Urgency / timing">
                       <Input
                         value={form.ctaUrgency}
-                      onChange={(e) => update("ctaUrgency", e.target.value)}
-                      placeholder="Q1 budget cycle, limited spots..."
-                      className="h-10"
-                    />
-                  </FieldGroup>
-                </div>
+                        onChange={(e) => update("ctaUrgency", e.target.value)}
+                        placeholder={form.archetype === "investor_pitch" ? "Round closing end of month" : "Q1 budget cycle, limited spots..."}
+                        className="h-10"
+                      />
+                    </FieldGroup>
+                  </div>
                 </div>
               </div>
             </SectionCard>
@@ -1093,7 +1131,7 @@ export function RunSettingsView() {
                 </>
               ) : (
                 <>
-                  Continue to Targets
+                  {activeTab === "strategy" ? "Continue to Design" : activeTab === "design" ? "Continue to Advanced" : "Continue to Targets"}
                   <ArrowRight className="size-4" />
                 </>
               )}

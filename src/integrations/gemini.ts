@@ -32,10 +32,16 @@ export class GeminiImageProvider implements ImageProvider {
   public readonly name = "gemini" as const;
   private readonly apiKey: string;
   private readonly model: string;
+  private visualContentTypes?: string[];
 
   public constructor(apiKey: string, model = "gemini-3.1-flash-image-preview") {
     this.apiKey = apiKey;
     this.model = model;
+  }
+
+  /** Allow callers to pass visual content type preferences for image generation */
+  public setVisualContentTypes(types?: string[]): void {
+    this.visualContentTypes = types;
   }
 
   /**
@@ -111,6 +117,9 @@ export class GeminiImageProvider implements ImageProvider {
                       `Presentation objective: ${request.objective}`,
                       `Visual style: ${request.visualStyle}`,
                       "",
+                      this.visualContentTypes?.length
+                        ? `PREFERRED CONTENT TYPES: ${this.visualContentTypes.join(", ")}. Lean into these styles when composing the image.`
+                        : "",
                       "STRICT RULES: No logos, no text overlays, no UI screenshots, no watermarks, no unrealistic CGI collages, no generic stock photo poses.",
                     ]
                       .filter(Boolean)

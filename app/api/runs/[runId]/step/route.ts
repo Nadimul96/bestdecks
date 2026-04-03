@@ -393,6 +393,8 @@ async function runTargetStep(
     mustAvoid: run.questionnaire.mustAvoid,
     outputFormat: run.questionnaire.outputFormat,
     imagePolicy: run.questionnaire.imagePolicy,
+    visualContentTypes: run.questionnaire.visualContentTypes,
+    visualDensity: run.questionnaire.visualDensity,
   };
 
   try {
@@ -402,6 +404,7 @@ async function runTargetStep(
     if (deckInput.imagePolicy !== "never" && settings.geminiApiKey) {
       await addRunEvent(runId, { targetId: targetRow.id, level: "info", stage: "image_strategy", message: `Generating supporting visuals for ${targetName}...` });
       const imageProvider = new GeminiImageProvider(settings.geminiApiKey);
+      imageProvider.setVisualContentTypes(deckInput.visualContentTypes);
       imagePromise = imageProvider.generateSupportingAssets({
         companyBrief,
         sellerPositioningSummary,

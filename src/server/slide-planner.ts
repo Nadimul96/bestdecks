@@ -271,6 +271,8 @@ export class SlidePlanner {
       `Call to action: ${deckInput.callToAction}`,
       `Number of slides: ${deckInput.cardCount} (including title and contact slides)`,
       `Image policy: ${deckInput.imagePolicy}`,
+      `Visual content preferences: ${deckInput.visualContentTypes?.join(", ") || "AI's choice"}`,
+      `Visual density: ${deckInput.visualDensity || "moderate"}`,
       "",
       `## Verbosity Guide`,
       verbosityGuide,

@@ -365,43 +365,32 @@ export function SetupWizard({ currentUser, onComplete }: SetupWizardProps) {
         <div className="mx-auto flex min-h-full max-w-3xl flex-col px-6 py-12 sm:px-8">
           {/* ── Step counter + skip ── */}
           <div className="mb-8 flex items-center justify-between text-xs text-muted-foreground animate-fade-in">
-            {stepId !== "welcome" ? (
-              <>
-                <span>
-                  Step {step + 1} of {TOTAL_STEPS}
-                </span>
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-1.5">
-                    {STEPS.map((s, i) => (
-                      <div
-                        key={s.id}
-                        className={cn(
-                          "h-1.5 w-6 rounded-full transition-colors",
-                          i <= step ? "bg-primary" : "bg-muted-foreground/20",
-                        )}
-                      />
-                    ))}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={onComplete}
-                    className="text-[11px] text-muted-foreground/50 transition-colors hover:text-muted-foreground"
-                  >
-                    Skip for now
-                  </button>
+            <span>
+              {stepId !== "welcome" ? `Step ${step + 1} of ${TOTAL_STEPS}` : ""}
+            </span>
+            <div className="flex items-center gap-3">
+              {stepId !== "welcome" && (
+                <div className="flex items-center gap-1.5">
+                  {STEPS.map((s, i) => (
+                    <div
+                      key={s.id}
+                      className={cn(
+                        "h-1.5 w-6 rounded-full transition-colors",
+                        i <= step ? "bg-primary" : "bg-muted-foreground/20",
+                      )}
+                    />
+                  ))}
                 </div>
-              </>
-            ) : (
-              <div className="ml-auto">
-                <button
-                  type="button"
-                  onClick={onComplete}
-                  className="text-[11px] text-muted-foreground/50 transition-colors hover:text-muted-foreground"
-                >
-                  Skip setup
-                </button>
-              </div>
-            )}
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onComplete}
+                className="gap-1.5 text-[11px]"
+              >
+                {stepId === "welcome" ? "Skip setup" : "Set up later"}
+              </Button>
+            </div>
           </div>
 
           {/* ── Step content ── */}
@@ -874,18 +863,13 @@ export function SetupWizard({ currentUser, onComplete }: SetupWizardProps) {
                 Back
               </Button>
               <div className="flex items-center gap-2">
-                {stepId === "targets" && (
-                  <Button
-                    variant="ghost"
-                    className="text-muted-foreground"
-                    onClick={() => {
-                      update("websitesText", "");
-                      next();
-                    }}
-                  >
-                    Skip for now
-                  </Button>
-                )}
+                <Button
+                  variant="ghost"
+                  className="text-muted-foreground"
+                  onClick={next}
+                >
+                  Skip
+                </Button>
                 <Button
                   onClick={next}
                   disabled={!canAdvance}

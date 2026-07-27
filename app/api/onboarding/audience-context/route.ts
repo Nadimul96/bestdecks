@@ -1,6 +1,5 @@
-import { NextResponse } from "next/server";
-
 import { getSession } from "@/src/server/auth";
+import { privateJson } from "@/src/server/private-json";
 import { getAudienceContext } from "@/src/server/repository";
 
 export const dynamic = "force-dynamic";
@@ -13,13 +12,13 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const session = await getSession();
   if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return privateJson({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
     const data = await getAudienceContext(session.user.id);
-    return NextResponse.json(data ?? {});
+    return privateJson(data ?? {});
   } catch {
-    return NextResponse.json({});
+    return privateJson({});
   }
 }

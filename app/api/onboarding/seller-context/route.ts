@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getSession } from "@/src/server/auth";
+import { privateJson } from "@/src/server/private-json";
 import {
   saveOnboarding,
   getOnboarding,
@@ -20,18 +21,18 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const session = await getSession();
   if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return privateJson({ error: "Unauthorized" }, { status: 401 });
   }
   const userId = session.user.id;
 
   try {
     const knowledge = await getSellerKnowledge(userId);
-    if (knowledge) return NextResponse.json(knowledge);
+    if (knowledge) return privateJson(knowledge);
 
     const data = await getOnboarding(userId);
-    return NextResponse.json(data.sellerContext ?? {});
+    return privateJson(data.sellerContext ?? {});
   } catch {
-    return NextResponse.json({});
+    return privateJson({});
   }
 }
 

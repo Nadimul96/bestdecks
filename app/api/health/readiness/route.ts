@@ -1,5 +1,3 @@
-import { NextResponse } from "next/server";
-
 import {
   providerHealthSchema,
   uncheckedProviderHealth,
@@ -8,6 +6,7 @@ import { requestText } from "@/src/integrations/http";
 import { resolveSafeOutboundTarget } from "@/src/integrations/url-policy";
 import { getAdminSession } from "@/src/server/auth";
 import { getDb } from "@/src/server/db";
+import { privateJson } from "@/src/server/private-json";
 import { buildReferenceProviderStatuses } from "@/src/server/reference-provider-health";
 import { resolveIntegrationConfig } from "@/src/server/settings";
 
@@ -57,7 +56,7 @@ async function checkPresenton(
 export async function GET() {
   const session = await getAdminSession();
   if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return privateJson({ error: "Unauthorized" }, { status: 401 });
   }
 
   const database = await checkDatabase();
@@ -66,7 +65,7 @@ export async function GET() {
     settings = await resolveIntegrationConfig(session.user.id);
   } catch {
     const providers = buildReferenceProviderStatuses({});
-    return NextResponse.json(
+    return privateJson(
       {
         status: "degraded",
         services: {
@@ -108,7 +107,7 @@ export async function GET() {
     services.database &&
     services.artifactRenderer.reachable;
 
-  return NextResponse.json(
+  return privateJson(
     { status: ready ? "ready" : "degraded", services },
     { status: ready ? 200 : 503 },
   );

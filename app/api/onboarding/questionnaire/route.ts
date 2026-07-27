@@ -6,6 +6,7 @@ import {
   RICH_STATIC_VISUAL_PROFILE,
 } from "@/src/domain/visual-profile";
 import { getSession } from "@/src/server/auth";
+import { privateJson } from "@/src/server/private-json";
 import { saveOnboarding, getOnboarding } from "@/src/server/repository";
 import { readBoundedJson, RequestBodyTooLargeError } from "@/src/server/request-body";
 
@@ -18,14 +19,14 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const session = await getSession();
   if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return privateJson({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
     const data = await getOnboarding(session.user.id);
-    return NextResponse.json(data.questionnaire ?? {});
+    return privateJson(data.questionnaire ?? {});
   } catch {
-    return NextResponse.json({});
+    return privateJson({});
   }
 }
 

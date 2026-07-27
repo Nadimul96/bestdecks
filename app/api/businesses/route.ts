@@ -1,6 +1,5 @@
-import { NextResponse } from "next/server";
-
 import { getSession } from "@/src/server/auth";
+import { privateJson } from "@/src/server/private-json";
 import { getOnboarding } from "@/src/server/repository";
 import { evaluateRunConfigurationReadiness } from "@/src/domain/run-configuration-readiness";
 
@@ -14,7 +13,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const session = await getSession();
   if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return privateJson({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
@@ -26,7 +25,7 @@ export async function GET() {
 
     // If no onboarding data exists yet, return empty array (fresh user)
     if (!seller && !quest && !data.profile.companyName) {
-      return NextResponse.json([]);
+      return privateJson([]);
     }
 
     // Transform raw DB sellerContext → SellerContextForm shape for the client
@@ -59,8 +58,8 @@ export async function GET() {
       sellerContext: sellerContextForm,
     };
 
-    return NextResponse.json([business]);
+    return privateJson([business]);
   } catch {
-    return NextResponse.json([]);
+    return privateJson([]);
   }
 }

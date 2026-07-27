@@ -1,5 +1,3 @@
-import { NextResponse } from "next/server";
-
 import {
   onboardingPayloadSchema,
   type OnboardingPayload,
@@ -9,12 +7,9 @@ import { IntegrationArchiveQuotaExceededError } from "@/src/server/integration-a
 import { readBoundedJson, RequestBodyTooLargeError } from "@/src/server/request-body";
 import type { getOnboarding } from "@/src/server/repository";
 import { IntegrationSettingsValidationError } from "@/src/server/settings";
+import { privateJson } from "@/src/server/private-json";
 
-export function privateOnboardingJson(body: unknown, init: ResponseInit = {}) {
-  const headers = new Headers(init.headers);
-  headers.set("Cache-Control", "private, no-store");
-  return NextResponse.json(body, { ...init, headers });
-}
+export const privateOnboardingJson = privateJson;
 
 export function withOnboardingReadiness<
   T extends Awaited<ReturnType<typeof getOnboarding>>,

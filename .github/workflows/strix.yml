@@ -42,6 +42,13 @@ jobs:
 
       - name: Assess the full source tree
         shell: bash
+        env:
+          MAX_BUDGET_USD: ${{ inputs.max_budget_usd }}
         run: |
+          if [[ ! "${MAX_BUDGET_USD}" =~ ^[0-9]+([.][0-9]{1,2})?$ ]]; then
+            echo "::error::max_budget_usd must be a numeric dollar amount."
+            exit 1
+          fi
+
           "${HOME}/.strix/bin/strix" -n --target . -m standard --scope-mode full \
-            --max-budget-usd "${{ inputs.max_budget_usd }}"
+            --max-budget-usd "${MAX_BUDGET_USD}"

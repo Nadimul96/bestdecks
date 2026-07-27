@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getSession } from "@/src/server/auth";
+import { privateJson } from "@/src/server/private-json";
 import { getSellerBriefMd, saveSellerBriefMd } from "@/src/server/repository";
 import { readBoundedJson, RequestBodyTooLargeError } from "@/src/server/request-body";
 
@@ -9,12 +10,12 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const session = await getSession();
   if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return privateJson({ error: "Unauthorized" }, { status: 401 });
   }
   const userId = session.user.id;
 
   const markdown = await getSellerBriefMd(userId);
-  return NextResponse.json({ markdown });
+  return privateJson({ markdown });
 }
 
 export async function POST(request: Request) {

@@ -125,6 +125,8 @@ test("production builds keep native libSQL packages outside the Webpack bundle",
 
 test("self-hosted Presenton is digest-pinned and isolated as a render-only service", () => {
   const helper = read("scripts/start-presenton.sh");
+  const wrapper = read("scripts/presenton-start.mjs");
+  const localSetup = read("scripts/setup-local.mjs");
   const compose = read("deploy/docker-compose.prod.yml");
   const presentonService = compose.match(/\n  presenton:\n(?<body>[\s\S]*?)\n  caddy:/u)?.groups?.body;
 
@@ -143,6 +145,12 @@ test("self-hosted Presenton is digest-pinned and isolated as a render-only servi
   assert.match(helper, /OPENAI_API_KEY=\*\|OPENAI_MODEL=\*/);
   assert.doesNotMatch(helper, /^\s*(?:source|\.)\s+/mu);
   assert.doesNotMatch(helper, /docker\s+(?:container\s+)?rm|--network\s+host/);
+  assert.match(wrapper, /from "dotenv"/);
+  assert.match(wrapper, /parse\(readFileSync\(environmentPath, "utf8"\)\)/);
+  assert.doesNotMatch(wrapper, /(?:source|\.\s+)\.env/);
+  assert.match(localSetup, /flag: "wx"/);
+  assert.match(localSetup, /mode: 0o600/);
+  assert.match(localSetup, /ghcr\.io\/presenton\/presenton@sha256:/);
 
   assert.ok(presentonService, "the production Compose file must define Presenton");
   assert.match(presentonService, /CAN_CHANGE_KEYS:\s*"true"/);

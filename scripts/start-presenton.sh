@@ -6,8 +6,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 
 # Deliberately do not source .env files. A shell-sourced configuration file is
 # executable code, which turns a local credential file into an arbitrary-code
-# execution boundary. Export the required variables in the calling shell or
-# use the production Compose environment-file parser instead.
+# execution boundary. The pnpm wrapper parses .env.local with dotenv before
+# launching this helper; direct invocations still require exported variables.
 
 : "${PRESENTON_IMAGE:?Set PRESENTON_IMAGE to an immutable image reference ending in @sha256:<digest>.}"
 : "${PRESENTON_AUTH_USERNAME:?PRESENTON_AUTH_USERNAME is required for Presenton HTTP Basic auth.}"

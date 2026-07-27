@@ -23,15 +23,18 @@ proves them.
 
 ## 1. Prepare configuration without overwriting state
 
-From a fresh clone:
+From a fresh clone, the quickest local path is:
 
 ```bash
-cp -n .env.example .env.local
+pnpm setup
 ```
 
-If `.env.local` already exists, inspect and edit it in place. Do not overwrite it with the example.
+This creates `.env.local` with independent auth, encryption, and renderer secrets; a local SQLite
+path; the exact supported Presenton digest; and the single-user local credential mode. Add your
+Cloudflare, Perplexity, and Gemini credentials, then run `pnpm install --frozen-lockfile`. It never
+overwrites an existing configuration; inspect and edit an existing `.env.local` in place.
 
-Generate independent high-entropy values for:
+`pnpm setup` generates independent high-entropy values for:
 
 - `BETTER_AUTH_SECRET`
 - `APP_SECRETS_KEY`
@@ -135,6 +138,10 @@ loopback and fails closed rather than replacing an existing container or Docker 
 image, isolation, authentication, mount, port, or hardening policy differs. It stores renderer data
 in `app_data/`. Inspect that directory and the helper before use; container lifecycle and retained
 artifact data remain the operator's responsibility.
+
+`pnpm presenton:start` parses `.env.local` with a dotenv parser before invoking the hardened shell
+helper. It does not shell-source the file, so command substitutions and other shell syntax are never
+evaluated. Shell-exported values take precedence for a one-off override.
 
 Confirm that `PRESENTON_BASE_URL` points to the intended instance. Bestdecks requires a complete
 Basic-auth pair for self-hosted Presenton and rejects `api.presenton.ai`, bearer/API-key

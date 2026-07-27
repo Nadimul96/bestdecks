@@ -42,28 +42,26 @@ does not silently substitute demo data or shared provider keys.
 ```bash
 git clone https://github.com/Nadimul96/bestdecks.git
 cd bestdecks
-cp -n .env.example .env.local
+pnpm setup
 pnpm install --frozen-lockfile
 ```
 
-Set the required values in `.env.local`: `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`,
-`APP_SECRETS_KEY`, `LOCAL_DB_PATH`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`,
-`PERPLEXITY_API_KEY`, `GEMINI_API_KEY`, and the Presenton variables. For a controlled local first
-account, temporarily set `SEED_ADMIN_ON_STARTUP=1` with `ADMIN_NAME`, `ADMIN_EMAIL`, and a unique
-`ADMIN_PASSWORD`; disable it and remove the password after that account exists.
+`pnpm setup` creates `.env.local` once, generates separate auth, encryption, and renderer secrets,
+sets the local SQLite path, pins the supported Presenton image, and never overwrites an existing
+configuration. Add your `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `PERPLEXITY_API_KEY`, and
+`GEMINI_API_KEY`; then create a local account on first visit or temporarily enable the documented
+bootstrap account. The generated configuration is for a single-user local instance—set
+`ALLOW_SHARED_PROVIDER_CREDENTIALS=0` before multi-user hosting.
 
 Start the renderer, app, and worker in three terminals:
 
 ```bash
-export PRESENTON_IMAGE='ghcr.io/presenton/presenton@sha256:<verified-digest>'
-export PRESENTON_AUTH_USERNAME='<renderer-user>'
-read -rs PRESENTON_AUTH_PASSWORD && export PRESENTON_AUTH_PASSWORD
 pnpm presenton:start
 ```
 
-The renderer helper intentionally does not source `.env.local`; environment files are executable
-shell input when sourced. Keep its variables in this terminal only and replace the image placeholder
-with a verified immutable digest from the [self-hosting guide](./docs/self-hosting.md).
+The renderer helper safely parses `.env.local` as configuration data; it never shell-sources that
+file. The checked-in digest is the supported v0.1 renderer identity. Inspect the script before use
+and see the [self-hosting guide](./docs/self-hosting.md) for production pinning and isolation.
 
 ```bash
 pnpm dev

@@ -36,12 +36,13 @@ Default base URL:
 pnpm presenton:start
 ```
 
-The helper requires the variables below to be exported by the calling shell, requires a
-digest-pinned `PRESENTON_IMAGE`, pre-seeds Basic auth, binds the renderer to loopback, creates a
-dedicated internal network, and fixes `DISABLE_IMAGE_GENERATION=true`. It deliberately does not source `.env.local`: shell-sourcing a
-credential file would execute it as code. Keep image generation disabled for the v0.1 attested
-profile. A qualifying v0.1 run must use the exact image recorded in the canonical manifest, not
-merely any digest-shaped Presenton reference. Inspect the script before first use.
+The helper reads the required values from `.env.local` with a dotenv parser (or from shell exports,
+which take precedence), requires a digest-pinned `PRESENTON_IMAGE`, pre-seeds Basic auth, binds the
+renderer to loopback, creates a dedicated internal network, and fixes `DISABLE_IMAGE_GENERATION=true`.
+It never shell-sources `.env.local`, so configuration cannot execute shell code. Keep image generation
+disabled for the v0.1 attested profile. A qualifying v0.1 run must use the exact image recorded in
+the canonical manifest, not merely any digest-shaped Presenton reference. Inspect the script before
+first use.
 
 Open:
 

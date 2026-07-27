@@ -8,8 +8,6 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import {
   Tooltip,
   TooltipContent,
@@ -26,11 +24,8 @@ import {
   toneOptions,
   visualStyleOptions,
   imagePolicyOptions,
-  visualContentTypeOptions,
-  visualDensityOptions,
   type QuestionnaireForm,
 } from "@/lib/workspace-types";
-import type { DeliveryFormat, VisualContentType } from "@/src/domain/schemas";
 import { cn } from "@/lib/utils";
 
 const meta = viewMeta["run-settings"];
@@ -260,53 +255,12 @@ function ChipGridWithCustom<T extends string>({
   );
 }
 
-/* ─── Multi-select visual content type grid ─── */
-function VisualContentGrid({
-  selected,
-  onChange,
-}: {
-  selected: VisualContentType[];
-  onChange: (v: VisualContentType[]) => void;
-}) {
-  function toggle(val: VisualContentType) {
-    if (selected.includes(val)) {
-      onChange(selected.filter((s) => s !== val));
-    } else {
-      onChange([...selected, val]);
-    }
-  }
-
-  return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {visualContentTypeOptions.map((opt) => (
-        <button
-          key={opt.value}
-          type="button"
-          onClick={() => toggle(opt.value)}
-          className={cn(
-            "flex items-start gap-3 rounded-xl border p-3.5 text-left transition-all focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2",
-            selected.includes(opt.value)
-              ? "border-primary bg-primary/5 ring-1 ring-primary/20"
-              : "border-border/50 bg-card hover:border-border hover:shadow-sm",
-          )}
-        >
-          <span className="mt-0.5 text-base shrink-0">{opt.icon}</span>
-          <div className="min-w-0">
-            <p className="text-[13px] font-medium text-foreground">{opt.label}</p>
-            <p className="mt-0.5 text-[11px] text-muted-foreground line-clamp-2">
-              {opt.description}
-            </p>
-          </div>
-        </button>
-      ))}
-    </div>
-  );
-}
-
 export function RunSettingsView() {
-  const [form, setForm] = React.useState<QuestionnaireForm>(
-    defaultQuestionnaire(),
-  );
+  const [form, setForm] = React.useState<QuestionnaireForm>(() => ({
+    ...defaultQuestionnaire(),
+    optionalReview: false,
+    allowUserApprovedCrawlException: false,
+  }));
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
   const [autofilling, setAutofilling] = React.useState(false);
@@ -334,16 +288,20 @@ export function RunSettingsView() {
               successMetric: data.successMetric ?? prev.successMetric,
               callToAction: data.callToAction ?? prev.callToAction,
               ctaUrgency: data.ctaUrgency ?? prev.ctaUrgency,
-              outputFormat: data.outputFormat === "presenton_editor" ? "bestdecks_editor" : (data.outputFormat ?? prev.outputFormat),
+              outputFormat: "pptx",
               desiredCardCount:
                 data.desiredCardCount?.toString() ?? prev.desiredCardCount,
               tone: data.tone ?? prev.tone,
-              customTone: data.customTone ?? prev.customTone,
+              customTone: (data.tone ?? prev.tone) === "custom"
+                ? data.customTone ?? prev.customTone
+                : "",
               visualStyle: data.visualStyle ?? prev.visualStyle,
-              customVisualStyle: data.customVisualStyle ?? prev.customVisualStyle,
-              imagePolicy: data.imagePolicy ?? prev.imagePolicy,
-              visualContentTypes: data.visualContentTypes ?? prev.visualContentTypes,
-              visualDensity: data.visualDensity ?? prev.visualDensity,
+              customVisualStyle: (data.visualStyle ?? prev.visualStyle) === "custom"
+                ? data.customVisualStyle ?? prev.customVisualStyle
+                : "",
+              imagePolicy: "never",
+              visualContentTypes: [],
+              visualDensity: "rich",
               mustIncludeText: Array.isArray(data.mustInclude)
                 ? data.mustInclude.join("\n")
                 : data.mustIncludeText ?? prev.mustIncludeText,
@@ -352,10 +310,10 @@ export function RunSettingsView() {
                 : data.mustAvoidText ?? prev.mustAvoidText,
               extraInstructions:
                 data.extraInstructions ?? prev.extraInstructions,
-              optionalReview: data.optionalReview ?? prev.optionalReview,
-              allowUserApprovedCrawlException:
-                data.allowUserApprovedCrawlException ??
-                prev.allowUserApprovedCrawlException,
+              // These controls are not implemented by the durable worker. Do
+              // not let stale persisted values advertise or reactivate them.
+              optionalReview: false,
+              allowUserApprovedCrawlException: false,
             }));
           }
         }
@@ -457,9 +415,22 @@ export function RunSettingsView() {
   async function handleSave() {
     setSaving(true);
     try {
+      if (form.tone === "custom" && !form.customTone.trim()) {
+        toast.error("Describe the custom tone before saving.");
+        return;
+      }
+      if (form.visualStyle === "custom" && !form.customVisualStyle.trim()) {
+        toast.error("Describe the custom visual direction before saving.");
+        return;
+      }
       // Transform text fields to arrays for the API
       const payload = {
         ...form,
+        optionalReview: false,
+        allowUserApprovedCrawlException: false,
+        imagePolicy: "never" as const,
+        visualContentTypes: [],
+        visualDensity: "rich" as const,
         mustInclude: form.mustIncludeText
           ? form.mustIncludeText.split("\n").map((s: string) => s.trim()).filter(Boolean)
           : [],
@@ -716,7 +687,7 @@ export function RunSettingsView() {
                           Auto-fill from your business profile
                         </p>
                         <p className="text-[11px] text-muted-foreground">
-                          We'll use your seller context to pre-populate these fields.
+                          We&apos;ll use your seller context to pre-populate these fields.
                         </p>
                       </div>
                     </div>
@@ -818,7 +789,7 @@ export function RunSettingsView() {
                       <Input
                         value={form.successMetric}
                         onChange={(e) => update("successMetric", e.target.value)}
-                        placeholder={form.archetype === "investor_pitch" ? "Data room request, follow-up meeting" : "Reply rate > 15%, meetings booked..."}
+                        placeholder={form.archetype === "investor_pitch" ? "Data room request or follow-up meeting" : "Qualified replies and meetings booked"}
                         className="h-10"
                       />
                     </FieldGroup>
@@ -857,7 +828,11 @@ export function RunSettingsView() {
               <ChipGridWithCustom
                 options={toneOptions}
                 value={form.tone}
-                onChange={(v) => update("tone", v)}
+                onChange={(v) => setForm((previous) => ({
+                  ...previous,
+                  tone: v,
+                  ...(v === "custom" ? {} : { customTone: "" }),
+                }))}
                 customValue={form.customTone}
                 onCustomChange={(v) => update("customTone", v)}
                 customPlaceholder="e.g., Warm but data-driven, like a smart friend who did the research..."
@@ -870,11 +845,11 @@ export function RunSettingsView() {
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {[
-                    { label: "Alex Hormozi", value: "Direct, specific, zero filler. Every sentence earns the next. Lead with numbers, name the problem better than they can, conviction over hedging. Third-grade reading level." },
-                    { label: "Peter Thiel", value: "Contrarian and definite. Challenge conventional wisdom. Frame the opportunity as inevitable for those who see it clearly. Intellectual confidence, not aggression." },
-                    { label: "Steve Jobs", value: "Simple, aspirational, dramatic. Short sentences. One idea per slide. Build tension, then reveal. Make the audience feel they're witnessing something important." },
-                    { label: "McKinsey", value: "Structured, evidence-driven, executive-ready. MECE frameworks. Every claim supported by data. Professional but never warm. Authority through rigor." },
-                    { label: "Y Combinator", value: "Brutally concise. No jargon, no fluff. Lead with traction. Say what you do in one sentence. If it needs explaining, simplify it." },
+                    { label: "Direct", value: "Direct, specific, and free of filler. Use short sentences, name the problem clearly, and avoid unsupported emphasis." },
+                    { label: "Contrarian", value: "Challenge the default assumption, explain the alternative plainly, and label interpretation as inference." },
+                    { label: "Minimal", value: "Simple and restrained. Use one idea per slide, short sentences, and deliberate pacing." },
+                    { label: "Analytical", value: "Structured, evidence-led, and executive-ready. Keep every external factual claim bound to retained support." },
+                    { label: "Concise", value: "Use plain language, remove jargon and repetition, and state the core point in one sentence when possible." },
                   ].map((persona) => (
                     <button
                       key={persona.label}
@@ -902,7 +877,11 @@ export function RunSettingsView() {
                       <button
                         key={opt.value}
                         type="button"
-                        onClick={() => update("visualStyle", opt.value)}
+                        onClick={() => setForm((previous) => ({
+                          ...previous,
+                          visualStyle: opt.value,
+                          ...(opt.value === "custom" ? {} : { customVisualStyle: "" }),
+                        }))}
                         className={cn(
                           "group flex items-center gap-3 rounded-xl border p-3.5 text-left transition-all relative focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2",
                           isSelected
@@ -938,7 +917,8 @@ export function RunSettingsView() {
                 {form.visualStyle === "custom" && (
                   <Input
                     value={form.customVisualStyle}
-                    onChange={(e) => update("customVisualStyle", e.target.value)}
+                    onChange={(e) => update("customVisualStyle", e.target.value.slice(0, 1000))}
+                    maxLength={1000}
                     placeholder="e.g., Dark mode with neon accents, tech-forward, geometric patterns..."
                     className="h-10 animate-fade-in"
                   />
@@ -946,42 +926,9 @@ export function RunSettingsView() {
               </div>
             </SectionCard>
 
-            {/* Visual content types, density, image policy */}
-            <SectionCard title="Visual content" description="Control what types of visuals appear and how dense they are.">
-              <div className="space-y-6">
-                <FieldGroup label="Content types">
-                  <VisualContentGrid
-                    selected={form.visualContentTypes}
-                    onChange={(v) => update("visualContentTypes", v)}
-                  />
-                </FieldGroup>
-
-                <FieldGroup label="Visual density">
-                  <div className="flex flex-wrap gap-2">
-                    {visualDensityOptions.map((opt) => (
-                      <Tooltip key={opt.value}>
-                        <TooltipTrigger asChild>
-                          <button
-                            type="button"
-                            onClick={() => update("visualDensity", opt.value)}
-                            className={cn(
-                              "rounded-full border px-3.5 py-1.5 text-[12px] font-medium transition-all focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2",
-                              form.visualDensity === opt.value
-                                ? "border-primary bg-primary/10 text-primary"
-                                : "border-border/50 bg-card text-muted-foreground hover:border-border hover:text-foreground",
-                            )}
-                          >
-                            {opt.label}
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent side="top" className="text-xs">
-                          {opt.description}
-                        </TooltipContent>
-                      </Tooltip>
-                    ))}
-                  </div>
-                </FieldGroup>
-
+            {/* Richness comes from attested vector layouts, never untracked media. */}
+            <SectionCard title="Visual content" description="Mandatory rich-static v0.1 profile.">
+              <div className="space-y-3">
                 <FieldGroup label="Image generation">
                   <div className="flex flex-wrap gap-2">
                     {imagePolicyOptions.map((opt) => (
@@ -1007,19 +954,23 @@ export function RunSettingsView() {
                     ))}
                   </div>
                 </FieldGroup>
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  Every delivered deck must pass the rich vector-layout receipt. Generated images,
+                  charts, screenshots, and other media remain unavailable until their provenance,
+                  storage, and exact renderer placement can be attested.
+                </p>
               </div>
             </SectionCard>
 
             {/* Output format & card count */}
-            <SectionCard title="Output" description="Choose file format and slide count.">
+            <SectionCard title="Output" description="Configure PPTX delivery and slide count.">
               <div className="space-y-6">
                 <FieldGroup label="Export format">
                   <OptionGrid
                     options={outputFormatOptions}
                     value={form.outputFormat}
                     onChange={(v) => update("outputFormat", v)}
-                    columns={3}
-                    disabledValues={["bestdecks_editor", "bestdecks_link", "google_slides"] as DeliveryFormat[]}
+                    columns={1}
                   />
                 </FieldGroup>
 
@@ -1074,38 +1025,16 @@ export function RunSettingsView() {
               </div>
             </SectionCard>
 
-            <SectionCard title="Review & safety">
-              <div className="space-y-4">
-                <div className="flex items-center gap-3 rounded-lg border border-border/40 bg-muted/30 p-4">
-                  <Switch
-                    id="review-gate"
-                    checked={form.optionalReview}
-                    onCheckedChange={(c) =>
-                      update("optionalReview", c as boolean)
-                    }
-                  />
-                  <Label htmlFor="review-gate" className="cursor-pointer">
-                    <p className="text-[13px] font-medium">Review gate</p>
-                    <p className="text-[11px] text-muted-foreground">
-                      Pause before delivery for manual review
-                    </p>
-                  </Label>
-                </div>
-
-                <div className="flex items-center gap-3 rounded-lg border border-border/40 bg-muted/30 p-4">
-                  <Switch
-                    id="crawl-exception"
-                    checked={form.allowUserApprovedCrawlException}
-                    onCheckedChange={(c) =>
-                      update("allowUserApprovedCrawlException", c as boolean)
-                    }
-                  />
-                  <Label htmlFor="crawl-exception" className="cursor-pointer">
-                    <p className="text-[13px] font-medium">Crawl exceptions</p>
-                    <p className="text-[11px] text-muted-foreground">
-                      Allow generation even when website crawl fails
-                    </p>
-                  </Label>
+            <SectionCard title="Delivery safeguards">
+              <div className="flex items-start gap-3 rounded-lg border border-border/40 bg-muted/30 p-4">
+                <Info className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                <div>
+                  <p className="text-[13px] font-medium">Verified delivery</p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                    Automatic delivery occurs only after evidence coverage and
+                    artifact verification pass. Manual approval pauses and
+                    crawl-failure fallbacks are not available.
+                  </p>
                 </div>
               </div>
             </SectionCard>

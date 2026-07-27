@@ -4,7 +4,6 @@ import * as React from "react";
 import {
   ArrowRight,
   GripVertical,
-  ImageIcon,
   LoaderCircle,
   Plus,
   Save,
@@ -32,17 +31,12 @@ import { CSS } from "@dnd-kit/utilities";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ViewLayout } from "../view-layout";
 import { viewMeta, archetypeOptions, type QuestionnaireForm } from "@/lib/workspace-types";
-import type { DeckArchetype } from "@/src/domain/schemas";
 import { cn } from "@/lib/utils";
 
 const meta = viewMeta["deck-structure"];
-
-/* ─── Constants ─── */
-const VISUAL_CREDIT_COST = 0.25;
 
 /* ─── Types ─── */
 
@@ -50,7 +44,6 @@ interface SlideBlueprint {
   id: string;
   title: string;
   description: string;
-  includeVisual: boolean;
   required: boolean; // required slides can still be edited, just not removed
 }
 
@@ -63,11 +56,10 @@ function archetypeLabel(archetype: string): string {
 }
 
 function defaultSlideBlueprints(archetype: string): SlideBlueprint[] {
-  const s = (id: string, title: string, description: string, opts?: { visual?: boolean; required?: boolean }): SlideBlueprint => ({
+  const s = (id: string, title: string, description: string, opts?: { required?: boolean }): SlideBlueprint => ({
     id,
     title,
     description,
-    includeVisual: opts?.visual ?? false,
     required: opts?.required ?? false,
   });
 
@@ -76,10 +68,10 @@ function defaultSlideBlueprints(archetype: string): SlideBlueprint[] {
       return [
         s("hook", "Hook", "A company-specific opening that grabs attention — reference a recent event, metric, or challenge unique to the target.", { required: true }),
         s("tension", "Company-Specific Tension", "Surface a concrete tension or gap the target is experiencing right now, backed by research."),
-        s("industry_shift", "Industry Shift", "Frame a broader industry change that makes the status quo risky. Set the stage for urgency.", { visual: true }),
-        s("loss_stat", "Preventable Loss Stat", "One powerful statistic that quantifies what inaction costs companies like theirs.", { visual: true }),
+        s("industry_shift", "Industry Shift", "Frame a broader industry change that makes the status quo risky. Set the stage for urgency."),
+        s("loss_stat", "Preventable Loss Stat", "One powerful statistic that quantifies what inaction costs companies like theirs."),
         s("vision", "Vision", "Paint the picture of the better future — what the world looks like once this problem is solved."),
-        s("solution_1", "Solution Pillar 1", "First key capability of your solution, mapped directly to their pain.", { visual: true }),
+        s("solution_1", "Solution Pillar 1", "First key capability of your solution, mapped directly to their pain."),
         s("solution_2", "Solution Pillar 2", "Second key capability — show breadth without losing focus."),
         s("solution_3", "Solution Pillar 3", "Third key capability — tie back to the industry shift or loss stat."),
         s("proof", "Proof / Case Study", "A concrete example of results achieved for a similar company. Include metrics."),
@@ -91,8 +83,8 @@ function defaultSlideBlueprints(archetype: string): SlideBlueprint[] {
         s("context", "Context Recap", "Reference the shared connection, event, or prior interaction that makes this warm.", { required: true }),
         s("shared_connection", "Shared Connection", "Why this introduction matters — mutual interests, overlapping networks, or aligned goals."),
         s("challenge", "Their Challenge", "The specific problem or opportunity you believe they face, based on what you know."),
-        s("approach", "Your Approach", "How your solution addresses their challenge — tailored, not generic.", { visual: true }),
-        s("how_it_works", "How It Works", "A clear walkthrough of your process or product in action.", { visual: true }),
+        s("approach", "Your Approach", "How your solution addresses their challenge — tailored, not generic."),
+        s("how_it_works", "How It Works", "A clear walkthrough of your process or product in action."),
         s("results", "Results", "Proof points from similar engagements — metrics, testimonials, or outcomes."),
         s("next_steps", "Next Steps", "A warm, specific ask — meeting, intro call, or shared resource."),
         s("contact", "Contact", "Your details, calendar link, and a closing note.", { required: true }),
@@ -102,10 +94,10 @@ function defaultSlideBlueprints(archetype: string): SlideBlueprint[] {
       return [
         s("cover", "Cover", "Title, your logo, their company name, and date.", { required: true }),
         s("brief", "Understanding Their Brief", "Demonstrate that you've listened — restate their goals, constraints, and success criteria."),
-        s("approach", "Our Approach", "Your strategic framework for tackling their brief. Show thinking, not just doing.", { visual: true }),
+        s("approach", "Our Approach", "Your strategic framework for tackling their brief. Show thinking, not just doing."),
         s("scope", "Scope & Deliverables", "Detailed breakdown of what's included — be precise about outputs."),
-        s("timeline", "Timeline", "Key milestones, phases, and delivery dates laid out clearly.", { visual: true }),
-        s("team", "Team", "Who will work on this and why they're the right people.", { visual: true }),
+        s("timeline", "Timeline", "Key milestones, phases, and delivery dates laid out clearly."),
+        s("team", "Team", "Who will work on this and why they're the right people."),
         s("case_study_1", "Case Study 1", "A relevant past project with measurable results."),
         s("case_study_2", "Case Study 2", "A second example that shows range or depth in their space."),
         s("investment", "Investment", "Pricing options, what each tier includes, and ROI framing."),
@@ -115,15 +107,15 @@ function defaultSlideBlueprints(archetype: string): SlideBlueprint[] {
     case "investor_pitch":
       return [
         s("cover", "Cover", "Company name, tagline, round details, and date.", { required: true }),
-        s("problem", "Problem", "The problem you're solving — make it visceral and large.", { visual: true }),
-        s("market", "Market Size", "TAM/SAM/SOM with credible sources. Show the opportunity is large enough.", { visual: true }),
-        s("solution", "Solution", "What you've built and why it's the right approach.", { visual: true }),
-        s("how_it_works", "How It Works", "Product walkthrough or demo screenshots showing the experience."),
-        s("traction", "Traction", "Key metrics — revenue, users, growth rate, retention. Be honest and specific.", { visual: true }),
+        s("problem", "Problem", "The problem you're solving — make it visceral and large."),
+        s("market", "Market Size", "TAM/SAM/SOM with credible sources. Show the opportunity is large enough."),
+        s("solution", "Solution", "What you've built and why it's the right approach."),
+        s("how_it_works", "How It Works", "A concise, step-by-step product walkthrough in headlines and bullets."),
+        s("traction", "Traction", "Key metrics — revenue, users, growth rate, retention. Be honest and specific."),
         s("business_model", "Business Model", "How you make money — unit economics, pricing, LTV/CAC."),
-        s("competition", "Competition", "Landscape positioning — why you win and what moats you're building.", { visual: true }),
-        s("team", "Team", "Founders and key hires — relevant experience and why this team.", { visual: true }),
-        s("financials", "Financials", "Projections, burn rate, runway. Keep it grounded.", { visual: true }),
+        s("competition", "Competition", "Landscape positioning — why you win and what moats you're building."),
+        s("team", "Team", "Founders and key hires — relevant experience and why this team."),
+        s("financials", "Financials", "Projections, burn rate, runway. Keep it grounded."),
         s("ask", "The Ask", "How much you're raising, use of funds, and what you're looking for in a partner."),
         s("contact", "Contact", "Founder contact details and data room link.", { required: true }),
       ];
@@ -132,8 +124,8 @@ function defaultSlideBlueprints(archetype: string): SlideBlueprint[] {
       return [
         s("cover", "Cover", "Partnership proposal title, both company names, and date.", { required: true }),
         s("opportunity", "Mutual Opportunity", "Frame the partnership as a win-win — what each side gains."),
-        s("audience_overlap", "Audience Overlap", "Show where your audiences or markets intersect.", { visual: true }),
-        s("integration", "Integration Concept", "What the partnership looks like in practice — co-sell, integration, or co-marketing.", { visual: true }),
+        s("audience_overlap", "Audience Overlap", "Show where your audiences or markets intersect."),
+        s("integration", "Integration Concept", "What the partnership looks like in practice — co-sell, integration, or co-marketing."),
         s("pilot", "Pilot Proposal", "A concrete, low-risk first step to test the partnership."),
         s("case_study", "Case Study", "An example of a similar partnership that worked — or adjacent proof."),
         s("terms", "Terms", "Proposed structure — revenue share, responsibilities, timeline."),
@@ -144,11 +136,11 @@ function defaultSlideBlueprints(archetype: string): SlideBlueprint[] {
       return [
         s("cover", "Cover", "Sponsorship proposal title, event name, and date.", { required: true }),
         s("alignment", "Event Alignment", "Why this event fits your brand — audience, theme, and values match."),
-        s("audience", "Audience Reach", "Demographics, attendee count, and engagement metrics.", { visual: true }),
-        s("activation", "Activation Ideas", "Creative ways to show up — booths, talks, branded experiences.", { visual: true }),
+        s("audience", "Audience Reach", "Demographics, attendee count, and engagement metrics."),
+        s("activation", "Activation Ideas", "Creative ways to show up — booths, talks, branded experiences."),
         s("past_sponsorships", "Past Sponsorships", "Examples of past events you've sponsored and results achieved."),
         s("packages", "Package Options", "Sponsorship tiers with clear inclusions and pricing."),
-        s("roi", "ROI Projection", "Expected returns — leads, impressions, brand lift.", { visual: true }),
+        s("roi", "ROI Projection", "Expected returns — leads, impressions, brand lift."),
         s("contact", "Contact", "Decision-maker details and next steps.", { required: true }),
       ];
 
@@ -156,21 +148,21 @@ function defaultSlideBlueprints(archetype: string): SlideBlueprint[] {
       return [
         s("cover", "Cover", "Demo recap title, their company name, and date.", { required: true }),
         s("workflow_gaps", "Their Workflow Gaps", "The specific pain points or inefficiencies you identified in their current setup."),
-        s("highlights", "Demo Highlights", "Key moments from the demo — the features that resonated most.", { visual: true }),
-        s("feature_1", "Feature Deep-Dive 1", "First standout feature mapped to their workflow gap.", { visual: true }),
-        s("feature_2", "Feature Deep-Dive 2", "Second feature with a concrete use case for their team.", { visual: true }),
+        s("highlights", "Demo Highlights", "Key moments from the demo — the features that resonated most."),
+        s("feature_1", "Feature Deep-Dive 1", "First standout feature mapped to their workflow gap."),
+        s("feature_2", "Feature Deep-Dive 2", "Second feature with a concrete use case for their team."),
         s("feature_3", "Feature Deep-Dive 3", "Third feature — tie it to ROI or time savings."),
-        s("comparison", "Comparison", "How you stack up against their current solution or competitors.", { visual: true }),
+        s("comparison", "Comparison", "How you stack up against their current solution or competitors."),
         s("next_steps", "Next Steps", "Trial, pilot, or procurement process — be specific.", { required: true }),
       ];
 
     case "upsell":
       return [
         s("cover", "Cover", "Account expansion proposal, their company name, and date.", { required: true }),
-        s("usage_wins", "Current Usage Wins", "Highlight what's working — adoption metrics, outcomes, and team feedback.", { visual: true }),
+        s("usage_wins", "Current Usage Wins", "Highlight what's working — adoption metrics, outcomes, and team feedback."),
         s("growth_opp", "Growth Opportunity", "Where there's room to do more — untapped features, teams, or use cases."),
-        s("new_capability", "New Capability", "The specific product or tier you're proposing they adopt.", { visual: true }),
-        s("roi", "ROI of Expansion", "Projected value of upgrading — cost savings, revenue impact, efficiency gains.", { visual: true }),
+        s("new_capability", "New Capability", "The specific product or tier you're proposing they adopt."),
+        s("roi", "ROI of Expansion", "Projected value of upgrading — cost savings, revenue impact, efficiency gains."),
         s("implementation", "Implementation", "How the expansion works — migration, onboarding, support."),
         s("timeline", "Timeline", "Rollout plan with key milestones."),
         s("lets_talk", "Let's Talk", "Next meeting, decision timeline, and your contact.", { required: true }),
@@ -180,9 +172,9 @@ function defaultSlideBlueprints(archetype: string): SlideBlueprint[] {
       return [
         s("cover", "Cover", "Board update title, company name, period, and date.", { required: true }),
         s("exec_summary", "Executive Summary", "Three to five bullet-point highlights — wins, misses, and priorities."),
-        s("metrics", "Key Metrics", "Dashboard-style overview of the most important KPIs.", { visual: true }),
-        s("revenue", "Revenue", "Revenue performance vs. plan — MRR, ARR, pipeline, churn.", { visual: true }),
-        s("product", "Product", "Shipping velocity, roadmap progress, and key launches.", { visual: true }),
+        s("metrics", "Key Metrics", "A concise, ordered summary of the most important KPIs."),
+        s("revenue", "Revenue", "Revenue performance vs. plan — MRR, ARR, pipeline, churn."),
+        s("product", "Product", "Shipping velocity, roadmap progress, and key launches."),
         s("customers", "Customers", "Acquisition, retention, NPS, and notable logos."),
         s("team", "Team", "Headcount, key hires, org changes, and culture health."),
         s("challenges", "Challenges", "What's not working and what you're doing about it."),
@@ -194,11 +186,11 @@ function defaultSlideBlueprints(archetype: string): SlideBlueprint[] {
     case "case_study":
       return [
         s("cover", "Cover", "Case study title, client name (or anonymized), and date.", { required: true }),
-        s("challenge", "The Challenge", "What the client was struggling with before engaging you.", { visual: true }),
+        s("challenge", "The Challenge", "What the client was struggling with before engaging you."),
         s("context", "Context & Background", "Industry, company size, and why the problem mattered."),
-        s("approach", "Our Approach", "How you tackled the challenge — methodology, tools, timeline.", { visual: true }),
+        s("approach", "Our Approach", "How you tackled the challenge — methodology, tools, timeline."),
         s("implementation", "Implementation", "Key phases of the work and what was delivered."),
-        s("results", "Results", "Measurable outcomes — metrics, percentages, revenue impact.", { visual: true }),
+        s("results", "Results", "Measurable outcomes — metrics, percentages, revenue impact."),
         s("testimonial", "Client Testimonial", "A direct quote from the client about the experience."),
         s("bridge", "You Could See Similar Results", "Connect the case back to the reader's situation.", { required: true }),
       ];
@@ -206,10 +198,10 @@ function defaultSlideBlueprints(archetype: string): SlideBlueprint[] {
     case "competitive_displacement":
       return [
         s("cover", "Cover", "Title, target company name, and date.", { required: true }),
-        s("status_quo", "The Status Quo Cost", "What staying with their current solution is costing them — quantified.", { visual: true }),
+        s("status_quo", "The Status Quo Cost", "What staying with their current solution is costing them — quantified."),
         s("triggers", "Switching Triggers", "Market or internal changes that make now the right time to switch."),
-        s("comparison", "Side-by-Side Comparison", "Honest feature and value comparison — your strengths vs. incumbent.", { visual: true }),
-        s("migration", "Migration Ease", "How switching actually works — timeline, effort, and support.", { visual: true }),
+        s("comparison", "Side-by-Side Comparison", "Honest feature and value comparison — your strengths vs. incumbent."),
+        s("migration", "Migration Ease", "How switching actually works — timeline, effort, and support."),
         s("results", "Results After Switching", "Metrics from companies that made the move."),
         s("risk", "Risk Mitigation", "How you de-risk the transition — guarantees, pilots, rollback plans."),
         s("next_steps", "Next Steps", "Specific path to evaluate or pilot your solution.", { required: true }),
@@ -218,10 +210,10 @@ function defaultSlideBlueprints(archetype: string): SlideBlueprint[] {
     case "thought_leadership":
       return [
         s("cover", "Cover", "Title, your name/brand, and date.", { required: true }),
-        s("trend", "The Industry Shift", "A provocative trend or insight that demands attention.", { visual: true }),
-        s("data", "The Data Behind It", "Evidence that backs up your thesis — charts, research, stats.", { visual: true }),
+        s("trend", "The Industry Shift", "A provocative trend or insight that demands attention."),
+        s("data", "The Data Behind It", "Cited research and statistics that support the thesis."),
         s("implications", "What This Means", "How this shift affects your audience's business."),
-        s("framework", "A Framework for Thinking About It", "Your unique perspective or mental model.", { visual: true }),
+        s("framework", "A Framework for Thinking About It", "Your unique perspective or mental model."),
         s("approach", "How We Approach This", "Naturally position your solution as aligned with the shift."),
         s("examples", "Real-World Examples", "Companies or teams already adapting — and the results they see."),
         s("takeaway", "Key Takeaway & Next Steps", "What to do next — and how to go deeper.", { required: true }),
@@ -230,10 +222,10 @@ function defaultSlideBlueprints(archetype: string): SlideBlueprint[] {
     case "product_launch":
       return [
         s("cover", "Cover", "Product name, launch tagline, and date.", { required: true }),
-        s("whats_new", "What's New", "The headline feature or product — what changed and why it matters.", { visual: true }),
+        s("whats_new", "What's New", "The headline feature or product — what changed and why it matters."),
         s("who_its_for", "Who It's For", "Target audience and use cases — be specific."),
-        s("how_it_works", "How It Works", "Walkthrough of the new experience or capability.", { visual: true }),
-        s("key_features", "Key Features", "Three to five standout features with brief descriptions.", { visual: true }),
+        s("how_it_works", "How It Works", "Walkthrough of the new experience or capability."),
+        s("key_features", "Key Features", "Three to five standout features with brief descriptions."),
         s("comparison", "Before & After", "What the workflow looked like before vs. now."),
         s("availability", "Availability & Pricing", "When it's available, how to get it, and what it costs."),
         s("get_started", "Get Started", "CTA — sign up, upgrade, or learn more.", { required: true }),
@@ -244,8 +236,8 @@ function defaultSlideBlueprints(archetype: string): SlideBlueprint[] {
       return [
         s("cover", "Cover", "Title, your branding, and date.", { required: true }),
         s("context", "Context", "Set the scene — why this deck exists and what it's about."),
-        s("challenge", "Challenge", "The core problem or opportunity you're addressing.", { visual: true }),
-        s("approach", "Approach", "Your proposed solution, framework, or strategy.", { visual: true }),
+        s("challenge", "Challenge", "The core problem or opportunity you're addressing."),
+        s("approach", "Approach", "Your proposed solution, framework, or strategy."),
         s("details", "Details", "Supporting information — features, data, or specifications."),
         s("evidence", "Evidence", "Proof points — case studies, metrics, or testimonials."),
         s("summary", "Summary", "Recap the key points and reinforce your message."),
@@ -261,7 +253,6 @@ interface SortableSlideCardProps {
   index: number;
   onUpdateTitle: (id: string, title: string) => void;
   onUpdateDescription: (id: string, description: string) => void;
-  onToggleVisual: (id: string) => void;
   onRemove: (id: string) => void;
 }
 
@@ -270,7 +261,6 @@ function SortableSlideCard({
   index,
   onUpdateTitle,
   onUpdateDescription,
-  onToggleVisual,
   onRemove,
 }: SortableSlideCardProps) {
   const {
@@ -342,28 +332,8 @@ function SortableSlideCard({
           />
         </div>
 
-        {/* Visual toggle + remove */}
+        {/* Remove button — not shown for required slides. */}
         <div className="flex flex-col items-center gap-1.5 pt-0.5">
-          <div
-            className={cn(
-              "flex size-9 items-center justify-center rounded-lg transition-colors",
-              slide.includeVisual
-                ? "bg-primary/10 text-primary"
-                : "bg-muted text-muted-foreground/40",
-            )}
-          >
-            <ImageIcon className="size-4" />
-          </div>
-          <Switch
-            checked={slide.includeVisual}
-            onCheckedChange={() => onToggleVisual(slide.id)}
-            className="scale-75"
-          />
-          <span className="text-[9px] text-muted-foreground">
-            {slide.includeVisual ? `+img` : "No img"}
-          </span>
-
-          {/* Remove button — not shown for required slides */}
           {!slide.required && (
             <button
               type="button"
@@ -471,14 +441,6 @@ export function StructureView() {
     });
   }
 
-  function toggleVisual(slideId: string) {
-    setSlides((prev) =>
-      prev.map((s) =>
-        s.id === slideId ? { ...s, includeVisual: !s.includeVisual } : s,
-      ),
-    );
-  }
-
   function updateTitle(slideId: string, title: string) {
     setSlides((prev) =>
       prev.map((s) => (s.id === slideId ? { ...s, title } : s)),
@@ -501,7 +463,6 @@ export function StructureView() {
       id,
       title: "New Slide",
       description: "",
-      includeVisual: false,
       required: false,
     };
     // Insert before the last slide (Contact & Closing) if it exists
@@ -517,7 +478,7 @@ export function StructureView() {
       const structureText = slides
         .map(
           (s, i) =>
-            `Slide ${i + 1}: ${s.title} — ${s.description}${s.includeVisual ? " [include visual]" : ""}`,
+            `Slide ${i + 1}: ${s.title} — ${s.description}`,
         )
         .join("\n");
 
@@ -560,9 +521,6 @@ export function StructureView() {
       setSaving(false);
     }
   }
-
-  const visualCount = slides.filter((s) => s.includeVisual).length;
-  const visualCreditCost = visualCount * VISUAL_CREDIT_COST;
 
   return (
     <ViewLayout
@@ -629,23 +587,17 @@ export function StructureView() {
             </div>
           )}
 
-          {/* Visual credit summary */}
+          {/* Verified renderer profile summary. */}
           <div className="card-elevated rounded-xl border border-border/50 bg-card px-5 py-4">
             <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10">
-                  <ImageIcon className="size-4 text-primary" />
-                </div>
-                <div>
-                  <p className="text-[13px] font-medium text-foreground">
-                    {visualCount} slide{visualCount !== 1 ? "s" : ""} with
-                    visuals
-                  </p>
-                  <p className="text-[11px] text-muted-foreground">
-                    {VISUAL_CREDIT_COST} per visual &middot; {visualCreditCost}{" "}
-                    total for visuals
-                  </p>
-                </div>
+              <div>
+                <p className="text-[13px] font-medium text-foreground">
+                      Rich native-vector reference profile
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                      Slides use editable headlines, bullets, and deterministic vector layouts;
+                      generated media is not supported.
+                </p>
               </div>
               <div className="text-right">
                 <p className="text-xl font-bold tabular-nums text-foreground">
@@ -674,7 +626,6 @@ export function StructureView() {
                     index={index}
                     onUpdateTitle={updateTitle}
                     onUpdateDescription={updateDescription}
-                    onToggleVisual={toggleVisual}
                     onRemove={removeSlide}
                   />
                 ))}
@@ -696,8 +647,7 @@ export function StructureView() {
           <div className="sticky bottom-0 z-10 flex items-center justify-between rounded-xl border border-border/50 bg-card/95 px-6 py-4 shadow-lg backdrop-blur-sm">
             <div className="flex items-center gap-4">
               <p className="text-[13px] text-muted-foreground">
-                {slides.length} slides &middot; {visualCount} visuals
-                &middot; ~{(1 + visualCreditCost).toFixed(2)} cost/deck
+                    {slides.length} slides &middot; native vector
               </p>
             </div>
             <div className="flex items-center gap-2">

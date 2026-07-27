@@ -12,8 +12,6 @@ import {
   UserX,
   UserCheck,
   Zap,
-  Shield,
-  Globe,
 } from "lucide-react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { cn } from "@/lib/utils";
@@ -1016,7 +1014,7 @@ const productLaunchExample: ArchetypeExample = {
     },
     {
       title: "Available Now.\nFree for Teams Under 10.",
-      subtitle: "Start in 2 minutes. No credit card. No sales call. Install the GitHub App and your next PR gets reviewed automatically.",
+      subtitle: "Sample data: Invite the audience to evaluate a fictional pilot, review fit, and choose a concrete next step.",
       type: "cta",
       layout: "centered",
       visual: "none",
@@ -1527,7 +1525,7 @@ function VisualElement({
    ══════════════════════════════════════════════════════════════════ */
 
 function getSlideBg(bg: ExampleSlide["bg"], theme: AlaiPreviewTheme): React.CSSProperties {
-  const { accent, accentSoft, family, surface, surfaceAlt, surfaceGlow } = theme;
+  const { accentSoft, family, surface, surfaceAlt, surfaceGlow } = theme;
 
   if (family === "light") {
     switch (bg) {
@@ -1929,7 +1927,7 @@ export function SlidePreview({
         {/* ─── QUOTE ─── */}
         {slide.layout === "quote" && (
           <div className="flex h-full w-full flex-col items-center justify-center px-12 text-center sm:px-20">
-            <div className="mb-3 text-4xl font-light" style={{ color: `${accent}55` }}>"</div>
+            <div className="mb-3 text-4xl font-light" style={{ color: `${accent}55` }}>&ldquo;</div>
             <h3 className={cn("text-lg font-medium leading-relaxed tracking-tight sm:text-xl", isLight ? "text-gray-800" : "text-white/85")}>
               {slide.title}
             </h3>
@@ -1953,68 +1951,19 @@ interface ArchetypePreviewModalProps {
   onClose: () => void;
 }
 
-interface AlaiThemeCatalogResponse {
-  source?: "alai" | "fallback";
-  themes?: AlaiPreviewTheme[];
+export function ArchetypePreviewModal(props: ArchetypePreviewModalProps) {
+  const instanceKey = `${props.archetype}:${props.open ? "open" : "closed"}`;
+  return <ArchetypePreviewModalContent key={instanceKey} {...props} />;
 }
 
-export function ArchetypePreviewModal({ archetype, open, onClose }: ArchetypePreviewModalProps) {
+function ArchetypePreviewModalContent({ archetype, open, onClose }: ArchetypePreviewModalProps) {
+  const example = archetypeExamples[archetype];
   const [currentSlide, setCurrentSlide] = React.useState(0);
   const [direction, setDirection] = React.useState<"left" | "right">("right");
-  const [availableThemes, setAvailableThemes] = React.useState(alaiPreviewThemes);
-  const [themeSource, setThemeSource] = React.useState<"loading" | "alai" | "fallback">("fallback");
-  const example = archetypeExamples[archetype];
-
-  React.useEffect(() => {
-    if (!open || !example) return;
-    setCurrentSlide(0);
-    setDirection("right");
-  }, [open, archetype, example]);
-
-  const [selectedThemeKey, setSelectedThemeKey] = React.useState(
+  const availableThemes = alaiPreviewThemes;
+  const [preferredThemeKey, setPreferredThemeKey] = React.useState(
     example?.defaultThemeKey ?? alaiPreviewThemes[0]!.key,
   );
-
-  React.useEffect(() => {
-    if (!open || !example) return;
-    setSelectedThemeKey(example.defaultThemeKey ?? alaiPreviewThemes[0]!.key);
-  }, [open, archetype, example]);
-
-  React.useEffect(() => {
-    if (!open) return;
-
-    const controller = new AbortController();
-    setThemeSource("loading");
-
-    void fetch("/api/alai/themes", {
-      cache: "no-store",
-      signal: controller.signal,
-    })
-      .then(async (response) => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return response.json() as Promise<AlaiThemeCatalogResponse>;
-      })
-      .then((payload) => {
-        if (controller.signal.aborted || !Array.isArray(payload.themes) || payload.themes.length === 0) {
-          return;
-        }
-        setAvailableThemes(payload.themes);
-        setThemeSource(payload.source === "alai" ? "alai" : "fallback");
-      })
-      .catch(() => {
-        if (controller.signal.aborted) return;
-        setAvailableThemes(alaiPreviewThemes);
-        setThemeSource("fallback");
-      });
-
-    return () => controller.abort();
-  }, [open]);
-
-  React.useEffect(() => {
-    if (!availableThemes.some((theme) => theme.key === selectedThemeKey)) {
-      setSelectedThemeKey(example?.defaultThemeKey ?? availableThemes[0]?.key ?? alaiPreviewThemes[0]!.key);
-    }
-  }, [availableThemes, selectedThemeKey, example]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -2041,12 +1990,12 @@ export function ArchetypePreviewModal({ archetype, open, onClose }: ArchetypePre
   if (!example) return null;
 
   const total = example.slides.length;
-  const selectedTheme = availableThemes.find((theme) => theme.key === selectedThemeKey)
+  const selectedTheme = availableThemes.find((theme) => theme.key === preferredThemeKey)
+    ?? availableThemes.find((theme) => theme.key === example.defaultThemeKey)
+    ?? availableThemes[0]
     ?? getAlaiPreviewTheme(example.defaultThemeKey);
   const accent = selectedTheme.accent;
-  const themeStatusLabel = themeSource === "alai"
-    ? "Live themes"
-    : "Themes";
+  const themeStatusLabel = "Sample themes";
 
   function goNext() {
     if (currentSlide < total - 1) { setDirection("right"); setCurrentSlide((s) => s + 1); }
@@ -2077,6 +2026,9 @@ export function ArchetypePreviewModal({ archetype, open, onClose }: ArchetypePre
                       Quick preview
                     </p>
                   </div>
+                  <span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] text-amber-200">
+                    Sample data
+                  </span>
                   <p className="text-sm font-semibold text-white">{example.title}</p>
                   <p className="hidden text-[12px] text-white/40 lg:block">
                     {example.scenario}
@@ -2191,7 +2143,7 @@ export function ArchetypePreviewModal({ archetype, open, onClose }: ArchetypePre
                     <button
                       key={theme.key}
                       type="button"
-                      onClick={() => setSelectedThemeKey(theme.key)}
+                      onClick={() => setPreferredThemeKey(theme.key)}
                       className={cn(
                         "w-full rounded-xl border px-3 py-2 text-left transition-all",
                         selected

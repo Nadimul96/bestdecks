@@ -1,7 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { PlusAiDeckProvider } from "./plusai";
+import {
+  PLUS_AI_DECK_PROVIDER_METADATA,
+  PlusAiDeckProvider,
+} from "./plusai";
+import { ProviderAdapterError } from "./provider-contract";
 import type { DeckGenerationInput } from "./providers";
 
 const baseInput: DeckGenerationInput = {
@@ -53,6 +57,17 @@ function installImmediateTimers() {
     globalThis.setTimeout = originalSetTimeout;
     globalThis.clearTimeout = originalClearTimeout;
   };
+}
+
+function assertProviderError(
+  error: unknown,
+  code: ProviderAdapterError["code"],
+  status?: number,
+) {
+  assert.ok(error instanceof ProviderAdapterError);
+  assert.equal(error.code, code);
+  assert.equal(error.status, status);
+  return true;
 }
 
 test("PlusAiDeckProvider uses slide-plan prompts, template mapping, and Google Slides URLs", async () => {
@@ -163,5 +178,204 @@ test("PlusAiDeckProvider omits templateId for auto visual style and retries 429s
   } finally {
     globalThis.fetch = originalFetch;
     restoreTimers();
+  }
+});
+
+test("PlusAiDeckProvider does not replay an ambiguous create failure", async () => {
+  const originalFetch = globalThis.fetch;
+  let createAttempts = 0;
+  globalThis.fetch = (async (_input, init) => {
+    if (init?.body) createAttempts += 1;
+    return new Response("unavailable", { status: 503 });
+  }) as typeof fetch;
+
+  try {
+    const provider = new PlusAiDeckProvider({ apiKey: "fixture-key" });
+    await assert.rejects(provider.createDeck(baseInput), /HTTP 503/u);
+    assert.equal(createAttempts, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("PlusAiDeckProvider does not expose provider response bodies in errors", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => {
+    return new Response("sensitive provider diagnostics", { status: 400 });
+  }) as typeof fetch;
+
+  try {
+    const provider = new PlusAiDeckProvider({ apiKey: "plus-key" });
+    await assert.rejects(() => provider.createDeck(baseInput), (error: unknown) => {
+      assertProviderError(error, "client_request", 400);
+      assert.ok(error instanceof Error);
+      assert.doesNotMatch(error.message, /sensitive provider diagnostics/);
+      return true;
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("PlusAiDeckProvider never forwards authorization to an untrusted polling URL", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: Array<{ url: string; authorization?: string }> = [];
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL ? input.toString() : input.url;
+    requests.push({
+      url,
+      authorization: new Headers(init?.headers).get("authorization") ?? undefined,
+    });
+    return createJsonResponse({
+      pollingUrl: "http://169.254.169.254/latest/meta-data",
+      status: "PROCESSING",
+    });
+  }) as typeof fetch;
+
+  try {
+    const provider = new PlusAiDeckProvider({ apiKey: "plus-key" });
+    await assert.rejects(
+      () => provider.createDeck(baseInput),
+      (error: unknown) => assertProviderError(error, "malformed_response"),
+    );
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0]?.url, "https://api.plusdocs.com/r/v0/presentation");
+    assert.equal(requests[0]?.authorization, "Bearer plus-key");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("PlusAiDeckProvider exposes stable experimental metadata and validates config offline", () => {
+  assert.equal(PLUS_AI_DECK_PROVIDER_METADATA.providerId, "plusai.presentation.generation");
+  assert.equal(PLUS_AI_DECK_PROVIDER_METADATA.modelId, null);
+  assert.equal(PLUS_AI_DECK_PROVIDER_METADATA.contractVersion, 1);
+  assert.equal(PLUS_AI_DECK_PROVIDER_METADATA.releaseStatus, "experimental");
+
+  const configured = new PlusAiDeckProvider({ apiKey: "<plus-ai-api-key>" });
+  assert.equal(configured.providerId, PLUS_AI_DECK_PROVIDER_METADATA.providerId);
+  assert.deepEqual(configured.capabilities, PLUS_AI_DECK_PROVIDER_METADATA.capabilities);
+  assert.throws(() => new PlusAiDeckProvider({ apiKey: "" }), (error: unknown) => {
+    assertProviderError(error, "configuration");
+    assert.ok(error instanceof Error);
+    assert.doesNotMatch(error.message, /plus-ai-api-key/u);
+    return true;
+  });
+});
+
+test("PlusAiDeckProvider classifies every required HTTP failure without replaying ambiguity", async () => {
+  const originalFetch = globalThis.fetch;
+  const cases = [
+    [401, "authentication"],
+    [403, "authorization"],
+    [408, "timeout"],
+    [429, "rate_limited"],
+    [503, "provider_unavailable"],
+  ] as const;
+
+  try {
+    for (const [status, code] of cases) {
+      let attempts = 0;
+      globalThis.fetch = (async () => {
+        attempts += 1;
+        return new Response("provider-controlled diagnostic", { status });
+      }) as typeof fetch;
+      const provider = new PlusAiDeckProvider({
+        apiKey: "<plus-ai-api-key>",
+        maxRetries: 0,
+      });
+      await assert.rejects(
+        () => provider.createDeck(baseInput),
+        (error: unknown) => {
+          assertProviderError(error, code, status);
+          assert.ok(error instanceof Error);
+          assert.doesNotMatch(error.message, /provider-controlled diagnostic/u);
+          return true;
+        },
+      );
+      assert.equal(attempts, 1, `HTTP ${status} must not cause an ambiguous replay`);
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("PlusAiDeckProvider rejects empty, malformed, and schema-invalid responses", async () => {
+  const originalFetch = globalThis.fetch;
+  const cases = [
+    ["", "empty_response"],
+    ["{", "malformed_response"],
+    [JSON.stringify({
+      pollingUrl: "https://api.plusdocs.com/r/v0/presentation/pres_1",
+      status: "PROCESSING",
+      unexpected: true,
+    }), "malformed_response"],
+  ] as const;
+
+  try {
+    for (const [body, code] of cases) {
+      globalThis.fetch = (async () => new Response(body, { status: 200 })) as typeof fetch;
+      const provider = new PlusAiDeckProvider({ apiKey: "<plus-ai-api-key>" });
+      await assert.rejects(
+        () => provider.createDeck(baseInput),
+        (error: unknown) => assertProviderError(error, code),
+      );
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("PlusAiDeckProvider propagates AbortSignal and minimizes source URLs", async () => {
+  const originalFetch = globalThis.fetch;
+  let createBody = "";
+  globalThis.fetch = (async (_input, init) => {
+    if (init?.body) {
+      createBody = String(init.body);
+      return createJsonResponse({
+        pollingUrl: "https://api.plusdocs.com/r/v0/presentation/pres_url",
+        status: "PROCESSING",
+      });
+    }
+    return createJsonResponse({
+      id: "pres_url",
+      status: "GENERATED",
+      url: "https://download.example.com/presentation.pptx",
+      slides: ["Intro"],
+      createdAt: "2026-03-20T00:00:00.000Z",
+      updatedAt: "2026-03-20T00:00:05.000Z",
+      language: "en",
+    });
+  }) as typeof fetch;
+
+  try {
+    const provider = new PlusAiDeckProvider({
+      apiKey: "<plus-ai-api-key>",
+      pollIntervalMs: 0,
+    });
+    await provider.createDeck({
+      ...baseInput,
+      companyBrief: {
+        ...baseInput.companyBrief,
+        websiteUrl: "https://example.com/?token=private#fragment",
+        sourceUrls: ["https://example.com/report?token=private#fragment"],
+      },
+    });
+    assert.doesNotMatch(createBody, /token=private|#fragment/u);
+
+    const controller = new AbortController();
+    controller.abort();
+    globalThis.fetch = (async (_input, init) => {
+      assert.equal(init?.signal?.aborted, true);
+      throw new DOMException("aborted", "AbortError");
+    }) as typeof fetch;
+    await assert.rejects(
+      () => provider.createDeck(baseInput, [], { signal: controller.signal }),
+      (error: unknown) => assertProviderError(error, "aborted"),
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
   }
 });

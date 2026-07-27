@@ -1,6 +1,10 @@
 import { z } from "zod";
 
-export const deckArchetypeSchema = z.enum([
+import { normalizePersistableSourceUrl } from "./source-url";
+
+export const MAX_TARGETS_PER_RUN = 100;
+
+export const DECK_ARCHETYPES = [
   "cold_outreach",
   "warm_intro",
   "agency_proposal",
@@ -10,7 +14,9 @@ export const deckArchetypeSchema = z.enum([
   "thought_leadership",
   "product_launch",
   "custom",
-]);
+] as const;
+
+export const deckArchetypeSchema = z.enum(DECK_ARCHETYPES);
 
 export const deliveryFormatSchema = z.enum([
   "bestdecks_editor",
@@ -63,27 +69,65 @@ export const visualStyleSchema = z.enum([
   "mixed",
 ]);
 
+export const publicHttpUrlSchema = z.string().trim().min(1).max(2_048).url().superRefine(
+  (value, context) => {
+    let url: URL;
+    try {
+      url = new URL(value);
+    } catch {
+      return;
+    }
+    if (url.protocol !== "https:" && url.protocol !== "http:") {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Website URLs must use HTTP or HTTPS.",
+      });
+    }
+    if (url.username || url.password) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Website URLs cannot contain credentials.",
+      });
+    }
+    const hostname = url.hostname.toLowerCase().replace(/\.$/u, "");
+    if (
+      hostname === "localhost"
+      || hostname.endsWith(".localhost")
+      || hostname.endsWith(".local")
+      || hostname.endsWith(".internal")
+      || hostname.endsWith(".home.arpa")
+      || /^\d{1,3}(?:\.\d{1,3}){3}$/u.test(hostname)
+      || hostname.includes(":")
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Website URLs must use a public hostname.",
+      });
+    }
+  },
+).transform(normalizePersistableSourceUrl);
+
 export const companyRowSchema = z.object({
-  websiteUrl: z.string().url(),
-  companyName: z.string().trim().min(1).optional(),
-  firstName: z.string().trim().min(1).optional(),
-  lastName: z.string().trim().min(1).optional(),
-  role: z.string().trim().min(1).optional(),
-  campaignGoal: z.string().trim().min(1).optional(),
-  notes: z.string().trim().min(1).optional(),
-});
+  websiteUrl: publicHttpUrlSchema,
+  companyName: z.string().trim().min(1).max(300).optional(),
+  firstName: z.string().trim().min(1).max(200).optional(),
+  lastName: z.string().trim().min(1).max(200).optional(),
+  role: z.string().trim().min(1).max(300).optional(),
+  campaignGoal: z.string().trim().min(1).max(2_000).optional(),
+  notes: z.string().trim().min(1).max(5_000).optional(),
+}).strict();
 
 export const sellerContextSchema = z
   .object({
-    websiteUrl: z.string().url().optional(),
-    companyName: z.string().trim().min(1).optional(),
-    offerSummary: z.string().trim().min(1),
-    services: z.array(z.string().trim().min(1)).min(1),
-    differentiators: z.array(z.string().trim().min(1)).min(1),
-    targetCustomer: z.string().trim().min(1),
-    desiredOutcome: z.string().trim().min(1),
-    proofPoints: z.array(z.string().trim().min(1)).default([]),
-    constraints: z.array(z.string().trim().min(1)).default([]),
+    websiteUrl: publicHttpUrlSchema.optional(),
+    companyName: z.string().trim().min(1).max(300).optional(),
+    offerSummary: z.string().trim().min(1).max(10_000),
+    services: z.array(z.string().trim().min(1).max(2_000)).min(1).max(100),
+    differentiators: z.array(z.string().trim().min(1).max(2_000)).min(1).max(100),
+    targetCustomer: z.string().trim().min(1).max(5_000),
+    desiredOutcome: z.string().trim().min(1).max(5_000),
+    proofPoints: z.array(z.string().trim().min(1).max(5_000)).max(100).default([]),
+    constraints: z.array(z.string().trim().min(1).max(5_000)).max(100).default([]),
   })
   .superRefine((value, ctx) => {
     if (!value.websiteUrl && !value.companyName) {
@@ -98,31 +142,61 @@ export const sellerContextSchema = z
 
 export const runQuestionnaireSchema = z.object({
   archetype: deckArchetypeSchema,
-  audience: z.string().trim().min(1),
-  objective: z.string().trim().min(1),
-  callToAction: z.string().trim().min(1),
+  audience: z.string().trim().min(1).max(2_000),
+  objective: z.string().trim().min(1).max(5_000),
+  callToAction: z.string().trim().min(1).max(2_000),
   outputFormat: deliveryFormatSchema,
   desiredCardCount: z.number().int().min(4).max(20),
   tone: toneSchema,
   visualStyle: visualStyleSchema,
   imagePolicy: imagePolicySchema,
-  mustInclude: z.array(z.string().trim().min(1)).default([]),
-  mustAvoid: z.array(z.string().trim().min(1)).default([]),
-  extraInstructions: z.string().trim().min(1).optional(),
-  customArchetypePrompt: z.string().trim().min(1).optional(),
-  customTone: z.string().trim().min(1).optional(),
-  customVisualStyle: z.string().trim().min(1).optional(),
-  visualContentTypes: z.array(visualContentTypeSchema).default([]),
-  visualDensity: visualDensitySchema.default("moderate"),
-  optionalReview: z.boolean().default(true),
+  mustInclude: z.array(z.string().trim().min(1).max(2_000)).max(100).default([]),
+  mustAvoid: z.array(z.string().trim().min(1).max(2_000)).max(100).default([]),
+  extraInstructions: z.string().trim().min(1).max(10_000).optional(),
+  customArchetypePrompt: z.string().trim().min(1).max(10_000).optional(),
+  customTone: z.string().trim().min(1).max(1_000).optional(),
+  customVisualStyle: z.string().trim().min(1).max(1_000).optional(),
+  visualContentTypes: z.array(visualContentTypeSchema).max(6).default([]),
+  visualDensity: visualDensitySchema.default("rich"),
+  optionalReview: z.boolean().default(false),
   allowUserApprovedCrawlException: z.boolean().default(false),
+}).strict().superRefine((questionnaire, context) => {
+  const customTonePresent = Boolean(questionnaire.customTone?.trim());
+  if (questionnaire.tone === "custom" && !customTonePresent) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "A custom tone requires its bounded tone instruction.",
+      path: ["customTone"],
+    });
+  } else if (questionnaire.tone !== "custom" && customTonePresent) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "A custom tone instruction requires tone=custom.",
+      path: ["customTone"],
+    });
+  }
+
+  const customVisualStylePresent = Boolean(questionnaire.customVisualStyle?.trim());
+  if (questionnaire.visualStyle === "custom" && !customVisualStylePresent) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "A custom visual style requires its bounded style instruction.",
+      path: ["customVisualStyle"],
+    });
+  } else if (questionnaire.visualStyle !== "custom" && customVisualStylePresent) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "A custom visual-style instruction requires visualStyle=custom.",
+      path: ["customVisualStyle"],
+    });
+  }
 });
 
 export const intakeRunSchema = z.object({
   sellerContext: sellerContextSchema,
   questionnaire: runQuestionnaireSchema,
-  targets: z.array(companyRowSchema).min(1).max(100),
-});
+  targets: z.array(companyRowSchema).min(1).max(MAX_TARGETS_PER_RUN),
+}).strict();
 
 /* ─────────────────────────────────────────────
    Business Schema
@@ -137,61 +211,6 @@ export const businessSchema = z.object({
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
-
-/* ─────────────────────────────────────────────
-   Deck Score Schema
-   ───────────────────────────────────────────── */
-
-export const deckScoreBreakdownSchema = z.object({
-  relevance: z.number().min(0).max(100),
-  completeness: z.number().min(0).max(100),
-  persuasion: z.number().min(0).max(100),
-  visualQuality: z.number().min(0).max(100),
-  personalization: z.number().min(0).max(100),
-});
-
-export const deckScoreSchema = z.object({
-  deckId: z.string(),
-  overallScore: z.number().min(0).max(100),
-  breakdown: deckScoreBreakdownSchema,
-  feedback: z.array(z.string()),
-  infoRequests: z.array(
-    z.object({
-      field: z.string(),
-      question: z.string(),
-      priority: z.enum(["high", "medium", "low"]),
-      businessId: z.string(),
-    }),
-  ),
-  scoredAt: z.string().datetime(),
-});
-
-/* ─────────────────────────────────────────────
-   Credits Schema
-   ───────────────────────────────────────────── */
-
-export const planTierSchema = z.enum([
-  "free",
-  "starter",
-  "growth",
-  "scale",
-  "enterprise",
-]);
-
-export const userCreditsSchema = z.object({
-  userId: z.string(),
-  balance: z.number().int().min(0),
-  monthlyAllowance: z.number().int().min(0),
-  bonusCredits: z.number().int().min(0).default(0),
-  planTier: planTierSchema,
-  resetDate: z.string().datetime(),
-});
-
-/* ─────────────────────────────────────────────
-   AI Model Preference
-   ───────────────────────────────────────────── */
-
-export const aiModelSchema = z.enum(["claude", "gpt", "gemini", "kimi"]);
 
 /* ─────────────────────────────────────────────
    Pricing Model
@@ -288,48 +307,75 @@ export const sellerKnowledgeSchema = z
   });
 
 /* ─────────────────────────────────────────────
-   Offer Strength Score
+   Seller-context completion evidence
    ───────────────────────────────────────────── */
 
-/** Computes 0–10 score reflecting how rich the seller knowledge is. */
-export function computeOfferStrengthScore(k: SellerKnowledge): number {
-  let score = 0;
+export const SELLER_CONTEXT_COMPLETION_CHECK_KEYS = [
+  "hasOfferSummary",
+  "hasAtLeastTwoServices",
+  "hasAtLeastTwoDifferentiators",
+  "hasTargetCustomer",
+  "hasDesiredOutcome",
+  "hasAtLeastThreeProofPoints",
+  "hasCaseStudyWithChallengeAndResult",
+  "hasObjectionWithResponse",
+  "hasPricingModel",
+  "hasCompetitorNotes",
+] as const;
 
-  // offerSummary filled: +1
-  if (k.offerSummary.trim().length > 0) score += 1;
+export type SellerContextCompletionCheckKey =
+  (typeof SELLER_CONTEXT_COMPLETION_CHECK_KEYS)[number];
 
-  // services >= 2: +1
-  if (k.services.length >= 2) score += 1;
+export type SellerContextCompletion = Readonly<{
+  completed: number;
+  total: number;
+  percentage: number;
+  checks: Readonly<Record<SellerContextCompletionCheckKey, boolean>>;
+}>;
 
-  // differentiators >= 2: +1
-  if (k.differentiators.length >= 2) score += 1;
+/**
+ * Reports which seller-context inputs are present. Every named check has equal
+ * weight. This measures input completion only; it is not a proposal-quality or
+ * outcome prediction.
+ */
+export function computeSellerContextCompletion(
+  knowledge: SellerKnowledge,
+): SellerContextCompletion {
+  const checks = {
+    hasOfferSummary: knowledge.offerSummary.trim().length > 0,
+    hasAtLeastTwoServices:
+      knowledge.services.filter((service) => service.trim().length > 0).length >= 2,
+    hasAtLeastTwoDifferentiators:
+      knowledge.differentiators.filter((item) => item.trim().length > 0).length >= 2,
+    hasTargetCustomer: knowledge.targetCustomer.trim().length > 0,
+    hasDesiredOutcome: knowledge.desiredOutcome.trim().length > 0,
+    hasAtLeastThreeProofPoints:
+      knowledge.proofPoints.filter((point) => point.trim().length > 0).length >= 3,
+    hasCaseStudyWithChallengeAndResult: knowledge.caseStudies.some(
+      (study) =>
+        study.clientName.trim().length > 0
+        && study.challenge.trim().length > 0
+        && study.results.trim().length > 0,
+    ),
+    hasObjectionWithResponse: knowledge.commonObjections.some(
+      (item) => item.objection.trim().length > 0 && item.response.trim().length > 0,
+    ),
+    hasPricingModel: Boolean(knowledge.pricingModel),
+    hasCompetitorNotes: Boolean(knowledge.competitorNotes?.trim()),
+  } satisfies Record<SellerContextCompletionCheckKey, boolean>;
 
-  // targetCustomer filled: +1
-  if (k.targetCustomer.trim().length > 0) score += 1;
-
-  // desiredOutcome filled: +1
-  if (k.desiredOutcome.trim().length > 0) score += 1;
-
-  // proofPoints: 1-2 = +0.5, 3+ = +1
-  if (k.proofPoints.length >= 3) score += 1;
-  else if (k.proofPoints.length >= 1) score += 0.5;
-
-  // caseStudies with at least challenge+results filled: +2
-  const completeCaseStudies = k.caseStudies.filter(
-    (cs) => cs.challenge.trim().length > 0 && cs.results.trim().length > 0
+  const total = SELLER_CONTEXT_COMPLETION_CHECK_KEYS.length;
+  const completed = SELLER_CONTEXT_COMPLETION_CHECK_KEYS.reduce(
+    (count, key) => count + Number(checks[key]),
+    0,
   );
-  if (completeCaseStudies.length >= 1) score += 2;
 
-  // commonObjections >= 1: +1
-  if (k.commonObjections.length >= 1) score += 1;
-
-  // pricingModel set: +0.5
-  if (k.pricingModel) score += 0.5;
-
-  // competitorNotes filled: +0.5
-  if (k.competitorNotes && k.competitorNotes.trim().length > 0) score += 0.5;
-
-  return Math.min(10, Math.max(0, score));
+  return {
+    completed,
+    total,
+    percentage: Math.round((completed / total) * 100),
+    checks,
+  };
 }
 
 /* ─────────────────────────────────────────────
@@ -346,9 +392,6 @@ export type SellerContext = z.infer<typeof sellerContextSchema>;
 export type RunQuestionnaire = z.infer<typeof runQuestionnaireSchema>;
 export type IntakeRun = z.infer<typeof intakeRunSchema>;
 export type BusinessRecord = z.infer<typeof businessSchema>;
-export type DeckScoreRecord = z.infer<typeof deckScoreSchema>;
-export type UserCreditsRecord = z.infer<typeof userCreditsSchema>;
-export type AIModelType = z.infer<typeof aiModelSchema>;
 export type VisualContentType = z.infer<typeof visualContentTypeSchema>;
 export type VisualDensity = z.infer<typeof visualDensitySchema>;
 export type PricingModel = z.infer<typeof pricingModelSchema>;

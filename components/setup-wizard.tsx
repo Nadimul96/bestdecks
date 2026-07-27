@@ -25,12 +25,12 @@ import { Logo } from "@/components/logo";
 import {
   intentOptions,
   type DeckIntent,
-  type Business,
 } from "@/lib/workspace-types";
 import { useBusinessContext } from "@/lib/business-context";
 import { archetypeExamples, ArchetypePreviewModal } from "@/components/archetype-preview-modal";
-import { dispatchRunStart } from "@/lib/run-launch";
+import { submitSetup, setupArchetypeByIntent } from "@/lib/setup-submission";
 import { cn } from "@/lib/utils";
+import { TARGET_CSV_COLUMNS } from "@/src/domain/intake-fields";
 
 /* ─────────────────────────────────────────────
    Types
@@ -45,8 +45,14 @@ interface WizardState {
   websiteUrl: string;
   companyName: string;
   offerSummary: string;
+  servicesText: string;
+  differentiatorsText: string;
   targetCustomer: string;
+  desiredOutcome: string;
   intent: DeckIntent;
+  audience: string;
+  objective: string;
+  callToAction: string;
   websitesText: string;
   contactsCsvText: string;
   showCsv: boolean;
@@ -64,8 +70,6 @@ const STEPS = [
   { id: "launch", label: "Launch" },
 ] as const;
 
-type StepId = (typeof STEPS)[number]["id"];
-
 const TOTAL_STEPS = STEPS.length;
 
 /* ─────────────────────────────────────────────
@@ -73,36 +77,26 @@ const TOTAL_STEPS = STEPS.length;
    ───────────────────────────────────────────── */
 
 export function SetupWizard({ currentUser, onComplete }: SetupWizardProps) {
-  const { currentBusiness, addBusiness, updateBusiness } =
-    useBusinessContext();
+  const { refreshBusinesses } = useBusinessContext();
 
   const [step, setStep] = React.useState(0);
-  const [crawling, setCrawling] = React.useState(false);
-  const [crawlStatus, setCrawlStatus] = React.useState<string | null>(null);
   const [saving, setSaving] = React.useState(false);
   const [launched, setLaunched] = React.useState(false);
   const [previewArchetype, setPreviewArchetype] = React.useState<string | null>(null);
 
   // Map intent → archetype for preview lookup
-  const intentToArchetype: Record<string, string> = {
-    cold_pitch: "cold_outreach",
-    post_call: "warm_intro",
-    agency_rfp: "agency_proposal",
-    investor: "investor_pitch",
-    partnership: "warm_intro",
-    event_sponsor: "agency_proposal",
-    product_demo: "product_launch",
-    upsell: "warm_intro",
-    board_update: "thought_leadership",
-    custom: "cold_outreach",
-  };
-
   const [state, setState] = React.useState<WizardState>({
     websiteUrl: "",
     companyName: "",
     offerSummary: "",
+    servicesText: "",
+    differentiatorsText: "",
     targetCustomer: "",
+    desiredOutcome: "",
     intent: "cold_pitch",
+    audience: "",
+    objective: "",
+    callToAction: "",
     websitesText: "",
     contactsCsvText: "",
     showCsv: false,
@@ -125,9 +119,17 @@ export function SetupWizard({ currentUser, onComplete }: SetupWizardProps) {
       case "welcome":
         return true;
       case "business":
-        return state.websiteUrl.length > 0;
+        return [
+          state.websiteUrl,
+          state.offerSummary,
+          state.servicesText,
+          state.differentiatorsText,
+          state.targetCustomer,
+          state.desiredOutcome,
+        ].every((value) => value.trim().length > 0);
       case "goal":
-        return !!state.intent;
+        return [state.audience, state.objective, state.callToAction]
+          .every((value) => value.trim().length > 0);
       case "targets":
         return true;
       case "launch":
@@ -145,187 +147,19 @@ export function SetupWizard({ currentUser, onComplete }: SetupWizardProps) {
     if (step > 0) setStep((s) => s - 1);
   }
 
-  /* ── Auto-fill ── */
-
-  async function handleAutofill() {
-    if (!state.websiteUrl) return;
-    setCrawling(true);
-    setCrawlStatus("Crawling your website…");
-    try {
-      const res = await fetch("/api/onboarding/crawl-seller", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ websiteUrl: state.websiteUrl }),
-      });
-
-      if (!res.ok || !res.body) {
-        toast.error("Couldn\u2019t analyze that website. Fill in the fields manually.");
-        setCrawling(false);
-        setCrawlStatus(null);
-        return;
-      }
-
-      // Stream SSE events for real-time progress
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          try {
-            const event = JSON.parse(line.slice(6));
-
-            if (event.type === "status") {
-              setCrawlStatus(event.message ?? "Analyzing…");
-            } else if (event.type === "complete") {
-              const sc = event.sellerContext;
-              if (sc) {
-                setState((prev) => ({
-                  ...prev,
-                  companyName: sc.companyName ?? prev.companyName,
-                  offerSummary: sc.offerSummary ?? prev.offerSummary,
-                  targetCustomer: sc.targetCustomer ?? prev.targetCustomer,
-                }));
-                toast.success("We analyzed your website and filled in the details.");
-              }
-            } else if (event.type === "error") {
-              toast.error(event.message ?? "Analysis failed. Fill in the fields manually.");
-            }
-          } catch {
-            // Skip malformed SSE lines
-          }
-        }
-      }
-    } catch {
-      toast.error("Network error. Please try again.");
-    } finally {
-      setCrawling(false);
-      setCrawlStatus(null);
-    }
-  }
-
   /* ── Launch ── */
 
   async function handleLaunch() {
     setSaving(true);
     try {
-      // 1. Save seller context
-      await fetch("/api/onboarding/seller-context", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          websiteUrl: state.websiteUrl,
-          companyName: state.companyName,
-          offerSummary: state.offerSummary,
-          targetCustomer: state.targetCustomer,
-          desiredOutcome: "",
-          servicesText: "",
-          differentiatorsText: "",
-          proofPointsText: "",
-          constraintsText: "",
-        }),
-      });
-
-      // 2. Save questionnaire with archetype derived from intent
-      const archetypeMap: Record<DeckIntent, string> = {
-        cold_pitch: "cold_outreach",
-        post_call: "warm_intro",
-        agency_rfp: "agency_proposal",
-        investor: "investor_pitch",
-        partnership: "warm_intro",
-        event_sponsor: "agency_proposal",
-        product_demo: "product_launch",
-        upsell: "warm_intro",
-        board_update: "thought_leadership",
-        custom: "cold_outreach",
-      };
-      await fetch("/api/onboarding/questionnaire", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ archetype: archetypeMap[state.intent] }),
-      });
-
-      // 3. If targets were provided, create a run
-      const urls = state.websitesText
-        .split("\n")
-        .filter((l) => l.trim().length > 0);
-
-      let runId: string | null = null;
-
-      if (urls.length > 0) {
-        const runResponse = await fetch("/api/runs", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            websitesText: state.websitesText,
-            contactsCsvText: state.contactsCsvText || undefined,
-            autoLaunch: false,
-          }),
-        });
-
-        const runPayload = (await runResponse.json().catch(() => null)) as
-          | { runId?: string; error?: string }
-          | null;
-
-        if (!runResponse.ok || !runPayload?.runId) {
-          throw new Error(
-            runPayload?.error ?? "Failed to create the initial run.",
-          );
-        }
-
-        runId = runPayload.runId;
-      }
-
-      // 4. Create or update the business entity in context
-      const now = new Date().toISOString();
-      if (currentBusiness && currentBusiness.id !== "default") {
-        updateBusiness(currentBusiness.id, {
-          name: state.companyName || currentBusiness.name,
-          websiteUrl: state.websiteUrl,
-          setupComplete: true,
-          updatedAt: now,
-        });
-      } else {
-        const newBiz: Business = {
-          id: crypto.randomUUID(),
-          name: state.companyName || "My Business",
-          websiteUrl: state.websiteUrl,
-          setupComplete: true,
-          createdAt: now,
-          updatedAt: now,
-        };
-        addBusiness(newBiz);
-
-        try {
-          await fetch("/api/businesses", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(newBiz),
-          });
-        } catch {
-          // context state is already updated
-        }
-      }
-
-      // 5. Show celebration, then redirect
+      const result = await submitSetup(state);
+      await refreshBusinesses();
       setLaunched(true);
 
-      if (runId) {
-        dispatchRunStart(runId);
-      }
-
       setTimeout(() => {
-        if (urls.length > 0) {
+        if (result.targetCount > 0) {
           toast.success(
-            `Setup complete! Launched a run with ${urls.length} target${urls.length > 1 ? "s" : ""}.`,
+            `Setup complete! Queued a run with ${result.targetCount} target${result.targetCount > 1 ? "s" : ""}.`,
           );
         } else {
           toast.success("Setup complete! Add targets whenever you\u2019re ready.");
@@ -333,8 +167,8 @@ export function SetupWizard({ currentUser, onComplete }: SetupWizardProps) {
         window.location.hash = "overview";
         onComplete();
       }, 2400);
-    } catch {
-      toast.error("Something went wrong. Please try again.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to save setup.");
     } finally {
       setSaving(false);
     }
@@ -406,7 +240,7 @@ export function SetupWizard({ currentUser, onComplete }: SetupWizardProps) {
 
                 <p className="mt-4 max-w-md text-base text-muted-foreground leading-relaxed">
                   AI-powered personalized pitch decks for every prospect.
-                  Let&apos;s get you set up in under two minutes.
+                  Let&apos;s configure the essentials for your first run.
                 </p>
 
                 <Button
@@ -433,7 +267,7 @@ export function SetupWizard({ currentUser, onComplete }: SetupWizardProps) {
                   </p>
                 </div>
 
-                {/* Hero card — website input + auto-fill */}
+                {/* Seller website anchor. Automatic analysis is intentionally unavailable. */}
                 <div className="relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/[0.04] via-card to-card">
                   <div
                     className="pointer-events-none absolute -right-20 -top-20 size-40 rounded-full opacity-40"
@@ -452,7 +286,7 @@ export function SetupWizard({ currentUser, onComplete }: SetupWizardProps) {
                           Start with your website
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          We&apos;ll analyze it and auto-fill everything below
+                          Automatic analysis is paused; enter the details below.
                         </p>
                       </div>
                     </div>
@@ -465,51 +299,23 @@ export function SetupWizard({ currentUser, onComplete }: SetupWizardProps) {
                           onChange={(e) => update("websiteUrl", e.target.value)}
                           placeholder="https://yourcompany.com"
                           className="h-11 pl-10 text-sm"
-                          onKeyDown={(e) =>
-                            e.key === "Enter" && handleAutofill()
-                          }
                           autoFocus
                         />
                       </div>
                       <Button
-                        onClick={handleAutofill}
-                        disabled={crawling || !state.websiteUrl}
+                        disabled
+                        title="Automatic analysis requires a future durable worker job."
                         className="h-11 px-5"
                       >
-                        {crawling ? (
-                          <>
-                            <LoaderCircle className="size-4 animate-spin" />
-                            Analyzing...
-                          </>
-                        ) : (
-                          <>
-                            <Zap className="size-4" />
-                            Auto-fill
-                          </>
-                        )}
+                        <Zap className="size-4" />
+                        Manual entry
                       </Button>
                     </div>
 
-                    {crawling && (
-                      <div className="mt-3 flex items-center gap-2 text-xs animate-fade-in">
-                        <div className="h-1.5 flex-1 max-w-[240px] rounded-full bg-primary/10 overflow-hidden">
-                          <div
-                            className="h-full rounded-full bg-primary/60"
-                            style={{
-                              animation: "shimmer 2s ease-in-out infinite",
-                              width: "60%",
-                            }}
-                          />
-                        </div>
-                        <span className="text-muted-foreground text-[12px]">
-                          {crawlStatus ?? "Starting…"}
-                        </span>
-                      </div>
-                    )}
                   </div>
                 </div>
 
-                {/* Auto-filled fields */}
+                {/* Seller-entered fields */}
                 <div className="rounded-xl border border-border/50 bg-card p-6 card-elevated">
                   <div className="mb-4">
                     <p className="text-sm font-semibold text-foreground">
@@ -551,8 +357,41 @@ export function SetupWizard({ currentUser, onComplete }: SetupWizardProps) {
                       <Textarea
                         value={state.offerSummary}
                         onChange={(e) => update("offerSummary", e.target.value)}
-                        placeholder="We build high-converting landing pages for SaaS companies that want to 2-3x their demo requests."
+                        placeholder="We design and implement landing pages for B2B software teams."
                         className="min-h-[80px] resize-none"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-foreground">
+                        Services (one per line)
+                      </label>
+                      <Textarea
+                        value={state.servicesText}
+                        onChange={(e) => update("servicesText", e.target.value)}
+                        placeholder={"Landing-page strategy\nDesign and implementation"}
+                        className="min-h-[96px] resize-none"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-foreground">
+                        Differentiators (one per line)
+                      </label>
+                      <Textarea
+                        value={state.differentiatorsText}
+                        onChange={(e) => update("differentiatorsText", e.target.value)}
+                        placeholder={"Operator-led delivery\nEvidence-backed recommendations"}
+                        className="min-h-[96px] resize-none"
+                      />
+                    </div>
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <label className="text-xs font-medium text-foreground">
+                        Desired customer outcome
+                      </label>
+                      <Textarea
+                        value={state.desiredOutcome}
+                        onChange={(e) => update("desiredOutcome", e.target.value)}
+                        placeholder="The concrete outcome your buyer should achieve."
+                        className="min-h-[72px] resize-none"
                       />
                     </div>
                   </div>
@@ -574,7 +413,7 @@ export function SetupWizard({ currentUser, onComplete }: SetupWizardProps) {
 
                 <div className="grid gap-3 grid-cols-2 lg:grid-cols-3">
                   {intentOptions.map((opt) => {
-                    const archetype = intentToArchetype[opt.value];
+                    const archetype = setupArchetypeByIntent[opt.value];
                     const example = archetype ? archetypeExamples[archetype] : undefined;
                     return (
                       <button
@@ -620,6 +459,42 @@ export function SetupWizard({ currentUser, onComplete }: SetupWizardProps) {
                     );
                   })}
                 </div>
+
+                <div className="rounded-xl border border-border/50 bg-card p-6 card-elevated">
+                  <div className="mb-4">
+                    <p className="text-sm font-semibold text-foreground">Define the campaign</p>
+                    <p className="text-xs text-muted-foreground">
+                      Bestdecks requires these operator-supplied facts and will not invent them.
+                    </p>
+                  </div>
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-foreground">Audience</label>
+                      <Input
+                        value={state.audience}
+                        onChange={(e) => update("audience", e.target.value)}
+                        placeholder="VP Sales at mid-market B2B SaaS companies"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-foreground">Call to action</label>
+                      <Input
+                        value={state.callToAction}
+                        onChange={(e) => update("callToAction", e.target.value)}
+                        placeholder="Review the evidence together in a 20-minute call"
+                      />
+                    </div>
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <label className="text-xs font-medium text-foreground">Objective</label>
+                      <Textarea
+                        value={state.objective}
+                        onChange={(e) => update("objective", e.target.value)}
+                        placeholder="What this deck should help the recipient understand or decide."
+                        className="min-h-[72px] resize-none"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -650,7 +525,7 @@ export function SetupWizard({ currentUser, onComplete }: SetupWizardProps) {
                   <Textarea
                     value={state.websitesText}
                     onChange={(e) => update("websitesText", e.target.value)}
-                    placeholder={`https://acmeplumbing.com\nhttps://northshoreclinic.com\nhttps://sunsetlogistics.io`}
+                    placeholder={`https://target-one.example\nhttps://target-two.example\nhttps://target-three.example`}
                     className="min-h-[160px] resize-none font-mono text-xs leading-relaxed"
                     autoFocus
                   />
@@ -665,10 +540,10 @@ export function SetupWizard({ currentUser, onComplete }: SetupWizardProps) {
                   >
                     <div>
                       <p className="text-sm font-medium text-foreground">
-                        Have a CSV with contacts?
+                        Have a CSV with target metadata?
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        Optional -- personalizes greetings and CTAs per person
+                        Optional -- adds names, roles, goals, and notes. No recipient-email columns.
                       </p>
                     </div>
                     <ChevronDown
@@ -684,7 +559,7 @@ export function SetupWizard({ currentUser, onComplete }: SetupWizardProps) {
                       <div className="space-y-1.5">
                         <div className="flex items-center justify-between">
                           <label className="text-xs font-medium text-foreground">
-                            Contacts CSV
+                            Target CSV
                           </label>
                           <span className="text-xs text-muted-foreground">
                             Optional
@@ -695,15 +570,14 @@ export function SetupWizard({ currentUser, onComplete }: SetupWizardProps) {
                           onChange={(e) =>
                             update("contactsCsvText", e.target.value)
                           }
-                          placeholder={`websiteUrl,firstName,lastName,role,email\nhttps://acmeplumbing.com,Sarah,Lee,Founder,sarah@acmeplumbing.com\nhttps://northshoreclinic.com,Marcus,Reed,Director,marcus@northshoreclinic.com`}
+                          placeholder={`websiteUrl,firstName,lastName,role,campaignGoal,notes\nhttps://target-one.example,Casey,Lee,Founder,Review operations,"Regional expansion, 2026"\nhttps://target-two.example,Morgan,Reed,Director,Assess workflow,New service line`}
                           className="min-h-[120px] resize-none font-mono text-xs leading-relaxed"
                         />
                       </div>
                       <p className="text-xs text-muted-foreground">
                         Columns:{" "}
                         <code className="rounded bg-muted px-1 py-0.5 text-xs">
-                          websiteUrl, firstName, lastName, role, email,
-                          campaignGoal, notes
+                          {TARGET_CSV_COLUMNS.join(", ")}
                         </code>
                       </p>
                     </div>
@@ -863,13 +737,6 @@ export function SetupWizard({ currentUser, onComplete }: SetupWizardProps) {
                 Back
               </Button>
               <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  className="text-muted-foreground"
-                  onClick={next}
-                >
-                  Skip
-                </Button>
                 <Button
                   onClick={next}
                   disabled={!canAdvance}

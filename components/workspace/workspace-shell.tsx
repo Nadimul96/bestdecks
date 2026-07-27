@@ -22,6 +22,40 @@ import { DeliveryView } from "./views/delivery-view";
 import { PricingView } from "./views/pricing-view";
 
 const TOUR_COMPLETE_KEY = "bestdecks_tour_complete";
+const TOUR_COMPLETE_EVENT = "bestdecks:tour-complete";
+
+function getTourCompleteSnapshot() {
+  try {
+    return localStorage.getItem(TOUR_COMPLETE_KEY) === "true";
+  } catch {
+    return true;
+  }
+}
+
+function getServerTourCompleteSnapshot() {
+  return true;
+}
+
+function subscribeToTourCompletion(onStoreChange: () => void) {
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === TOUR_COMPLETE_KEY) onStoreChange();
+  };
+  window.addEventListener("storage", onStorage);
+  window.addEventListener(TOUR_COMPLETE_EVENT, onStoreChange);
+  return () => {
+    window.removeEventListener("storage", onStorage);
+    window.removeEventListener(TOUR_COMPLETE_EVENT, onStoreChange);
+  };
+}
+
+function markTourComplete() {
+  try {
+    localStorage.setItem(TOUR_COMPLETE_KEY, "true");
+    window.dispatchEvent(new Event(TOUR_COMPLETE_EVENT));
+  } catch {
+    // Completion still applies to this session through showTour state.
+  }
+}
 
 function useActiveWorkspaceView() {
   const [activeView, setActiveView] =
@@ -69,15 +103,11 @@ export function WorkspaceShell({ currentUser }: WorkspaceShellProps) {
   // Show product tour after wizard completion (one-time)
   const [showTour, setShowTour] = React.useState(false);
 
-  const [tourAlreadyDone, setTourAlreadyDone] = React.useState(true);
-
-  React.useEffect(() => {
-    try {
-      setTourAlreadyDone(localStorage.getItem(TOUR_COMPLETE_KEY) === "true");
-    } catch {
-      setTourAlreadyDone(true);
-    }
-  }, []);
+  const tourAlreadyDone = React.useSyncExternalStore(
+    subscribeToTourCompletion,
+    getTourCompleteSnapshot,
+    getServerTourCompleteSnapshot,
+  );
 
   const shouldShowWizard = !loading && !setupComplete && !wizardDismissed;
 
@@ -91,7 +121,7 @@ export function WorkspaceShell({ currentUser }: WorkspaceShellProps) {
 
   function handleTourComplete() {
     setShowTour(false);
-    localStorage.setItem(TOUR_COMPLETE_KEY, "true");
+    markTourComplete();
   }
 
   // Full-screen setup wizard for first-time users
@@ -112,9 +142,7 @@ export function WorkspaceShell({ currentUser }: WorkspaceShellProps) {
       {showTour && <ProductTour onComplete={handleTourComplete} />}
       <div key={activeView} className="animate-fade-up">
         {activeView === "overview" && <OverviewView currentUser={currentUser} />}
-        {activeView === "onboarding" && (
-          <OnboardingView currentUser={currentUser} />
-        )}
+        {activeView === "onboarding" && <OnboardingView />}
         {activeView === "seller-context" && <SellerContextView />}
         {activeView === "run-settings" && <RunSettingsView />}
         {activeView === "deck-structure" && <StructureView />}

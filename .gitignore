@@ -1,7 +1,8 @@
 node_modules
 dist
-.env
-.env.local
+.env*
+!.env.example
+!.env.production.example
 .DS_Store
 .data
 .next
@@ -9,3 +10,9 @@ app_data
 output
 tsconfig.tsbuildinfo
 .vercel
+tmp/
+.pnpm-store/
+.firecrawl/
+.agents/
+.claude/
+.codex/

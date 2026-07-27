@@ -26,6 +26,11 @@ import { useBusinessContext } from "@/lib/business-context";
 import { cn } from "@/lib/utils";
 
 const meta = viewMeta.overview;
+const COMPLETE_READINESS_STATE = {
+  seller: true,
+  settings: true,
+  targets: true,
+} as const;
 
 function formatOverviewRunName(run: RunSummary): string {
   let siteName = "Run";
@@ -55,7 +60,7 @@ interface ReadinessItem {
 }
 
 export function OverviewView({ currentUser }: { currentUser: CurrentUser }) {
-  const { currentBusiness, businesses, credits } = useBusinessContext();
+  const { currentBusiness, businesses } = useBusinessContext();
   const [runs, setRuns] = React.useState<RunSummary[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [readinessLoading, setReadinessLoading] = React.useState(true);
@@ -82,11 +87,7 @@ export function OverviewView({ currentUser }: { currentUser: CurrentUser }) {
 
   /* Check actual readiness — mirrors setup-guide.tsx logic */
   React.useEffect(() => {
-    if (setupComplete) {
-      setReadinessState({ seller: true, settings: true, targets: true });
-      setReadinessLoading(false);
-      return;
-    }
+    if (setupComplete) return;
 
     async function checkReadiness() {
       const done: Record<string, boolean> = {
@@ -96,31 +97,15 @@ export function OverviewView({ currentUser }: { currentUser: CurrentUser }) {
       };
 
       try {
-        const sellerRes = await fetch("/api/onboarding/seller-context");
-        if (sellerRes.ok) {
-          const data = await sellerRes.json();
-          if (data?.companyName || data?.offerSummary) {
-            done.seller = true;
-          }
+        const [onboardingRes, runsRes] = await Promise.all([
+          fetch("/api/onboarding"),
+          fetch("/api/runs"),
+        ]);
+        if (onboardingRes.ok) {
+          const data = await onboardingRes.json();
+          done.seller = data?.readiness?.sellerReady === true;
+          done.settings = data?.readiness?.questionnaireReady === true;
         }
-      } catch {
-        // ignore
-      }
-
-      try {
-        const questRes = await fetch("/api/onboarding/questionnaire");
-        if (questRes.ok) {
-          const data = await questRes.json();
-          if (data?.audience || data?.objective) {
-            done.settings = true;
-          }
-        }
-      } catch {
-        // ignore
-      }
-
-      try {
-        const runsRes = await fetch("/api/runs");
         if (runsRes.ok) {
           const data = await runsRes.json();
           if (Array.isArray(data) && data.length > 0) {
@@ -138,14 +123,19 @@ export function OverviewView({ currentUser }: { currentUser: CurrentUser }) {
     checkReadiness();
   }, [setupComplete]);
 
+  const displayReadinessState = setupComplete
+    ? COMPLETE_READINESS_STATE
+    : readinessState;
+  const displayReadinessLoading = setupComplete ? false : readinessLoading;
+
   const readiness: ReadinessItem[] = [
     {
       id: "seller",
       label: "Business context",
       icon: Briefcase,
       hash: "#seller-context",
-      status: readinessState.seller ? "ready" : "incomplete",
-      detail: readinessState.seller
+      status: displayReadinessState.seller ? "ready" : "incomplete",
+      detail: displayReadinessState.seller
         ? "Context configured"
         : "Tell us what you sell",
     },
@@ -154,8 +144,8 @@ export function OverviewView({ currentUser }: { currentUser: CurrentUser }) {
       label: "Run settings",
       icon: Settings2,
       hash: "#run-settings",
-      status: readinessState.settings ? "ready" : "incomplete",
-      detail: readinessState.settings
+      status: displayReadinessState.settings ? "ready" : "incomplete",
+      detail: displayReadinessState.settings
         ? "Preferences saved"
         : "Configure deck style and tone",
     },
@@ -164,8 +154,8 @@ export function OverviewView({ currentUser }: { currentUser: CurrentUser }) {
       label: "Targets imported",
       icon: Upload,
       hash: "#target-intake",
-      status: readinessState.targets ? "ready" : "incomplete",
-      detail: readinessState.targets
+      status: displayReadinessState.targets ? "ready" : "incomplete",
+      detail: displayReadinessState.targets
         ? "Targets added"
         : "Add companies to personalize for",
     },
@@ -175,6 +165,20 @@ export function OverviewView({ currentUser }: { currentUser: CurrentUser }) {
   const progress = Math.round((completedCount / readiness.length) * 100);
 
   const firstName = currentUser?.name?.split(" ")[0];
+  const deliveredRunCount = runs.filter(
+    (run) => run.status === "delivered",
+  ).length;
+  const activeRunCount = runs.filter((run) =>
+    [
+      "queued",
+      "crawling",
+      "enriching",
+      "brief_ready",
+      "planning",
+      "rendering",
+      "running",
+    ].includes(run.status),
+  ).length;
 
   return (
     <ViewLayout
@@ -199,9 +203,7 @@ export function OverviewView({ currentUser }: { currentUser: CurrentUser }) {
                   {currentBusiness?.name} is ready
                 </p>
                 <p className="text-[13px] text-muted-foreground">
-                  {credits
-                    ? `${credits.balance} deck${credits.balance !== 1 ? "s" : ""} available`
-                    : "Start generating decks for your targets"}
+                  Provider usage is billed to your configured accounts.
                 </p>
               </div>
             </div>
@@ -226,7 +228,7 @@ export function OverviewView({ currentUser }: { currentUser: CurrentUser }) {
       {/* ── Setup incomplete: progress banner ── */}
       {!setupComplete && (
         <>
-          {readinessLoading ? (
+          {displayReadinessLoading ? (
             <Skeleton className="h-28 w-full rounded-xl" />
           ) : (
             progress < 100 && (
@@ -266,7 +268,7 @@ export function OverviewView({ currentUser }: { currentUser: CurrentUser }) {
           )}
 
           {/* Readiness checklist */}
-          {readinessLoading ? (
+          {displayReadinessLoading ? (
             <div className="grid gap-3 sm:grid-cols-3">
               {[0, 1, 2].map((i) => (
                 <Skeleton key={i} className="h-24 rounded-xl" />
@@ -332,7 +334,7 @@ export function OverviewView({ currentUser }: { currentUser: CurrentUser }) {
             },
             {
               label: "Download decks",
-              description: `${runs.filter((r) => r.status === "completed").length} completed`,
+              description: `${deliveredRunCount} delivered`,
               icon: FileText,
               href: "#delivery",
               accent: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
@@ -373,14 +375,14 @@ export function OverviewView({ currentUser }: { currentUser: CurrentUser }) {
               icon: Upload,
             },
             {
-              label: "Completed",
-              value: runs.filter((r) => r.status === "completed").length,
+              label: "Delivered",
+              value: deliveredRunCount,
               icon: CheckCircle2,
             },
             {
-              label: "Decks",
-              value: credits?.balance ?? 0,
-              icon: Sparkles,
+              label: "Active",
+              value: activeRunCount,
+              icon: Clock3,
             },
           ].map((stat) => (
             <div
@@ -486,7 +488,7 @@ export function OverviewView({ currentUser }: { currentUser: CurrentUser }) {
                 <div className="flex items-center gap-3">
                   <StatusPill
                     status={
-                      run.status === "completed"
+                      run.status === "delivered"
                         ? "ready"
                         : run.status === "failed" || run.status === "cancelled"
                           ? "error"
@@ -499,6 +501,7 @@ export function OverviewView({ currentUser }: { currentUser: CurrentUser }) {
                     label={
                       run.status === "partially_completed" ? "partial"
                         : run.status === "queued" ? "starting"
+                        : run.status === "completed" ? "legacy / unverified"
                         : run.status
                     }
                   />

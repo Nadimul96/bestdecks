@@ -3,7 +3,6 @@
 import * as React from "react";
 import {
   CircleUser,
-  CreditCard,
   EllipsisVertical,
   LogOut,
   MessageSquareDot,
@@ -94,10 +93,6 @@ export function NavUser({
               <DropdownMenuItem>
                 <CircleUser />
                 Account
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <CreditCard />
-                Billing
               </DropdownMenuItem>
               <DropdownMenuItem>
                 <MessageSquareDot />

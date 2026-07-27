@@ -1,39 +1,111 @@
+import { z } from "zod";
+
 import {
   buildDeckInputText,
   buildPresentationAdditionalInstructions,
 } from "../domain/deck";
-import { requestText } from "./http";
+import { requestText, sleep } from "./http";
+import {
+  invalidProviderConfiguration,
+  normalizeDeckInputSourceUrls,
+  normalizeProviderTransportError,
+  parseProviderJson,
+  ProviderAdapterError,
+  providerErrorFromStatus,
+  safeProviderOutputUrlSchema,
+  type ProviderAdapterMetadata,
+} from "./provider-contract";
 import type {
   DeckGenerationInput,
+  DeckCreateOptions,
   DeckProvider,
   PresentonResult,
 } from "./providers";
 
+const PLUS_AI_ORIGIN = "https://api.plusdocs.com";
+const PLUS_AI_PRESENTATION_PATH = "/r/v0/presentation";
+const DISPLAY_NAME = "Plus AI";
+
+export const PLUS_AI_DECK_PROVIDER_METADATA = {
+  providerId: "plusai.presentation.generation",
+  apiVersion: "r/v0",
+  modelId: null,
+  contractVersion: 1,
+  capabilities: {
+    asynchronousGeneration: true,
+    structuredPrompt: true,
+    googleSlidesOutput: true,
+    usageMetadata: false,
+  },
+  releaseStatus: "experimental",
+} as const satisfies ProviderAdapterMetadata;
+
+function resolvePlusAiPollingUrl(candidate: string): string {
+  let url: URL;
+  try {
+    url = new URL(candidate, `${PLUS_AI_ORIGIN}${PLUS_AI_PRESENTATION_PATH}/`);
+  } catch {
+    throw new ProviderAdapterError(
+      PLUS_AI_DECK_PROVIDER_METADATA.providerId,
+      DISPLAY_NAME,
+      "poll",
+      "malformed_response",
+      false,
+    );
+  }
+
+  if (
+    url.origin !== PLUS_AI_ORIGIN
+    || url.username
+    || url.password
+    || !url.pathname.startsWith(`${PLUS_AI_PRESENTATION_PATH}/`)
+  ) {
+    throw new ProviderAdapterError(
+      PLUS_AI_DECK_PROVIDER_METADATA.providerId,
+      DISPLAY_NAME,
+      "poll",
+      "malformed_response",
+      false,
+    );
+  }
+  url.hash = "";
+  return url.toString();
+}
+
 /** Optional pre-built prompt from the slide planner — bypasses the old generic prompt builder */
-export interface PlusAiCreateOptions {
+export interface PlusAiCreateOptions extends DeckCreateOptions {
   /** If provided, this structured prompt is used instead of buildDeckInputText */
   slidePlanPrompt?: string;
   /** Brand colors from seller context — used to create on-brand decks */
   brandColors?: { primary?: string; accent?: string; background?: string };
 }
 
-interface PlusAiCreateResponse {
-  pollingUrl: string;
-  status: string;
-}
+const PlusAiIdentifierSchema = z.string().trim().min(1).max(256)
+  .regex(/^[A-Za-z0-9][A-Za-z0-9_-]*$/u);
 
-interface PlusAiPollResponse {
-  id: string;
-  status: "PROCESSING" | "GENERATED" | "FAILED";
-  url: string | null;
-  slides: string[] | null;
-  createdAt: string;
-  updatedAt: string;
-  language: string;
-}
+const PlusAiCreateResponseSchema = z.object({
+  pollingUrl: z.string().trim().min(1).max(4_096).url(),
+  status: z.enum(["PROCESSING", "GENERATED", "FAILED"]),
+}).strict();
+
+const PlusAiPollResponseSchema = z.object({
+  id: PlusAiIdentifierSchema,
+  status: z.enum(["PROCESSING", "GENERATED", "FAILED"]),
+  url: safeProviderOutputUrlSchema.nullable(),
+  slides: z.array(z.string().max(20_000)).max(100).nullable(),
+  createdAt: z.string().datetime({ offset: true }),
+  updatedAt: z.string().datetime({ offset: true }),
+  language: z.string().trim().min(1).max(100),
+}).strict();
 
 export interface PlusAiProviderOptions {
   apiKey: string;
+  requestTimeoutMs?: number;
+  maxRetries?: number;
+  retryBaseDelayMs?: number;
+  pollIntervalMs?: number;
+  pollTimeoutMs?: number;
+  maxPollAttempts?: number;
 }
 
 /** Map our visual style to a Plus AI built-in template.
@@ -76,10 +148,23 @@ function buildBrandTheme(brandColors?: { primary?: string; accent?: string; back
   };
 }
 
-const MAX_RETRIES = 2;
-const POLL_INTERVAL_MS = 5000;
-const POLL_TIMEOUT_MS = 240_000; // 4 min max wait — leaves headroom within 300s step budget
-const CREATE_RETRY_DELAY_MS = 5000;
+const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+const DEFAULT_MAX_RETRIES = 2;
+const DEFAULT_RETRY_BASE_DELAY_MS = 5_000;
+const DEFAULT_POLL_INTERVAL_MS = 5_000;
+const DEFAULT_POLL_TIMEOUT_MS = 240_000;
+const DEFAULT_MAX_POLL_ATTEMPTS = 48;
+const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
+
+const PlusAiConfigSchema = z.object({
+  apiKey: z.string().trim().min(1).max(8_192),
+  requestTimeoutMs: z.number().int().min(100).max(120_000),
+  maxRetries: z.number().int().min(0).max(5),
+  retryBaseDelayMs: z.number().int().min(0).max(30_000),
+  pollIntervalMs: z.number().int().min(0).max(60_000),
+  pollTimeoutMs: z.number().int().min(100).max(900_000),
+  maxPollAttempts: z.number().int().min(1).max(600),
+}).strict();
 
 /**
  * Plus AI has a request body size limit (~100 KB).  Our crawled company data +
@@ -107,66 +192,110 @@ function truncatePrompt(prompt: string): string {
  */
 export class PlusAiDeckProvider implements DeckProvider {
   public readonly name = "plusai" as const;
+  public readonly providerId = PLUS_AI_DECK_PROVIDER_METADATA.providerId;
+  public readonly modelId = PLUS_AI_DECK_PROVIDER_METADATA.modelId;
+  public readonly capabilities = PLUS_AI_DECK_PROVIDER_METADATA.capabilities;
+  public readonly contractVersion = PLUS_AI_DECK_PROVIDER_METADATA.contractVersion;
+
   private readonly apiKey: string;
+  private readonly requestTimeoutMs: number;
+  private readonly maxRetries: number;
+  private readonly retryBaseDelayMs: number;
+  private readonly pollIntervalMs: number;
+  private readonly pollTimeoutMs: number;
+  private readonly maxPollAttempts: number;
 
   public constructor(options: PlusAiProviderOptions) {
-    this.apiKey = options.apiKey;
+    const parsed = PlusAiConfigSchema.safeParse({
+      apiKey: options.apiKey,
+      requestTimeoutMs: options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
+      maxRetries: options.maxRetries ?? DEFAULT_MAX_RETRIES,
+      retryBaseDelayMs: options.retryBaseDelayMs ?? DEFAULT_RETRY_BASE_DELAY_MS,
+      pollIntervalMs: options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS,
+      pollTimeoutMs: options.pollTimeoutMs ?? DEFAULT_POLL_TIMEOUT_MS,
+      maxPollAttempts: options.maxPollAttempts ?? DEFAULT_MAX_POLL_ATTEMPTS,
+    });
+    if (!parsed.success) {
+      throw invalidProviderConfiguration(this.providerId, DISPLAY_NAME);
+    }
+
+    this.apiKey = parsed.data.apiKey;
+    this.requestTimeoutMs = parsed.data.requestTimeoutMs;
+    this.maxRetries = parsed.data.maxRetries;
+    this.retryBaseDelayMs = parsed.data.retryBaseDelayMs;
+    this.pollIntervalMs = parsed.data.pollIntervalMs;
+    this.pollTimeoutMs = parsed.data.pollTimeoutMs;
+    this.maxPollAttempts = parsed.data.maxPollAttempts;
   }
 
   /** Accepts an optional slidePlanPrompt to bypass the generic prompt builder */
   public async createDeck(
     input: DeckGenerationInput,
     imageUrls: string[] = [],
-    options?: PlusAiCreateOptions,
+    options: PlusAiCreateOptions = {},
   ): Promise<PresentonResult> {
+    let normalizedInput: DeckGenerationInput;
+    try {
+      normalizedInput = normalizeDeckInputSourceUrls(input);
+    } catch {
+      throw new ProviderAdapterError(
+        this.providerId,
+        DISPLAY_NAME,
+        "create",
+        "client_request",
+        false,
+      );
+    }
+
     let fullPrompt: string;
 
-    if (options?.slidePlanPrompt) {
+    if (options.slidePlanPrompt) {
       // Use the pre-built slide plan prompt from our AI planner
       const instructions = buildPresentationAdditionalInstructions({
-        archetype: input.archetype,
-        customArchetypePrompt: input.customArchetypePrompt,
-        tone: input.tone,
-        visualStyle: input.visualStyle,
-        imagePolicy: input.imagePolicy,
-        cardCount: input.cardCount,
+        archetype: normalizedInput.archetype,
+        customArchetypePrompt: normalizedInput.customArchetypePrompt,
+        tone: normalizedInput.tone,
+        visualStyle: normalizedInput.visualStyle,
+        imagePolicy: normalizedInput.imagePolicy,
+        cardCount: normalizedInput.cardCount,
       });
       fullPrompt = truncatePrompt(
         `${options.slidePlanPrompt}\n\n---\nStyle instructions: ${instructions}`,
       );
     } else {
       // Fallback to original generic prompt
-      const prompt = buildDeckInputText(input, imageUrls);
+      const prompt = buildDeckInputText(normalizedInput, imageUrls);
       const instructions = buildPresentationAdditionalInstructions({
-        archetype: input.archetype,
-        customArchetypePrompt: input.customArchetypePrompt,
-        tone: input.tone,
-        visualStyle: input.visualStyle,
-        imagePolicy: input.imagePolicy,
-        cardCount: input.cardCount,
+        archetype: normalizedInput.archetype,
+        customArchetypePrompt: normalizedInput.customArchetypePrompt,
+        tone: normalizedInput.tone,
+        visualStyle: normalizedInput.visualStyle,
+        imagePolicy: normalizedInput.imagePolicy,
+        cardCount: normalizedInput.cardCount,
       });
       fullPrompt = truncatePrompt(
         `${prompt}\n\n---\nAdditional instructions: ${instructions}`,
       );
     }
 
-    console.log(`[plusai] Prompt length: ${fullPrompt.length} chars, mode: ${options?.slidePlanPrompt ? "slide-plan" : "generic"}`);
-
     // Step 1: Create presentation (with retries for rate limiting)
     // Don't send textHandling — let Plus AI use its default behavior.
     // The old REWRITE/PRESERVE values were invalid enum members and caused HTTP 400.
-    const templateId = pickTemplate(input.visualStyle);
-    const brandTheme = buildBrandTheme(options?.brandColors);
+    const templateId = pickTemplate(normalizedInput.visualStyle);
+    const brandTheme = buildBrandTheme(options.brandColors);
     const createResponse = await this.createPresentation({
       prompt: fullPrompt,
-      numberOfSlides: Math.min(input.cardCount, 30),
+      numberOfSlides: Math.min(normalizedInput.cardCount, 30),
       language: "en",
       ...(templateId && { templateId }),
       ...(brandTheme && { theme: brandTheme }),
-    });
+    }, options);
 
     // Step 2: Poll until complete
-    const result = await this.pollUntilDone(createResponse.pollingUrl);
+    const result = await this.pollUntilDone(
+      resolvePlusAiPollingUrl(createResponse.pollingUrl),
+      options,
+    );
 
     const rawUrl = result.url ?? undefined;
 
@@ -195,84 +324,181 @@ export class PlusAiDeckProvider implements DeckProvider {
     language: string;
     templateId?: string;
     theme?: Record<string, string>;
-  }): Promise<PlusAiCreateResponse> {
-    let lastError: Error | undefined;
+  }, options: DeckCreateOptions): Promise<z.infer<typeof PlusAiCreateResponseSchema>> {
+    for (let attempt = 0; attempt <= this.maxRetries; attempt += 1) {
+      let response: Awaited<ReturnType<typeof requestText>>;
+      try {
+        response = await requestText(`${PLUS_AI_ORIGIN}${PLUS_AI_PRESENTATION_PATH}`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${this.apiKey}` },
+          body,
+          signal: options.signal,
+          timeoutMs: this.requestTimeoutMs,
+          maxResponseBytes: MAX_RESPONSE_BYTES,
+        });
+      } catch (error) {
+        // A transport failure can occur after this paid POST was accepted.
+        // Never replay an ambiguous outcome.
+        throw normalizeProviderTransportError({
+          error,
+          providerId: this.providerId,
+          displayName: DISPLAY_NAME,
+          operation: "create",
+          signal: options.signal,
+        });
+      }
 
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      const response = await requestText("https://api.plusdocs.com/r/v0/presentation", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-        },
-        body,
-      });
-
-      if (response.status === 429 && attempt < MAX_RETRIES) {
-        // Rate limited — wait and retry
-        const delay = CREATE_RETRY_DELAY_MS * (attempt + 1);
-        console.error(`[plusai] Rate limited (429). Retrying in ${delay}ms...`);
-        await new Promise((resolve) => setTimeout(resolve, delay));
+      if (response.status === 429 && attempt < this.maxRetries) {
+        const delayMs = Math.min(this.retryBaseDelayMs * (attempt + 1), 30_000);
+        console.warn("[plusai] retrying provider request", {
+          operation: "create",
+          code: "rate_limited",
+          status: 429,
+          attempt: attempt + 1,
+          maxAttempts: this.maxRetries + 1,
+          delayMs,
+        });
+        try {
+          await sleep(delayMs, options.signal);
+        } catch (error) {
+          throw normalizeProviderTransportError({
+            error,
+            providerId: this.providerId,
+            displayName: DISPLAY_NAME,
+            operation: "create",
+            signal: options.signal,
+          });
+        }
         continue;
       }
 
-      const text = response.text;
-
       if (response.status < 200 || response.status >= 300) {
-        lastError = new Error(
-          `Plus AI create failed: HTTP ${response.status}: ${text.slice(0, 500)}`,
+        throw providerErrorFromStatus(
+          this.providerId,
+          DISPLAY_NAME,
+          "create",
+          response.status,
         );
-
-        // Don't retry on client errors that won't resolve (413, 400, 401, 403)
-        if (response.status >= 400 && response.status < 500 && response.status !== 429) {
-          throw lastError;
-        }
-
-        if (attempt < MAX_RETRIES) {
-          const delay = CREATE_RETRY_DELAY_MS * (attempt + 1);
-          console.error(`[plusai] Create attempt ${attempt + 1} failed: ${lastError.message}. Retrying in ${delay}ms...`);
-          await new Promise((resolve) => setTimeout(resolve, delay));
-          continue;
-        }
-        throw lastError;
       }
 
-      return JSON.parse(text) as PlusAiCreateResponse;
+      const parsed = parseProviderJson({
+        text: response.text,
+        schema: PlusAiCreateResponseSchema,
+        providerId: this.providerId,
+        displayName: DISPLAY_NAME,
+        operation: "create",
+      });
+      if (parsed.status === "FAILED") {
+        throw new ProviderAdapterError(
+          this.providerId,
+          DISPLAY_NAME,
+          "create",
+          "generation_failed",
+          false,
+        );
+      }
+      return parsed;
     }
 
-    throw lastError ?? new Error("Plus AI create failed after retries.");
+    throw new ProviderAdapterError(
+      this.providerId,
+      DISPLAY_NAME,
+      "create",
+      "rate_limited",
+      true,
+      429,
+    );
   }
 
-  private async pollUntilDone(pollingUrl: string): Promise<PlusAiPollResponse> {
-    const deadline = Date.now() + POLL_TIMEOUT_MS;
+  private async pollUntilDone(
+    pollingUrl: string,
+    options: DeckCreateOptions,
+  ): Promise<z.infer<typeof PlusAiPollResponseSchema>> {
+    const deadline = Date.now() + this.pollTimeoutMs;
 
-    while (Date.now() < deadline) {
-      await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+    for (let attempt = 0; attempt < this.maxPollAttempts; attempt += 1) {
+      if (Date.now() >= deadline) break;
+      try {
+        await sleep(this.pollIntervalMs, options.signal);
+      } catch (error) {
+        throw normalizeProviderTransportError({
+          error,
+          providerId: this.providerId,
+          displayName: DISPLAY_NAME,
+          operation: "poll",
+          signal: options.signal,
+        });
+      }
 
-      const response = await requestText(pollingUrl, {
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-        },
-      });
-
-      if (response.status < 200 || response.status >= 300) {
-        console.error(`[plusai] Poll error: HTTP ${response.status}: ${response.text.slice(0, 200)}`);
-        // Keep polling on transient errors
+      let response: Awaited<ReturnType<typeof requestText>>;
+      try {
+        response = await requestText(pollingUrl, {
+          headers: { Authorization: `Bearer ${this.apiKey}` },
+          signal: options.signal,
+          timeoutMs: this.requestTimeoutMs,
+          maxResponseBytes: MAX_RESPONSE_BYTES,
+        });
+      } catch (error) {
+        const normalized = normalizeProviderTransportError({
+          error,
+          providerId: this.providerId,
+          displayName: DISPLAY_NAME,
+          operation: "poll",
+          signal: options.signal,
+        });
+        if (!normalized.retryable || attempt + 1 === this.maxPollAttempts) throw normalized;
         continue;
       }
 
-      const data = JSON.parse(response.text) as PlusAiPollResponse;
+      if (response.status < 200 || response.status >= 300) {
+        const normalized = providerErrorFromStatus(
+          this.providerId,
+          DISPLAY_NAME,
+          "poll",
+          response.status,
+        );
+        if (!normalized.retryable || attempt + 1 === this.maxPollAttempts) throw normalized;
+        continue;
+      }
+
+      const data = parseProviderJson({
+        text: response.text,
+        schema: PlusAiPollResponseSchema,
+        providerId: this.providerId,
+        displayName: DISPLAY_NAME,
+        operation: "poll",
+      });
 
       if (data.status === "GENERATED") {
+        if (!data.url) {
+          throw new ProviderAdapterError(
+            this.providerId,
+            DISPLAY_NAME,
+            "poll",
+            "empty_response",
+            false,
+          );
+        }
         return data;
       }
 
       if (data.status === "FAILED") {
-        throw new Error("Plus AI presentation generation failed.");
+        throw new ProviderAdapterError(
+          this.providerId,
+          DISPLAY_NAME,
+          "poll",
+          "generation_failed",
+          false,
+        );
       }
-
-      // Still PROCESSING — keep polling
     }
 
-    throw new Error(`Plus AI generation timed out after ${POLL_TIMEOUT_MS / 1000}s.`);
+    throw new ProviderAdapterError(
+      this.providerId,
+      DISPLAY_NAME,
+      "poll",
+      "poll_timeout",
+      true,
+    );
   }
 }

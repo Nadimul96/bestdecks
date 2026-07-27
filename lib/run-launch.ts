@@ -31,11 +31,16 @@ export function dispatchRunStart(runId: string) {
   }).then((response) => {
     if (!response.ok) {
       recentDispatches.delete(runId);
-      console.error(`[run-launch] Failed to dispatch run ${runId}: HTTP ${response.status}`);
+      console.error("[run-launch] Failed to dispatch run.", {
+        code: "http_error",
+        status: response.status,
+      });
     }
-  }).catch((error) => {
+  }).catch(() => {
     recentDispatches.delete(runId);
-    console.error(`[run-launch] Failed to dispatch run ${runId}:`, error);
+    console.error("[run-launch] Failed to dispatch run.", {
+      code: "network_error",
+    });
   });
 
   return true;

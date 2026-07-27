@@ -2,17 +2,10 @@
 
 import * as React from "react";
 import {
-  Briefcase,
-  CreditCard,
-  FileText,
-  LayoutDashboard,
-  ListTree,
   Moon,
   Rocket,
-  SearchCheck,
   Settings2,
   Sun,
-  Upload,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 
@@ -24,7 +17,6 @@ import {
   CommandItem,
   CommandList,
   CommandSeparator,
-  CommandShortcut,
 } from "@/components/ui/command";
 import { workspaceNavGroups } from "@/lib/workspace-navigation";
 
@@ -45,7 +37,7 @@ export function CommandMenu() {
   }, []);
 
   function navigate(hash: string) {
-    window.location.hash = hash;
+    window.location.assign(hash);
     setOpen(false);
   }
 

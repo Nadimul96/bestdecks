@@ -1,7 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { AlaiDeckProvider, pickAlaiTheme, pickAlaiTone } from "./alai";
+import {
+  ALAI_DECK_PROVIDER_METADATA,
+  AlaiDeckProvider,
+  pickAlaiTheme,
+  pickAlaiTone,
+} from "./alai";
+import { ProviderAdapterError } from "./provider-contract";
 import type { DeckGenerationInput } from "./providers";
 
 const baseInput: DeckGenerationInput = {
@@ -55,6 +61,17 @@ function installImmediateTimers() {
   };
 }
 
+function assertProviderError(
+  error: unknown,
+  code: ProviderAdapterError["code"],
+  status?: number,
+) {
+  assert.ok(error instanceof ProviderAdapterError);
+  assert.equal(error.code, code);
+  assert.equal(error.status, status);
+  return true;
+}
+
 /* ── Theme mapping tests ──────────────────────────────────────── */
 
 test("pickAlaiTheme maps known styles to correct themes", () => {
@@ -68,19 +85,14 @@ test("pickAlaiTheme maps known styles to correct themes", () => {
   assert.equal(pickAlaiTheme("custom"), "Simple Light");
 });
 
-test("pickAlaiTheme returns a theme from top 5 for auto", () => {
-  const top5 = ["Simple Light", "Simple Dark", "Light Cool Creative", "Royal Blue", "Aurora Flux"];
-  for (let i = 0; i < 20; i++) {
-    assert.ok(top5.includes(pickAlaiTheme("auto")), `auto theme was not in top 5`);
-  }
+test("pickAlaiTheme is deterministic for auto", () => {
+  assert.equal(pickAlaiTheme("auto"), "Simple Light");
+  assert.equal(pickAlaiTheme("auto"), pickAlaiTheme("auto"));
 });
 
-test("pickAlaiTheme returns a theme from all 23 for mixed", () => {
-  // Just verify it returns a non-empty string (randomness makes exact assertion fragile)
-  for (let i = 0; i < 20; i++) {
-    const theme = pickAlaiTheme("mixed");
-    assert.ok(typeof theme === "string" && theme.length > 0);
-  }
+test("pickAlaiTheme is deterministic for mixed", () => {
+  assert.equal(pickAlaiTheme("mixed"), "Aurora Flux");
+  assert.equal(pickAlaiTheme("mixed"), pickAlaiTheme("mixed"));
 });
 
 test("pickAlaiTheme falls back to Simple Light for unknown styles", () => {
@@ -162,7 +174,7 @@ test("AlaiDeckProvider creates a deck with slide-plan prompt and returns URLs", 
     assert.equal(createBody.tone, "PROFESSIONAL");
     assert.equal(createBody.content_mode, "preserve");
     assert.equal(createBody.amount_mode, "essential");
-    assert.equal(createBody.include_ai_images, true);
+    assert.equal(createBody.include_ai_images, false);
     assert.equal(createBody.image_style, "realistic");
     assert.deepEqual(createBody.export_formats, ["link", "pdf", "ppt"]);
     assert.match(String(createBody.input_text), /# Planned deck/);
@@ -194,6 +206,7 @@ test("AlaiDeckProvider polls multiple times until completed", async () => {
   globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     const body = typeof init?.body === "string" ? init.body : "";
+    assert.match(url, /slides-api\.getalai\.com/);
 
     if (body) {
       // Create request
@@ -253,10 +266,12 @@ test("AlaiDeckProvider throws on generation failure", async () => {
 
   try {
     const provider = new AlaiDeckProvider({ apiKey: "sk_test_key" });
-    await assert.rejects(
-      () => provider.createDeck(baseInput),
-      { message: /Alai presentation generation failed: Theme not found/ },
-    );
+    await assert.rejects(() => provider.createDeck(baseInput), (error: unknown) => {
+      assertProviderError(error, "generation_failed");
+      assert.ok(error instanceof Error);
+      assert.doesNotMatch(error.message, /Theme not found/);
+      return true;
+    });
   } finally {
     globalThis.fetch = originalFetch;
     restoreTimers();
@@ -305,22 +320,165 @@ test("AlaiDeckProvider retries on 429 rate limit", async () => {
   }
 });
 
+test("AlaiDeckProvider does not replay an ambiguous create failure", async () => {
+  const originalFetch = globalThis.fetch;
+  let createAttempts = 0;
+  globalThis.fetch = (async (_input, init) => {
+    if (init?.body) createAttempts += 1;
+    return new Response("unavailable", { status: 503 });
+  }) as typeof fetch;
+
+  try {
+    const provider = new AlaiDeckProvider({ apiKey: "sk_test_key" });
+    await assert.rejects(provider.createDeck(baseInput), /HTTP 503/u);
+    assert.equal(createAttempts, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("AlaiDeckProvider throws on non-retryable client errors (400)", async () => {
   const restoreTimers = installImmediateTimers();
   const originalFetch = globalThis.fetch;
 
-  globalThis.fetch = (async (_input: string | URL | Request, _init?: RequestInit) => {
+  globalThis.fetch = (async () => {
     return new Response("Bad Request: invalid input_text", { status: 400 });
   }) as typeof fetch;
 
   try {
     const provider = new AlaiDeckProvider({ apiKey: "sk_test_key" });
-    await assert.rejects(
-      () => provider.createDeck(baseInput),
-      { message: /Alai create failed: HTTP 400/ },
-    );
+    await assert.rejects(() => provider.createDeck(baseInput), (error: unknown) => {
+      assertProviderError(error, "client_request", 400);
+      assert.ok(error instanceof Error);
+      assert.doesNotMatch(error.message, /invalid input_text/);
+      return true;
+    });
   } finally {
     globalThis.fetch = originalFetch;
     restoreTimers();
+  }
+});
+
+test("AlaiDeckProvider exposes stable experimental metadata and validates config offline", () => {
+  assert.equal(ALAI_DECK_PROVIDER_METADATA.providerId, "alai.slides.generation");
+  assert.equal(ALAI_DECK_PROVIDER_METADATA.modelId, null);
+  assert.equal(ALAI_DECK_PROVIDER_METADATA.contractVersion, 1);
+  assert.equal(ALAI_DECK_PROVIDER_METADATA.releaseStatus, "experimental");
+
+  const configured = new AlaiDeckProvider({ apiKey: "<alai-api-key>" });
+  assert.equal(configured.providerId, ALAI_DECK_PROVIDER_METADATA.providerId);
+  assert.deepEqual(configured.capabilities, ALAI_DECK_PROVIDER_METADATA.capabilities);
+
+  assert.throws(() => new AlaiDeckProvider({ apiKey: "" }), (error: unknown) => {
+    assertProviderError(error, "configuration");
+    assert.ok(error instanceof Error);
+    assert.doesNotMatch(error.message, /alai-api-key/u);
+    return true;
+  });
+});
+
+test("AlaiDeckProvider classifies every required HTTP failure without replaying ambiguity", async () => {
+  const originalFetch = globalThis.fetch;
+  const cases = [
+    [401, "authentication"],
+    [403, "authorization"],
+    [408, "timeout"],
+    [429, "rate_limited"],
+    [503, "provider_unavailable"],
+  ] as const;
+
+  try {
+    for (const [status, code] of cases) {
+      let attempts = 0;
+      globalThis.fetch = (async () => {
+        attempts += 1;
+        return new Response("provider-controlled diagnostic", { status });
+      }) as typeof fetch;
+      const provider = new AlaiDeckProvider({
+        apiKey: "<alai-api-key>",
+        maxRetries: 0,
+      });
+      await assert.rejects(
+        () => provider.createDeck(baseInput),
+        (error: unknown) => {
+          assertProviderError(error, code, status);
+          assert.ok(error instanceof Error);
+          assert.doesNotMatch(error.message, /provider-controlled diagnostic/u);
+          return true;
+        },
+      );
+      assert.equal(attempts, 1, `HTTP ${status} must not cause an ambiguous replay`);
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("AlaiDeckProvider rejects empty, malformed, and schema-invalid responses", async () => {
+  const originalFetch = globalThis.fetch;
+  const cases = [
+    ["", "empty_response"],
+    ["{", "malformed_response"],
+    [JSON.stringify({ generation_id: "gen_1", unexpected: true }), "malformed_response"],
+  ] as const;
+
+  try {
+    for (const [body, code] of cases) {
+      globalThis.fetch = (async () => new Response(body, { status: 200 })) as typeof fetch;
+      const provider = new AlaiDeckProvider({ apiKey: "<alai-api-key>" });
+      await assert.rejects(
+        () => provider.createDeck(baseInput),
+        (error: unknown) => assertProviderError(error, code),
+      );
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("AlaiDeckProvider propagates AbortSignal and minimizes source URLs before dispatch", async () => {
+  const originalFetch = globalThis.fetch;
+  let fetchCount = 0;
+  let requestBody = "";
+  globalThis.fetch = (async (_input, init) => {
+    fetchCount += 1;
+    assert.equal(init?.signal?.aborted, false);
+    if (init?.body) requestBody = String(init.body);
+    return createJsonResponse({ generation_id: "gen_url" });
+  }) as typeof fetch;
+
+  try {
+    const provider = new AlaiDeckProvider({
+      apiKey: "<alai-api-key>",
+      pollIntervalMs: 0,
+    });
+    await assert.rejects(
+      () => provider.createDeck({
+        ...baseInput,
+        companyBrief: {
+          ...baseInput.companyBrief,
+          websiteUrl: "https://example.com/?token=private#fragment",
+          sourceUrls: ["https://example.com/report?token=private#fragment"],
+        },
+      }),
+      // The create succeeds, then the fixture intentionally returns the
+      // create shape for polling.
+      (error: unknown) => assertProviderError(error, "malformed_response"),
+    );
+    assert.equal(fetchCount, 2);
+    assert.doesNotMatch(requestBody, /token=private|#fragment/u);
+
+    const controller = new AbortController();
+    controller.abort();
+    globalThis.fetch = (async (_input, init) => {
+      assert.equal(init?.signal?.aborted, true);
+      throw new DOMException("aborted", "AbortError");
+    }) as typeof fetch;
+    await assert.rejects(
+      () => provider.createDeck(baseInput, [], { signal: controller.signal }),
+      (error: unknown) => assertProviderError(error, "aborted"),
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
   }
 });

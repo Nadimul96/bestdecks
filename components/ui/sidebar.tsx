@@ -32,6 +32,19 @@ const SIDEBAR_WIDTH_MOBILE = "18rem"
 const SIDEBAR_WIDTH_ICON = "3rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
 const SIDEBAR_STORAGE_KEY = "sidebar_open"
+const SIDEBAR_STORAGE_EVENT = "bestdecks:sidebar-open-change"
+
+function subscribeToSidebarStorage(onStoreChange: () => void) {
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === SIDEBAR_STORAGE_KEY) onStoreChange()
+  }
+  window.addEventListener("storage", onStorage)
+  window.addEventListener(SIDEBAR_STORAGE_EVENT, onStoreChange)
+  return () => {
+    window.removeEventListener("storage", onStorage)
+    window.removeEventListener(SIDEBAR_STORAGE_EVENT, onStoreChange)
+  }
+}
 
 type SidebarContextProps = {
   state: "expanded" | "collapsed"
@@ -70,22 +83,22 @@ function SidebarProvider({
   const isMobile = useIsMobile()
   const [openMobile, setOpenMobile] = React.useState(false)
 
-  // Keep the first client render aligned with the server render.
-  // Persisted state is restored after hydration.
-  const [_open, _setOpen] = React.useState(defaultOpen)
-  const open = openProp ?? _open
-
-  React.useEffect(() => {
-    if (openProp !== undefined) return
+  const getStoredOpen = React.useCallback(() => {
     try {
       const stored = localStorage.getItem(SIDEBAR_STORAGE_KEY)
-      if (stored !== null) {
-        _setOpen(stored === "true")
-      }
+      return stored === null ? defaultOpen : stored === "true"
     } catch {
-      // localStorage unavailable — ignore
+      return defaultOpen
     }
-  }, [openProp])
+  }, [defaultOpen])
+  const getServerOpen = React.useCallback(() => defaultOpen, [defaultOpen])
+  const persistedOpen = React.useSyncExternalStore(
+    subscribeToSidebarStorage,
+    getStoredOpen,
+    getServerOpen,
+  )
+  const [openOverride, setOpenOverride] = React.useState<boolean | null>(null)
+  const open = openProp ?? openOverride ?? persistedOpen
 
   const setOpen = React.useCallback(
     (value: boolean | ((value: boolean) => boolean)) => {
@@ -93,13 +106,14 @@ function SidebarProvider({
       if (setOpenProp) {
         setOpenProp(openState)
       } else {
-        _setOpen(openState)
+        setOpenOverride(openState)
       }
 
       // Persist to both cookie (SSR) and localStorage (client).
       document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`
       try {
         localStorage.setItem(SIDEBAR_STORAGE_KEY, String(openState))
+        window.dispatchEvent(new Event(SIDEBAR_STORAGE_EVENT))
       } catch {
         // localStorage unavailable — ignore
       }
@@ -625,10 +639,8 @@ function SidebarMenuSkeleton({
 }: React.ComponentProps<"div"> & {
   showIcon?: boolean
 }) {
-  // Random width between 50 to 90%.
-  const width = React.useMemo(() => {
-    return `${Math.floor(Math.random() * 40) + 50}%`
-  }, [])
+  // A stable width keeps the skeleton deterministic across server and client renders.
+  const width = "70%"
 
   return (
     <div

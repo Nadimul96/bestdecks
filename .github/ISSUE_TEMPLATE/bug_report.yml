@@ -1,0 +1,81 @@
+name: Bug report
+description: Report a reproducible defect without secrets or private data.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not report security vulnerabilities, exposed credentials, tenant-isolation issues, or exploit details here. Follow `SECURITY.md` and use a private GitHub Security Advisory.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Preflight
+      options:
+        - label: I searched existing issues and pull requests.
+          required: true
+        - label: I removed credentials, provider payloads, personal data, and customer content.
+          required: true
+        - label: This is not a private security report.
+          required: true
+
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behavior
+      description: Describe what happened and include the exact non-sensitive error text.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Use synthetic inputs and list the smallest sequence that reproduces the defect.
+    validations:
+      required: true
+
+  - type: input
+    id: commit
+    attributes:
+      label: Commit or version
+      placeholder: Commit SHA or release version
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      options:
+        - Local development
+        - Self-hosted production
+        - Container build
+        - Unit or integration test
+        - Documentation only
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: verification
+    attributes:
+      label: Checks already run
+      description: List exact commands and results. Say “not run” when applicable.
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional non-sensitive context
+      description: Redacted logs, screenshots, or related source paths.

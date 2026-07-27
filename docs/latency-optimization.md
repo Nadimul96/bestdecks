@@ -1,47 +1,39 @@
-# Latency Optimization Guide
+# Latency measurement and optimization
 
-## Current Bottlenecks (ranked by impact)
+Status: measurement protocol. No production latency or scale benchmark has been established.
 
-### 1. Sequential Deck Generation (HIGHEST IMPACT)
-**Problem**: Deck generation runs one target at a time because SQLite can't handle concurrent writes.
-**Time cost**: 30-90s per target (so 3 targets = 90-270s wasted sequentially).
-**Fix options**:
-- **Short term**: Buffer deck results in memory, batch-write to SQLite after all targets complete
-- **Medium term**: Switch to Turso HTTP API (supports concurrent writes)
-- **Long term**: Queue system (BullMQ + Redis) for async deck generation
+The reference worker processes persisted stages with leases and checkpoints. That design favors
+recoverability and evidence integrity. Optimization must preserve those properties and be driven
+by retained run timings rather than estimated provider speeds.
 
-### 2. No Crawl/Enrichment Caching (HIGH IMPACT)
-**Problem**: Same target company re-crawled and re-enriched on every run.
-**Time cost**: 30-45s per duplicate target.
-**Fix**: Cache crawl results and enrichment summaries in `run_artifacts` table with TTL.
-```
-Before each crawl:
-1. Check run_artifacts for recent crawl (< 48h) of same URL
-2. If found, reuse it
-3. If not, crawl fresh and store
-```
+## Measurement source
 
-### 3. Presenton Cold Start (MEDIUM IMPACT)
-**Problem**: Self-hosted Presenton container on Render starter plan may cold-start (spin-down after inactivity).
-**Time cost**: 15-45s cold start.
-**Fix**: Keep-alive ping every 10 minutes via Render cron job, or upgrade to always-on plan.
+Use the stage timings and attempts in the persisted run receipt. For each controlled run, retain:
 
-### 4. Gemini API Latency (LOW IMPACT — already parallelized)
-**Problem**: Slide planning and image generation each take 15-40s.
-**Current state**: Already running in parallel. No further optimization needed unless we batch multiple Gemini calls.
+- deployed commit and configuration names;
+- target count and target class;
+- provider and model identifiers;
+- stage start, completion, duration, and attempt count;
+- terminal state and failure code; and
+- verified artifact bytes and checksum for delivered targets.
 
-## Quick Wins (implement in order)
+Report distributions, not a single best case. At minimum use p50 and p95 after 30 completed
+reference runs, while accounting separately for failed and cancelled runs.
 
-1. **Crawl result caching** — 2-3 hours of work, saves 30-45s per duplicate target
-2. **Batch SQLite writes** — 1-2 hours, enables parallel deck generation
-3. **Presenton keep-alive** — 30 minutes, eliminates cold start penalty
-4. **Progress streaming** — Add SSE/WebSocket progress updates so users see real-time status instead of a spinner
+## Optimization order
 
-## Infrastructure Scaling Path
+1. Investigate the stage contributing most to measured p95 latency.
+2. Remove redundant provider work by reusing completed, contract-valid checkpoints.
+3. Add caching only with an explicit key, freshness policy, provenance, and invalidation test.
+4. Add target concurrency only after proving lease safety, provider limits, deterministic ordering,
+   and SQLite write behavior under contention.
+5. Change infrastructure only when a reproduced bottleneck justifies the operational cost.
 
-| Stage | Setup | Monthly Cost | Handles |
-|-------|-------|-------------|---------|
-| Current | Render starter × 2 | ~$14/mo | 5-10 runs/day |
-| Growth | Render standard + Redis | ~$50/mo | 50-100 runs/day |
-| Scale | Render pro + managed Postgres + BullMQ | ~$150/mo | 500+ runs/day |
-| Enterprise | AWS/GCP with queue workers | ~$500/mo | 5000+ runs/day |
+Never trade away source retention, evidence gating, cancellation boundaries, artifact verification,
+or idempotency merely to improve an elapsed-time number.
+
+## Required regression proof
+
+Any latency change must keep restart/resume, replay, cancellation, partial-failure, tenant
+isolation, and receipt tests green. A load claim requires a controlled load receipt; the configured
+100-target schema maximum is not itself evidence that the system can process that load reliably.

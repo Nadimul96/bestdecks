@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 
-import { getRun } from "@/src/server/repository";
-import { cancelRunProcessing } from "@/src/server/run-executor";
+import { getOwnedRunState } from "@/src/server/repository";
 import { getSession } from "@/src/server/auth";
+import { requestRunCancellation } from "@/src/server/run-queue";
 
 export const dynamic = "force-dynamic";
 
@@ -17,19 +17,18 @@ export async function POST(
 
   const userId = session.user.id;
   const { runId } = await context.params;
-  const run = await getRun(runId, userId);
+  const run = await getOwnedRunState(runId, userId);
 
   if (!run) {
     return NextResponse.json({ error: "Run not found." }, { status: 404 });
   }
 
-  if (run.status !== "running" && run.status !== "queued") {
+  const job = await requestRunCancellation(runId);
+  if (!job) {
     return NextResponse.json(
-      { error: "Only running or queued runs can be cancelled." },
-      { status: 400 },
+      { error: "Run is not cancellable in its current state." },
+      { status: 409 },
     );
   }
-
-  const cancelled = await cancelRunProcessing(runId);
-  return NextResponse.json({ ok: true, cancelled });
+  return NextResponse.json({ ok: true, cancellationRequested: true, state: job.state }, { status: 202 });
 }

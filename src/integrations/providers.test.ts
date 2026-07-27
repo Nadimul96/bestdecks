@@ -1,9 +1,8 @@
-import test from "node:test";
 import assert from "node:assert/strict";
+import test from "node:test";
 
 import {
-  crawlWithFallback,
-  type CrawlProvider,
+  reportProviderObservability,
   type CrawlRequest,
 } from "./providers";
 
@@ -12,56 +11,20 @@ const request: CrawlRequest = {
   requestedFormats: ["markdown"],
 };
 
-test("crawlWithFallback returns primary results when crawl succeeds", async () => {
-  let fallbackCalled = false;
-
-  const primary: CrawlProvider = {
-    name: "cloudflare",
-    async crawlSite() {
-      return {
-        provider: "cloudflare",
-        pages: [{ url: request.websiteUrl, markdown: "# Example" }],
-        blockedUrls: [],
-        discoveredUrls: [request.websiteUrl],
-      };
-    },
-  };
-
-  const fallback: CrawlProvider = {
-    name: "deepcrawl",
-    async crawlSite() {
-      fallbackCalled = true;
-      throw new Error("should not run");
-    },
-  };
-
-  const result = await crawlWithFallback(request, primary, fallback);
-
-  assert.equal(result.provider, "cloudflare");
-  assert.equal(fallbackCalled, false);
+test("crawl requests do not expose the retired fallback exception flag", () => {
+  assert.deepEqual(request, {
+    websiteUrl: "https://example.com",
+    requestedFormats: ["markdown"],
+  });
+  assert.equal("userApprovedException" in request, false);
 });
 
-test("crawlWithFallback uses fallback when the primary crawler throws", async () => {
-  const primary: CrawlProvider = {
-    name: "cloudflare",
-    async crawlSite() {
-      throw new Error("primary failed");
+test("observability callback failures cannot invalidate provider success", () => {
+  assert.doesNotThrow(() => reportProviderObservability({
+    onObservability() {
+      throw new Error("local metrics sink failed");
     },
-  };
-
-  const fallback: CrawlProvider = {
-    name: "deepcrawl",
-    async crawlSite() {
-      return {
-        provider: "deepcrawl",
-        pages: [{ url: request.websiteUrl, markdown: "# Example" }],
-        blockedUrls: [],
-        discoveredUrls: [request.websiteUrl],
-      };
-    },
-  };
-
-  const result = await crawlWithFallback(request, primary, fallback);
-
-  assert.equal(result.provider, "deepcrawl");
+  }, {
+    usage: [{ metric: "requests", unit: "calls", amount: 1 }],
+  }));
 });

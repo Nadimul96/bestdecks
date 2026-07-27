@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 
 import { AuthForm } from "@/components/auth-form";
 import { Logo } from "@/components/logo";
-import { getSession } from "@/src/server/auth";
+import { authCapabilities, getSession } from "@/src/server/auth";
 
 export default async function LoginPage() {
   const session = await getSession();
@@ -43,12 +43,7 @@ export default async function LoginPage() {
         </div>
 
         {/* Auth form */}
-        <AuthForm mode="login" />
-
-        {/* Footer */}
-        <p className="mt-8 text-center text-xs text-muted-foreground/60">
-          Powered by research-driven AI personalization
-        </p>
+        <AuthForm mode="login" capabilities={authCapabilities} />
       </div>
     </main>
   );

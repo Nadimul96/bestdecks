@@ -12,7 +12,6 @@ export const pipelineStageOrder = [
   "target_enrichment",
   "company_brief",
   "deck_strategy",
-  "image_strategy",
   "presentation_generation",
   "delivery",
 ] as const;
@@ -94,15 +93,6 @@ function buildStageList(questionnaire: RunQuestionnaire, sellerContext: SellerCo
           stage,
           reason:
             "The normalized questionnaire and seller context must be converted into a deterministic deck brief.",
-          required: true,
-        };
-      case "image_strategy":
-        return {
-          stage,
-          reason:
-            questionnaire.imagePolicy === "never"
-              ? "Image generation is disabled, but the system should still decide how to use existing assets."
-              : "The system should decide whether generated imagery will improve the presentation.",
           required: true,
         };
       case "presentation_generation":

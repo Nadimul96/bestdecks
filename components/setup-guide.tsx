@@ -30,7 +30,6 @@ interface SetupStep {
   description: string;
   icon: LucideIcon;
   hash: string;
-  checkEndpoint: string;
 }
 
 const steps: SetupStep[] = [
@@ -40,7 +39,6 @@ const steps: SetupStep[] = [
     description: "Tell us what you sell and who you help",
     icon: Briefcase,
     hash: "#seller-context",
-    checkEndpoint: "/api/onboarding/seller-context",
   },
   {
     id: "settings",
@@ -48,7 +46,6 @@ const steps: SetupStep[] = [
     description: "Configure deck style, tone, and format",
     icon: Settings2,
     hash: "#run-settings",
-    checkEndpoint: "/api/onboarding/questionnaire",
   },
   {
     id: "targets",
@@ -56,7 +53,6 @@ const steps: SetupStep[] = [
     description: "Add companies to personalize decks for",
     icon: Upload,
     hash: "#target-intake",
-    checkEndpoint: "/api/runs",
   },
 ];
 
@@ -79,31 +75,15 @@ export function SetupGuide() {
     const done = new Set<string>();
 
     try {
-      const sellerRes = await fetch("/api/onboarding/seller-context");
-      if (sellerRes.ok) {
-        const data = await sellerRes.json();
-        if (data?.companyName || data?.offerSummary) {
-          done.add("seller");
-        }
+      const [onboardingRes, runsRes] = await Promise.all([
+        fetch("/api/onboarding"),
+        fetch("/api/runs"),
+      ]);
+      if (onboardingRes.ok) {
+        const data = await onboardingRes.json();
+        if (data?.readiness?.sellerReady === true) done.add("seller");
+        if (data?.readiness?.questionnaireReady === true) done.add("settings");
       }
-    } catch {
-      // ignore
-    }
-
-    try {
-      const questRes = await fetch("/api/onboarding/questionnaire");
-      if (questRes.ok) {
-        const data = await questRes.json();
-        if (data?.audience || data?.objective) {
-          done.add("settings");
-        }
-      }
-    } catch {
-      // ignore
-    }
-
-    try {
-      const runsRes = await fetch("/api/runs");
       if (runsRes.ok) {
         const data = await runsRes.json();
         if (Array.isArray(data) && data.length > 0) {
@@ -120,11 +100,9 @@ export function SetupGuide() {
 
   /* ── Initial check on mount ── */
   React.useEffect(() => {
-    if (!businessSetupComplete) {
-      checkReadiness();
-    } else {
-      setLoading(false);
-    }
+    if (businessSetupComplete) return;
+    const timer = window.setTimeout(() => void checkReadiness(), 0);
+    return () => window.clearTimeout(timer);
   }, [checkReadiness, businessSetupComplete]);
 
   /* ── Re-check when user navigates (hash-based routing) ── */

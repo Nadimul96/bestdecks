@@ -36,7 +36,7 @@ const TOUR_STEPS: TourStep[] = [
   {
     title: "Your Business",
     description:
-      "Start here. Tell us about your business and we\u2019ll auto-fill from your website.",
+      "Start here. Enter the seller context that should ground every generated deck.",
     hash: "seller-context",
     position: "bottom",
   },
@@ -96,20 +96,6 @@ export function ProductTour({ onComplete }: ProductTourProps) {
   }, []);
 
   /* ── Handlers ───────────────────────────── */
-  const handleNext = useCallback(() => {
-    if (isLast) {
-      handleComplete();
-      return;
-    }
-    transitionTo(step + 1);
-  }, [step, isLast, transitionTo]);
-
-  const handleBack = useCallback(() => {
-    if (!isFirst) {
-      transitionTo(step - 1);
-    }
-  }, [step, isFirst, transitionTo]);
-
   const handleComplete = useCallback(() => {
     try {
       localStorage.setItem(STORAGE_KEY, "true");
@@ -119,6 +105,20 @@ export function ProductTour({ onComplete }: ProductTourProps) {
     setVisible(false);
     onComplete();
   }, [onComplete]);
+
+  const handleNext = useCallback(() => {
+    if (isLast) {
+      handleComplete();
+      return;
+    }
+    transitionTo(step + 1);
+  }, [step, isLast, transitionTo, handleComplete]);
+
+  const handleBack = useCallback(() => {
+    if (!isFirst) {
+      transitionTo(step - 1);
+    }
+  }, [step, isFirst, transitionTo]);
 
   /* ── Keyboard navigation ────────────────── */
   useEffect(() => {

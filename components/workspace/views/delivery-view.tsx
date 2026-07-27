@@ -1,14 +1,13 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import {
   AlertCircle,
   CheckCircle2,
   CheckSquare,
   ChevronLeft,
-  ChevronRight,
   Download,
-  ExternalLink,
   Eye,
   FileText,
   LoaderCircle,
@@ -16,11 +15,8 @@ import {
   Minimize2,
   RefreshCcw,
   Search,
-  Send,
   Share2,
   Square,
-  Star,
-  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -28,12 +24,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ViewLayout, StatusPill } from "../view-layout";
-import { DeckScoreBadge, DeckScoreDetail } from "@/components/deck-score-badge";
+import {
+  DeckEvidenceBadge,
+  DeckEvidenceDetails,
+  DeckEvidenceNotice,
+  type DeckEvidenceSummary,
+} from "@/components/deck-score-badge";
 import {
   viewMeta,
-  type RunArtifactRecord,
-  type RunTargetRecord,
-  type DeckScore,
 } from "@/lib/workspace-types";
 import { cn } from "@/lib/utils";
 
@@ -51,10 +49,55 @@ interface DeckCard {
   status: string;
   format: string;
   createdAt: string;
-  artifacts: RunArtifactRecord[];
+  downloadAvailable: boolean;
+  evidence?: DeckEvidenceSummary;
+  preview?: {
+    googleSlidesId?: string;
+    embedUrl?: string;
+  };
   shareSlug?: string;
   canShare?: boolean;
-  score?: DeckScore;
+}
+
+function safeHttpUrl(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  try {
+    const url = new URL(value);
+    if (
+      (url.protocol !== "https:" && url.protocol !== "http:")
+      || url.username
+      || url.password
+    ) return undefined;
+    return url.toString();
+  } catch {
+    return undefined;
+  }
+}
+
+function safeGoogleSlidesId(value: unknown): string | undefined {
+  return typeof value === "string" && /^[A-Za-z0-9_-]{1,256}$/u.test(value)
+    ? value
+    : undefined;
+}
+
+function safeGoogleSlidesEmbedUrl(value: unknown): string | undefined {
+  const safe = safeHttpUrl(value);
+  if (!safe) return undefined;
+  const url = new URL(safe);
+  if (
+    url.origin !== "https://docs.google.com"
+    || !/^\/presentation\/d\/[A-Za-z0-9_-]{1,256}\/embed$/u.test(url.pathname)
+  ) return undefined;
+  url.search = "";
+  url.searchParams.set("start", "false");
+  url.searchParams.set("loop", "false");
+  url.searchParams.set("rm", "minimal");
+  return url.toString();
+}
+
+function deliveryDownloadUrl(deck: DeckCard): string | undefined {
+  if (!deck.downloadAvailable) return undefined;
+  return `/api/delivery/${encodeURIComponent(deck.targetId)}/download`;
 }
 
 async function copyToClipboard(value: string) {
@@ -79,17 +122,12 @@ export function DeliveryView() {
   const [deckCards, setDeckCards] = React.useState<DeckCard[]>([]);
   const [searchQuery, setSearchQuery] = React.useState("");
   const [filterStatus, setFilterStatus] = React.useState<
-    "all" | "completed" | "failed" | "pending"
+    "all" | "delivered" | "failed" | "pending"
   >("all");
   const [previewDeck, setPreviewDeck] = React.useState<DeckCard | null>(null);
-  const [scoreDetailDeck, setScoreDetailDeck] = React.useState<DeckCard | null>(null);
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
 
-  React.useEffect(() => {
-    fetchAllDecks();
-  }, []);
-
-  async function fetchAllDecks(retries = 2) {
+  const fetchAllDecks = React.useCallback(async function loadDecks(retries = 2) {
     setLoading(true);
     try {
       // Single bulk API call instead of N+1 fetches — goes from ~60s to ~1s
@@ -103,41 +141,29 @@ export function DeliveryView() {
         return;
       }
 
-      // Map server response to DeckCard format with client-side scoring
-      const cards: DeckCard[] = (data.decks as Array<{
-        targetId: string;
-        runId: string;
-        companyName: string;
-        websiteUrl: string;
-        status: string;
-        format: string;
-        createdAt: string;
-        artifacts: RunArtifactRecord[];
-        shareSlug?: string;
-        canShare?: boolean;
-      }>).map((deck) => ({
-        ...deck,
-        score: (deck.status === "completed" || deck.status === "delivered")
-          ? generateMockScore({ id: deck.targetId, status: deck.status } as RunTargetRecord)
-          : undefined,
-      }));
+      const cards = data.decks as DeckCard[];
 
       cards.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       setDeckCards(cards);
-    } catch (err) {
+    } catch {
       if (retries > 0) {
         await new Promise((r) => setTimeout(r, 1000));
-        return fetchAllDecks(retries - 1);
+        return loadDecks(retries - 1);
       }
       toast.error("Failed to load decks. Please refresh the page.");
       setDeckCards([]);
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
+
+  React.useEffect(() => {
+    const timer = window.setTimeout(() => void fetchAllDecks(), 0);
+    return () => window.clearTimeout(timer);
+  }, [fetchAllDecks]);
 
   const filteredDecks = deckCards.filter((deck) => {
-    if (filterStatus === "completed" && deck.status !== "completed" && deck.status !== "delivered") return false;
+    if (filterStatus === "delivered" && deck.status !== "delivered") return false;
     if (filterStatus === "failed" && deck.status !== "failed") return false;
     if (filterStatus === "pending" && deck.status !== "pending" && deck.status !== "brief_ready") return false;
     if (searchQuery) {
@@ -149,7 +175,7 @@ export function DeliveryView() {
 
   // Selection helpers
   const selectableDecks = filteredDecks.filter(
-    (d) => d.status === "completed" || d.status === "delivered",
+    (d) => d.status === "delivered",
   );
   const allSelected =
     selectableDecks.length > 0 &&
@@ -176,15 +202,9 @@ export function DeliveryView() {
     const selected = selectableDecks.filter((d) => selectedIds.has(d.targetId));
     let downloadCount = 0;
     for (const deck of selected) {
-      const downloadUrl = deck.artifacts.find(
-        (a) => typeof a.artifact_json?.download_url === "string",
-      )?.artifact_json?.download_url as string | undefined;
-      const viewUrl = deck.artifacts.find(
-        (a) => typeof a.artifact_json?.url === "string",
-      )?.artifact_json?.url as string | undefined;
-      const url = downloadUrl ?? viewUrl;
+      const url = deliveryDownloadUrl(deck);
       if (url) {
-        window.open(url, "_blank");
+        window.open(url, "_blank", "noopener,noreferrer");
         downloadCount++;
       }
     }
@@ -193,11 +213,6 @@ export function DeliveryView() {
     } else {
       toast.error("No downloadable decks found in selection.");
     }
-  }
-
-  function handleBatchSend() {
-    const selected = selectableDecks.filter((d) => selectedIds.has(d.targetId));
-    toast.info(`Send ${selected.length} deck${selected.length > 1 ? "s" : ""} — coming soon!`);
   }
 
   async function handleShare(deck: DeckCard) {
@@ -258,14 +273,9 @@ export function DeliveryView() {
     }
   }
 
-  const completedCount = deckCards.filter((d) => d.status === "completed" || d.status === "delivered").length;
+  const deliveredCount = deckCards.filter((d) => d.status === "delivered").length;
   const failedCount = deckCards.filter((d) => d.status === "failed").length;
   const totalCount = deckCards.length;
-  const scoredDecks = deckCards.filter((d) => d.score);
-  const avgScore =
-    scoredDecks.length > 0
-      ? Math.round(scoredDecks.reduce((sum, d) => sum + (d.score?.overallScore ?? 0), 0) / scoredDecks.length)
-      : 0;
 
   return (
     <ViewLayout
@@ -302,19 +312,21 @@ export function DeliveryView() {
       <>
       {/* Summary cards */}
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-3 min-w-0">
-        <SummaryCard label="Completed decks" value={completedCount} icon={CheckCircle2} accent="emerald" />
+        <SummaryCard label="Delivered decks" value={deliveredCount} icon={CheckCircle2} accent="emerald" />
         <SummaryCard label="Total targets" value={totalCount} icon={FileText} accent="primary" />
-        <SummaryCard label="Avg. quality score" value={avgScore} icon={Star} accent="amber" suffix="/100" />
+        <SummaryCard label="Failed targets" value={failedCount} icon={AlertCircle} accent="amber" />
       </div>
+
+      <DeckEvidenceNotice />
 
       {/* Filter bar */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-2">
-          {(["all", "completed", "failed", "pending"] as const).map((status) => {
+          {(["all", "delivered", "failed", "pending"] as const).map((status) => {
             const count = status === "all"
               ? deckCards.length
-              : status === "completed"
-                ? completedCount
+              : status === "delivered"
+                ? deliveredCount
                 : status === "failed"
                   ? failedCount
                   : deckCards.filter((d) => d.status === "pending" || d.status === "brief_ready").length;
@@ -377,14 +389,6 @@ export function DeliveryView() {
                 <Download className="size-3" />
                 Export ({selectedIds.size})
               </Button>
-              <Button
-                size="sm"
-                className="h-7 gap-1.5 text-xs"
-                onClick={handleBatchSend}
-              >
-                <Send className="size-3" />
-                Send ({selectedIds.size})
-              </Button>
             </div>
           )}
         </div>
@@ -419,7 +423,6 @@ export function DeliveryView() {
               selected={selectedIds.has(deck.targetId)}
               onToggleSelect={() => toggleSelect(deck.targetId)}
               onPreview={() => setPreviewDeck(deck)}
-              onScoreClick={() => setScoreDetailDeck(deck)}
               onShare={() => handleShare(deck)}
               onUnshare={() => handleUnshare(deck)}
             />
@@ -434,25 +437,7 @@ export function DeliveryView() {
         <DeckPreviewOverlay
           deck={previewDeck}
           onClose={() => setPreviewDeck(null)}
-          onScoreClick={() => setScoreDetailDeck(previewDeck)}
         />
-      )}
-
-      {/* Score detail overlay */}
-      {scoreDetailDeck?.score && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in"
-          onClick={() => setScoreDetailDeck(null)}
-          onKeyDown={(e) => e.key === "Escape" && setScoreDetailDeck(null)}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Deck quality score details"
-          tabIndex={-1}
-        >
-          <div className="w-full max-w-lg mx-4 animate-scale-in" onClick={(e) => e.stopPropagation()}>
-            <DeckScoreDetail deckScore={scoreDetailDeck.score} onClose={() => setScoreDetailDeck(null)} />
-          </div>
-        </div>
       )}
     </ViewLayout>
   );
@@ -465,7 +450,6 @@ function DeckCardItem({
   selected,
   onToggleSelect,
   onPreview,
-  onScoreClick,
   onShare,
   onUnshare,
 }: {
@@ -473,7 +457,6 @@ function DeckCardItem({
   selected: boolean;
   onToggleSelect: () => void;
   onPreview: () => void;
-  onScoreClick: () => void;
   onShare: () => void;
   onUnshare: () => void;
 }) {
@@ -484,11 +467,10 @@ function DeckCardItem({
     displayName = deck.websiteUrl;
   }
 
-  const isSelectable = deck.status === "completed" || deck.status === "delivered";
+  const isSelectable = deck.status === "delivered";
 
   // Extract Google Slides embed for thumbnail
-  const deliveryArtifact = deck.artifacts.find((a) => a.artifact_type === "presentation_delivery")?.artifact_json;
-  const gsId = deliveryArtifact?.googleSlidesId as string | undefined;
+  const gsId = safeGoogleSlidesId(deck.preview?.googleSlidesId);
   const thumbnailUrl = gsId
     ? `https://docs.google.com/presentation/d/${gsId}/export/png?pageid=p`
     : null;
@@ -505,11 +487,13 @@ function DeckCardItem({
         className="relative block w-full aspect-[16/10] bg-muted/30 overflow-hidden"
       >
         {thumbnailUrl && isSelectable ? (
-          <img
+          <Image
             src={thumbnailUrl}
             alt={`Preview of ${displayName} deck`}
+            fill
+            unoptimized
+            sizes="(max-width: 640px) 100vw, 33vw"
             className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-            loading="lazy"
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center">
@@ -567,8 +551,11 @@ function DeckCardItem({
               <p className="truncate text-[11px] text-muted-foreground">{deck.websiteUrl}</p>
             </div>
           </div>
-          {deck.score && <DeckScoreBadge score={deck.score.overallScore} onClick={onScoreClick} />}
+          {isSelectable && <DeckEvidenceBadge evidence={deck.evidence} />}
         </div>
+        {isSelectable && (
+          <DeckEvidenceDetails evidence={deck.evidence} className="mt-3 border-t border-border/30 pt-2.5" />
+        )}
       </div>
 
       {/* Footer metadata */}
@@ -579,8 +566,8 @@ function DeckCardItem({
           <span>{new Date(deck.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
           <span className="text-border">&middot;</span>
           <StatusPill
-            status={deck.status === "completed" || deck.status === "delivered" ? "ready" : deck.status === "failed" ? "error" : "running"}
-            label={deck.status === "delivered" ? "completed" : deck.status}
+            status={deck.status === "delivered" ? "ready" : deck.status === "failed" ? "error" : deck.status === "completed" ? "incomplete" : "running"}
+            label={deck.status === "delivered" ? "delivered" : deck.status === "completed" ? "legacy / unverified" : deck.status}
           />
         </div>
 
@@ -617,24 +604,15 @@ function DeckCardItem({
             )}
 
             {(() => {
-              const da = deck.artifacts.find((a) => a.artifact_type === "presentation_delivery")?.artifact_json;
-              const editorUrl = da?.editorUrl as string | undefined;
-              const downloadUrl = (da?.pptxExportUrl ?? da?.download_url) as string | undefined;
-              const actionUrl = editorUrl ?? downloadUrl;
-              if (!actionUrl) return null;
+              const downloadUrl = deliveryDownloadUrl(deck);
+              if (!downloadUrl) return null;
               return (
                 <a
-                  href={actionUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  href={downloadUrl}
                   className="flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  {editorUrl ? (
-                    <>Edit <ExternalLink className="size-2.5" /></>
-                  ) : (
-                    <>Download <Download className="size-2.5" /></>
-                  )}
+                  Download <Download className="size-2.5" />
                 </a>
               );
             })()}
@@ -650,11 +628,9 @@ function DeckCardItem({
 function DeckPreviewOverlay({
   deck,
   onClose,
-  onScoreClick,
 }: {
   deck: DeckCard;
   onClose: () => void;
-  onScoreClick: () => void;
 }) {
   const [iframeLoaded, setIframeLoaded] = React.useState(false);
   const [isFullscreen, setIsFullscreen] = React.useState(false);
@@ -668,21 +644,9 @@ function DeckPreviewOverlay({
     displayName = deck.websiteUrl;
   }
 
-  const viewUrl = deck.artifacts.find((a) => typeof a.artifact_json?.url === "string")?.artifact_json?.url as string | undefined;
-  const downloadUrl = deck.artifacts.find((a) => typeof a.artifact_json?.download_url === "string")?.artifact_json?.download_url as string | undefined;
-
-  const deliveryArtifact = deck.artifacts.find((a) => a.artifact_type === "presentation_delivery")?.artifact_json;
-  const embedUrl = deliveryArtifact?.embedUrl as string | undefined;
-  const editorUrl = deliveryArtifact?.editorUrl as string | undefined;
-  const pdfExportUrl = deliveryArtifact?.pdfExportUrl as string | undefined;
-  const pptxExportUrl = deliveryArtifact?.pptxExportUrl as string | undefined;
-
-  const fileUrl = downloadUrl ?? viewUrl;
-  const previewUrl = embedUrl
-    ? `${embedUrl}&rm=minimal`
-    : fileUrl
-      ? `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileUrl)}`
-      : null;
+  const embedUrl = safeGoogleSlidesEmbedUrl(deck.preview?.embedUrl);
+  const downloadUrl = deliveryDownloadUrl(deck);
+  const previewUrl = embedUrl ?? null;
 
   // Auto-hide controls after 3s of inactivity
   const resetHideTimer = React.useCallback(() => {
@@ -692,11 +656,14 @@ function DeckPreviewOverlay({
   }, []);
 
   React.useEffect(() => {
-    resetHideTimer();
+    hideTimerRef.current = setTimeout(
+      () => setControlsVisible(false),
+      3000,
+    );
     return () => {
       if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
     };
-  }, [resetHideTimer]);
+  }, []);
 
   // Keyboard shortcuts
   React.useEffect(() => {
@@ -707,14 +674,6 @@ function DeckPreviewOverlay({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
-
-  const scoreColor = deck.score
-    ? deck.score.overallScore >= 80
-      ? "text-emerald-400"
-      : deck.score.overallScore >= 60
-        ? "text-amber-400"
-        : "text-red-400"
-    : "";
 
   return (
     <div
@@ -761,25 +720,13 @@ function DeckPreviewOverlay({
         </div>
 
         <div className="flex items-center gap-1">
-          {pdfExportUrl && (
+          {downloadUrl && (
             <a
-              href={pdfExportUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+              href={downloadUrl}
               className="flex items-center gap-1.5 rounded-full bg-white/[0.07] px-3 py-1.5 text-[12px] font-medium text-white/60 backdrop-blur-md transition-all hover:bg-white/[0.12] hover:text-white"
             >
               <Download className="size-3" />
-              PDF
-            </a>
-          )}
-          {(pptxExportUrl || downloadUrl) && (
-            <a
-              href={(pptxExportUrl ?? downloadUrl)!}
-              download={!pptxExportUrl}
-              className="flex items-center gap-1.5 rounded-full bg-white/[0.07] px-3 py-1.5 text-[12px] font-medium text-white/60 backdrop-blur-md transition-all hover:bg-white/[0.12] hover:text-white"
-            >
-              <Download className="size-3" />
-              PPTX
+              Download
             </a>
           )}
 
@@ -792,25 +739,13 @@ function DeckPreviewOverlay({
             {isFullscreen ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
           </button>
 
-          {editorUrl ? (
+          {downloadUrl ? (
             <a
-              href={editorUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 rounded-full bg-white/90 px-4 py-1.5 text-[12px] font-semibold text-gray-900 shadow-lg shadow-black/20 backdrop-blur-md transition-all hover:bg-white hover:shadow-xl hover:shadow-black/25"
-            >
-              <ExternalLink className="size-3" />
-              Edit in Slides
-            </a>
-          ) : fileUrl ? (
-            <a
-              href={fileUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+              href={downloadUrl}
               className="flex items-center gap-1.5 rounded-full bg-white/90 px-4 py-1.5 text-[12px] font-semibold text-gray-900 shadow-lg shadow-black/20 backdrop-blur-md transition-all hover:bg-white hover:shadow-xl"
             >
-              <ExternalLink className="size-3" />
-              Open
+              <Download className="size-3" />
+              Download
             </a>
           ) : null}
         </div>
@@ -870,6 +805,8 @@ function DeckPreviewOverlay({
                   src={previewUrl}
                   title={`Preview — ${displayName}`}
                   className="h-full w-full border-0 bg-white"
+                  sandbox="allow-forms allow-popups allow-same-origin allow-scripts"
+                  referrerPolicy="no-referrer"
                   allowFullScreen
                   onLoad={() => setIframeLoaded(true)}
                 />
@@ -885,7 +822,7 @@ function DeckPreviewOverlay({
             <div>
               <p className="text-[15px] font-medium text-white/50">No preview available</p>
               <p className="mt-1 text-[12px] text-white/25 max-w-xs">
-                {downloadUrl ? "Download the deck to view it in PowerPoint or Google Slides." : "The presentation is still being generated."}
+                {downloadUrl ? "Download the verified PPTX; target-suite compatibility is still being validated." : "The presentation is still being generated."}
               </p>
             </div>
             {downloadUrl && (
@@ -902,35 +839,22 @@ function DeckPreviewOverlay({
         )}
       </div>
 
-      {/* Floating quality score pill */}
-      {deck.score && (
-        <div
-          className={cn(
-            "controls-bar absolute bottom-4 left-1/2 -translate-x-1/2 z-10",
-            !controlsVisible && "controls-hidden-bottom",
-          )}
-          onMouseEnter={() => setControlsVisible(true)}
-        >
-          <button
-            type="button"
-            onClick={onScoreClick}
-            className="group flex items-center gap-3 rounded-full bg-white/[0.08] backdrop-blur-xl px-5 py-2.5 transition-all hover:bg-white/[0.12] ring-1 ring-white/[0.06] shadow-lg shadow-black/20"
-          >
-            <div className="flex items-center gap-2">
-              <Star className={cn("size-3.5 fill-current", scoreColor)} />
-              <span className="text-[13px] font-semibold tabular-nums text-white/80">
-                {deck.score.overallScore}
-              </span>
-              <span className="text-[11px] text-white/30 font-normal">/100</span>
-            </div>
-            <div className="h-3 w-px bg-white/10" />
-            <span className="text-[11px] text-white/40 transition-colors group-hover:text-white/60">
-              View breakdown
-            </span>
-            <ChevronRight className="size-3 text-white/30 transition-transform group-hover:translate-x-0.5 group-hover:text-white/50" />
-          </button>
+      <div
+        className={cn(
+          "controls-bar absolute bottom-4 left-1/2 z-10 -translate-x-1/2",
+          !controlsVisible && "controls-hidden-bottom",
+        )}
+        onMouseEnter={() => setControlsVisible(true)}
+      >
+        <div className="flex max-w-[min(90vw,900px)] flex-col items-center gap-2 rounded-xl bg-black/25 px-3 py-2 backdrop-blur-md ring-1 ring-white/10">
+          <DeckEvidenceBadge evidence={deck.evidence} tone="dark" />
+          <DeckEvidenceDetails
+            evidence={deck.evidence}
+            tone="dark"
+            className="justify-center"
+          />
         </div>
-      )}
+      </div>
 
       {/* Keyboard hints — very subtle */}
       <div className={cn(
@@ -954,13 +878,11 @@ function SummaryCard({
   value,
   icon: Icon,
   accent,
-  suffix,
 }: {
   label: string;
   value: number;
   icon: React.ComponentType<{ className?: string }>;
   accent: "emerald" | "primary" | "amber";
-  suffix?: string;
 }) {
   const accentStyles = {
     emerald: "bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400",
@@ -975,48 +897,10 @@ function SummaryCard({
           <Icon className="size-4" />
         </div>
         <div>
-          <p className="text-2xl font-semibold tabular-nums text-foreground">
-            {value}
-            {suffix && <span className="text-sm font-normal text-muted-foreground">{suffix}</span>}
-          </p>
+          <p className="text-2xl font-semibold tabular-nums text-foreground">{value}</p>
           <p className="text-[11px] text-muted-foreground">{label}</p>
         </div>
       </div>
     </div>
   );
-}
-
-/* ── Mock score (dev only — production uses /api/decks/{id}/score) ── */
-
-function generateMockScore(target: RunTargetRecord): DeckScore {
-  const hash = target.id.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0);
-  const base = 55 + (hash % 40);
-
-  return {
-    deckId: target.id,
-    overallScore: base,
-    breakdown: {
-      relevance: Math.min(100, base + ((hash * 3) % 15) - 5),
-      completeness: Math.min(100, base + ((hash * 7) % 15) - 5),
-      persuasion: Math.min(100, base + ((hash * 11) % 15) - 5),
-      visualQuality: Math.min(100, base + ((hash * 13) % 15) - 5),
-      personalization: Math.min(100, base + ((hash * 17) % 15) - 5),
-    },
-    feedback:
-      base < 80
-        ? [
-            "Add a case study relevant to the target\u2019s industry",
-            "Include specific pricing or ROI metrics",
-            "Strengthen the call-to-action with a concrete next step",
-          ]
-        : ["Deck is well-tailored and ready to send"],
-    infoRequests:
-      base < 70
-        ? [
-            { field: "proofPoints", question: "Do you have case studies in their industry?", priority: "high" as const, businessId: "" },
-            { field: "constraintsText", question: "Any pricing details to include?", priority: "medium" as const, businessId: "" },
-          ]
-        : [],
-    scoredAt: new Date().toISOString(),
-  };
 }

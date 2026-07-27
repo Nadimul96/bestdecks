@@ -1,15 +1,26 @@
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 
 import { ShareableDeckViewer } from "@/components/shareable-deck-viewer";
 import { getPublicShareableDeck } from "@/src/server/repository";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = {
+  robots: {
+    index: false,
+    follow: false,
+    noarchive: true,
+    nosnippet: true,
+    noimageindex: true,
+    nocache: true,
+  },
+};
 
 export default async function ShareableDeckPage(
   { params }: { params: Promise<{ slug: string }> },
 ) {
   const { slug } = await params;
-  const deck = await getPublicShareableDeck(slug, { incrementViews: true });
+  const deck = await getPublicShareableDeck(slug);
 
   if (!deck) {
     notFound();

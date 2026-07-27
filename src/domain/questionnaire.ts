@@ -22,28 +22,29 @@ const rawQuestionnaireSchema = z.object({
   mustInclude: z.array(z.string().trim().min(1)).default([]),
   mustAvoid: z.array(z.string().trim().min(1)).default([]),
   extraInstructions: z.string().trim().min(1).optional(),
-  optionalReview: z.boolean().default(true),
+  optionalReview: z.boolean().default(false),
   allowUserApprovedCrawlException: z.boolean().default(false),
 });
 
 export type RawQuestionnaireAnswers = z.infer<typeof rawQuestionnaireSchema>;
 
 export function normalizeQuestionnaireAnswers(input: RawQuestionnaireAnswers) {
+  const parsedInput = rawQuestionnaireSchema.parse(input);
   const normalized = runQuestionnaireSchema.parse({
-    archetype: input.deckType,
-    audience: input.audience,
-    objective: input.goal,
-    callToAction: input.callToAction,
-    outputFormat: input.outputFormat,
-    desiredCardCount: input.cardCount,
-    tone: input.tone,
-    visualStyle: input.visualStyle,
-    imagePolicy: input.imagePolicy,
-    mustInclude: input.mustInclude,
-    mustAvoid: input.mustAvoid,
-    extraInstructions: input.extraInstructions,
-    optionalReview: input.optionalReview,
-    allowUserApprovedCrawlException: input.allowUserApprovedCrawlException,
+    archetype: parsedInput.deckType,
+    audience: parsedInput.audience,
+    objective: parsedInput.goal,
+    callToAction: parsedInput.callToAction,
+    outputFormat: parsedInput.outputFormat,
+    desiredCardCount: parsedInput.cardCount,
+    tone: parsedInput.tone,
+    visualStyle: parsedInput.visualStyle,
+    imagePolicy: parsedInput.imagePolicy,
+    mustInclude: parsedInput.mustInclude,
+    mustAvoid: parsedInput.mustAvoid,
+    extraInstructions: parsedInput.extraInstructions,
+    optionalReview: parsedInput.optionalReview,
+    allowUserApprovedCrawlException: parsedInput.allowUserApprovedCrawlException,
   });
 
   return normalized;
@@ -93,7 +94,7 @@ export const questionnairePrompts = [
   {
     id: "imagePolicy",
     label: "Image Policy",
-    prompt: "Should the system auto-decide, never use, or always use generated images?",
+    prompt: "Generated media is unavailable in the v0.1 reference profile; use never.",
   },
   {
     id: "mustInclude",

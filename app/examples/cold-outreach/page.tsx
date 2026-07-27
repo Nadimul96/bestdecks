@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ArrowLeft, Download, ExternalLink, Eye, FileText, Sparkles } from "lucide-react";
+import { ArrowLeft, Eye, Sparkles } from "lucide-react";
 
 import { coldOutreachExample, type ExampleDeckSlide } from "@/src/examples/cold-outreach-example";
 
@@ -117,7 +117,7 @@ export default function ColdOutreachExamplePage() {
           </Link>
           <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/10 px-4 py-2 text-sm font-medium text-cyan-100">
             <Sparkles className="size-4" />
-            Internal BestDecks example
+            Sample data
           </div>
         </div>
 
@@ -132,23 +132,9 @@ export default function ColdOutreachExamplePage() {
             </p>
 
             <div className="mt-8 flex flex-wrap items-center gap-3">
-              <a
-                href="/api/examples/cold-outreach/download?format=pdf"
-                className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-5 py-3 text-sm font-semibold text-slate-950 shadow-[0_16px_40px_-18px_rgba(103,232,249,0.85)] transition-transform hover:-translate-y-0.5"
-              >
-                <Download className="size-4" />
-                Download PDF
-              </a>
-              <a
-                href="/api/examples/cold-outreach/download?format=pptx"
-                className="inline-flex items-center gap-2 rounded-xl border border-white/12 bg-white/[0.06] px-5 py-3 text-sm font-semibold text-white/84 transition-colors hover:bg-white/[0.1]"
-              >
-                <FileText className="size-4" />
-                Download PPTX
-              </a>
               <span className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/54">
                 <Eye className="size-4" />
-                Rendered inside BestDecks
+                Static synthetic preview; no reviewed export
               </span>
             </div>
           </div>
@@ -169,7 +155,7 @@ export default function ColdOutreachExamplePage() {
                 <p className="mt-2 text-sm font-medium leading-relaxed text-white/76">{coldOutreachExample.audience}</p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-white/35">Generated</p>
+                <p className="text-[11px] uppercase tracking-[0.18em] text-white/35">Fixture updated</p>
                 <p className="mt-2 text-sm font-medium leading-relaxed text-white/76">
                   {new Date(coldOutreachExample.generatedAt).toLocaleString(undefined, {
                     year: "numeric",
@@ -191,30 +177,13 @@ export default function ColdOutreachExamplePage() {
               ))}
             </ul>
 
-            <details className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
-              <summary className="cursor-pointer list-none text-sm font-medium text-white/74">
-                Debug fallback
-              </summary>
-              <div className="mt-3 space-y-2 text-sm text-white/58">
-                <p>This stays off the primary UX. Use it only to compare BestDecks against the raw hosted presentation.</p>
-                <a
-                  href={coldOutreachExample.source.alaiViewUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-2 text-cyan-200 hover:text-cyan-100"
-                >
-                  Open presentation
-                  <ExternalLink className="size-3.5" />
-                </a>
-              </div>
-            </details>
           </aside>
         </header>
 
         <div className="mt-8 rounded-[28px] border border-white/10 bg-black/15 px-6 py-5 text-sm leading-relaxed text-white/62 backdrop-blur-sm">
-          <span className="font-semibold text-white/84">What this page is:</span> a BestDecks-owned viewer for a real generated example.
+          <span className="font-semibold text-white/84">What this page is:</span> a fictional, synthetic content fixture for reviewing layout and narrative structure.
           <span className="mx-2 text-white/18">|</span>
-          <span className="font-semibold text-white/84">What it is not:</span> an embedded third-party app surface.
+          <span className="font-semibold text-white/84">What it is not:</span> customer evidence, verified performance data, or a delivered deck.
         </div>
 
         <div className="mt-10 space-y-8">

@@ -22,7 +22,6 @@ import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { SearchTrigger } from "@/components/search-trigger";
 import { BusinessSwitcher } from "@/components/business-switcher";
-import { CreditCounter } from "@/components/credit-counter";
 import {
   isWorkspaceViewId,
   workspaceNavGroups,
@@ -110,10 +109,8 @@ export function WorkspaceHeader() {
           <SearchTrigger />
         </div>
 
-        {/* Right section: credits + new run */}
+        {/* Right section: new run */}
         <div className="flex items-center gap-2">
-          <CreditCounter />
-
           <TooltipProvider delayDuration={200}>
             <Tooltip>
               <TooltipTrigger asChild>

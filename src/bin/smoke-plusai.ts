@@ -39,11 +39,11 @@ async function main() {
   console.log(
     JSON.stringify(
       {
-        presentationId: result.presentationId,
-        exportUrl: result.exportUrl,
-        editorUrl: result.editorUrl,
-        googleSlidesId: result.googleSlidesId,
-        pptxExportUrl: result.pptxExportUrl,
+        generated: Boolean(result.presentationId),
+        exportAvailable: Boolean(result.exportUrl),
+        editorAvailable: Boolean(result.editorUrl),
+        googleSlidesAvailable: Boolean(result.googleSlidesId),
+        pptxAvailable: Boolean(result.pptxExportUrl),
       },
       null,
       2,
@@ -51,7 +51,7 @@ async function main() {
   );
 }
 
-main().catch((error) => {
-  console.error(error);
+main().catch(() => {
+  console.error("Plus AI smoke test failed.");
   process.exitCode = 1;
 });

@@ -3,7 +3,6 @@
 import * as React from "react";
 import {
   AlertCircle,
-  ArrowRight,
   CheckCircle2,
   ChevronDown,
   FileSpreadsheet,
@@ -16,16 +15,23 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { dispatchRunStart } from "@/lib/run-launch";
 import { ViewLayout, SectionCard, FieldGroup } from "../view-layout";
 import { viewMeta, type Notice } from "@/lib/workspace-types";
 import { cn } from "@/lib/utils";
+import { randomUUID } from "@/lib/utils-crypto";
+import { MAX_TARGETS_PER_RUN } from "@/src/domain/schemas";
+import {
+  canonicalizeTargetCsvHeader,
+  isRecipientEmailCsvHeader,
+  isSupportedTargetCsvHeader,
+  TARGET_CSV_COLUMNS,
+} from "@/src/domain/intake-fields";
 
 const meta = viewMeta["target-intake"];
 
-const targetExamples = `https://acmeplumbing.com
-https://northshoreclinic.com
-https://sunsetlogistics.io`;
+const targetExamples = `https://target-one.example
+https://target-two.example
+https://target-three.example`;
 
 /* ─── Simple CSV/TSV parser ─── */
 function parseDelimited(text: string): { headers: string[]; rows: string[][] } {
@@ -69,49 +75,6 @@ function parseDelimited(text: string): { headers: string[]; rows: string[][] } {
   return { headers, rows };
 }
 
-/* ─── Expected column mappings ─── */
-const EXPECTED_COLUMNS = [
-  "websiteUrl",
-  "companyName",
-  "firstName",
-  "lastName",
-  "role",
-  "email",
-  "campaignGoal",
-  "notes",
-];
-
-function normalizeHeader(header: string): string {
-  const h = header.toLowerCase().replace(/[^a-z0-9]/g, "");
-  const mappings: Record<string, string> = {
-    websiteurl: "websiteUrl",
-    website: "websiteUrl",
-    url: "websiteUrl",
-    site: "websiteUrl",
-    companyname: "companyName",
-    company: "companyName",
-    firstname: "firstName",
-    first: "firstName",
-    fname: "firstName",
-    lastname: "lastName",
-    last: "lastName",
-    lname: "lastName",
-    role: "role",
-    title: "role",
-    jobtitle: "role",
-    position: "role",
-    email: "email",
-    emailaddress: "email",
-    campaigngoal: "campaignGoal",
-    goal: "campaignGoal",
-    campaign: "campaignGoal",
-    notes: "notes",
-    note: "notes",
-    comments: "notes",
-  };
-  return mappings[h] ?? header;
-}
-
 interface FileUploadState {
   file: File | null;
   headers: string[];
@@ -138,9 +101,12 @@ export function TargetIntakeView() {
   const [isDragging, setIsDragging] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-  const websiteCount = websitesText
-    .split("\n")
-    .filter((l) => l.trim().length > 0).length;
+  const websiteCount = new Set(
+    websitesText
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean),
+  ).size;
 
   function processFile(file: File) {
     const reader = new FileReader();
@@ -156,8 +122,24 @@ export function TargetIntakeView() {
         toast.error("No data found in file.");
         return;
       }
+      if (rows.length > MAX_TARGETS_PER_RUN) {
+        toast.error(`A target CSV can contain at most ${MAX_TARGETS_PER_RUN} rows.`);
+        return;
+      }
+      if (headers.some(isRecipientEmailCsvHeader)) {
+        toast.error(
+          "Recipient-email columns are not accepted while outbound email is deferred.",
+        );
+        return;
+      }
 
-      const mapped = headers.map(normalizeHeader);
+      const mapped = headers.map(canonicalizeTargetCsvHeader);
+      if (mapped.some((header) => !isSupportedTargetCsvHeader(header))) {
+        toast.error(
+          `Remove unsupported columns. Accepted columns: ${TARGET_CSV_COLUMNS.join(", ")}.`,
+        );
+        return;
+      }
 
       setUpload({
         file,
@@ -247,25 +229,28 @@ export function TargetIntakeView() {
       return;
     }
 
+    if (websiteCount > MAX_TARGETS_PER_RUN) {
+      const message = `A run can contain at most ${MAX_TARGETS_PER_RUN} targets.`;
+      setNotice({ type: "error", message });
+      toast.error(message);
+      return;
+    }
+
     setSubmitting(true);
     setNotice(null);
 
     // ── Pre-flight: check onboarding completeness before hitting API ──
     try {
-      const [scRes] = await Promise.all([
-        fetch("/api/onboarding/seller-context"),
-        fetch("/api/onboarding/questionnaire"),
-      ]);
-
+      const onboardingRes = await fetch("/api/onboarding");
       const missingSteps: string[] = [];
-
-      if (scRes.ok) {
-        const sc = await scRes.json();
-        if (!sc.companyName && !sc.websiteUrl) {
-          missingSteps.push("Your Business — add your company name or website");
+      if (onboardingRes.ok) {
+        const onboarding = await onboardingRes.json();
+        if (onboarding?.readiness?.sellerReady !== true) {
+          missingSteps.push("Your Business — complete every required seller-context field");
         }
-      } else {
-        missingSteps.push("Your Business — complete your business profile");
+        if (onboarding?.readiness?.questionnaireReady !== true) {
+          missingSteps.push("Run Settings — add the required audience, objective, and CTA");
+        }
       }
 
       if (missingSteps.length > 0) {
@@ -290,22 +275,23 @@ export function TargetIntakeView() {
     try {
       const res = await fetch("/api/runs", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": randomUUID(),
+        },
         body: JSON.stringify({
           websitesText,
           contactsCsvText: contactsCsvText || undefined,
-          autoLaunch: false,
         }),
       });
 
       const payload = await res.json().catch(() => null) as
-        | { runId?: string; error?: string; insufficientCredits?: boolean }
+        | { runId?: string; error?: string }
         | null;
 
       if (res.ok && payload?.runId) {
-        dispatchRunStart(payload.runId);
         toast.success(
-          `Run starting with ${websiteCount} target${websiteCount > 1 ? "s" : ""}.`,
+          `Run queued with ${websiteCount} target${websiteCount > 1 ? "s" : ""}.`,
         );
         setWebsitesText("");
         setContactsCsvText("");
@@ -319,18 +305,7 @@ export function TargetIntakeView() {
           message: errorMsg,
         });
 
-        // Special handling for insufficient credits
-        if (payload?.insufficientCredits || res.status === 402) {
-          toast.error(errorMsg, {
-            action: {
-              label: "Upgrade",
-              onClick: () => { window.location.hash = "billing"; },
-            },
-            duration: 8000,
-          });
-        } else {
-          toast.error(errorMsg);
-        }
+        toast.error(errorMsg);
       }
     } catch {
       setNotice({ type: "error", message: "Network error." });
@@ -348,7 +323,11 @@ export function TargetIntakeView() {
       actions={
         <Button
           onClick={handleSubmit}
-          disabled={submitting || websiteCount === 0}
+          disabled={
+            submitting ||
+            websiteCount === 0 ||
+            websiteCount > MAX_TARGETS_PER_RUN
+          }
         >
           {submitting ? (
             <>
@@ -423,10 +402,10 @@ export function TargetIntakeView() {
         </FieldGroup>
       </SectionCard>
 
-      {/* File upload for contacts */}
+      {/* Optional target-metadata upload */}
       <SectionCard
-        title="Contact list"
-        description="Upload a CSV, TSV, or Excel file with contact details. We'll auto-detect your column headers."
+        title="Target metadata"
+        description="Optionally upload a CSV or TSV with target names, roles, goals, and notes. Recipient-email columns are not accepted."
       >
         <div className="space-y-4">
           {/* File drop zone */}
@@ -468,10 +447,10 @@ export function TargetIntakeView() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".csv,.tsv,.txt,.xlsx"
+                accept=".csv,.tsv,.txt"
                 onChange={handleFileInput}
                 className="hidden"
-                aria-label="Upload contact list file"
+                aria-label="Upload target metadata file"
               />
             </div>
           ) : (
@@ -535,7 +514,9 @@ export function TargetIntakeView() {
                   <tbody>
                     {upload.headers.map((h, i) => {
                       const mapped = upload.mappedHeaders[i];
-                      const isKnown = EXPECTED_COLUMNS.includes(mapped);
+                      const isKnown = TARGET_CSV_COLUMNS.some(
+                        (column) => column === mapped,
+                      );
                       return (
                         <tr
                           key={i}
@@ -661,13 +642,13 @@ export function TargetIntakeView() {
                   <Textarea
                     value={contactsCsvText}
                     onChange={(e) => setContactsCsvText(e.target.value)}
-                    placeholder={`websiteUrl,firstName,lastName,role,email\nhttps://acmeplumbing.com,Sarah,Lee,Founder,sarah@acmeplumbing.com`}
+                    placeholder={`websiteUrl,firstName,lastName,role,campaignGoal,notes\nhttps://target-one.example,Casey,Lee,Founder,Review operations,"Regional expansion, 2026"`}
                     className="min-h-[120px] resize-none font-mono text-xs leading-relaxed"
                   />
                   <p className="text-[11px] text-muted-foreground">
                     Expected columns:{" "}
                     <code className="rounded bg-muted px-1 py-0.5 text-[10px]">
-                      websiteUrl, firstName, lastName, role, email, campaignGoal, notes
+                      {TARGET_CSV_COLUMNS.join(", ")}
                     </code>
                   </p>
                 </div>
@@ -682,8 +663,8 @@ export function TargetIntakeView() {
         <p className="text-[13px] text-muted-foreground">
           {websiteCount > 0
             ? `${websiteCount} target${websiteCount > 1 ? "s" : ""} ready`
-            : "Add target URLs or upload a contact file to get started"}
-          {upload.confirmed && ` • ${upload.rows.length} contacts mapped`}
+            : "Add target URLs or upload a target metadata file to get started"}
+          {upload.confirmed && ` • ${upload.rows.length} target rows mapped`}
         </p>
         <div className="flex items-center gap-2">
           <Button

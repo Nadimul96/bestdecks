@@ -1,11 +1,19 @@
 import assert from "node:assert/strict";
-import { mkdirSync } from "node:fs";
+import { chmodSync, mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { chromium } from "playwright";
 
 const baseUrl = process.env.UAT_BASE_URL ?? "http://localhost:3001";
 const outputDir = resolve(process.cwd(), "output/playwright");
+
+function requireUatCredential(name: "UAT_EMAIL" | "UAT_PASSWORD") {
+  const value = process.env[name]?.trim();
+  if (!value) {
+    throw new Error(`${name} is required. Use an isolated UAT account; never a personal account.`);
+  }
+  return value;
+}
 
 async function setHash(page: import("playwright").Page, hash: string) {
   await page.evaluate((nextHash) => {
@@ -17,8 +25,21 @@ async function setHash(page: import("playwright").Page, hash: string) {
   );
 }
 
+async function capturePrivateScreenshot(
+  page: import("playwright").Page,
+  filename: string,
+) {
+  const path = resolve(outputDir, filename);
+  await page.screenshot({ path, fullPage: true });
+  chmodSync(path, 0o600);
+}
+
 async function run() {
-  mkdirSync(outputDir, { recursive: true });
+  const email = requireUatCredential("UAT_EMAIL");
+  const password = requireUatCredential("UAT_PASSWORD");
+
+  mkdirSync(outputDir, { recursive: true, mode: 0o700 });
+  chmodSync(outputDir, 0o700);
 
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({
@@ -28,11 +49,11 @@ async function run() {
 
   try {
     await page.goto(`${baseUrl}/login`, { waitUntil: "networkidle" });
-    await page.getByLabel("Email").fill("nadimul96@gmail.com");
-    await page.getByLabel("Password").fill("Nazmul89?");
+    await page.getByLabel("Email").fill(email);
+    await page.getByLabel("Password").fill(password);
     await page.getByRole("button", { name: "Sign in" }).click();
-    await page.waitForURL(`${baseUrl}/`, { timeout: 20000 });
-    await page.screenshot({ path: resolve(outputDir, "uat-overview.png"), fullPage: true });
+    await page.waitForURL(`${baseUrl}/console`, { timeout: 20000 });
+    await capturePrivateScreenshot(page, "uat-overview.png");
 
     await setHash(page, "#onboarding");
     await page.getByLabel("Company").fill("Bestdecks");
@@ -77,7 +98,7 @@ async function run() {
       );
     await page.getByLabel("Card count").fill("6");
     await page.getByLabel("Image policy").selectOption("never");
-    await page.getByLabel("Output format").selectOption("presenton_editor");
+    await page.getByLabel("Output format").selectOption("pptx");
     await page
       .getByLabel("Must include")
       .fill("Specific website observations\nClear next step");
@@ -95,24 +116,24 @@ async function run() {
     await page.getByRole("button", { name: "Launch new batch generation" }).click();
     await page.getByText(/Run .* launched\./).waitFor({ timeout: 20000 });
     await page
-      .getByRole("link", { name: /Editor/i })
+      .getByRole("link", { name: /Download/i })
       .first()
       .waitFor({ timeout: 180000 });
 
-    const editorHref = await page
-      .getByRole("link", { name: /Editor/i })
+    const downloadHref = await page
+      .getByRole("link", { name: /Download/i })
       .first()
       .getAttribute("href");
-    assert.ok(editorHref?.includes("localhost:5050/presentation?id="));
+    assert.match(downloadHref ?? "", /^\/api\/delivery\/[^/]+\/download$/u);
 
-    await page.screenshot({ path: resolve(outputDir, "uat-delivery.png"), fullPage: true });
+    await capturePrivateScreenshot(page, "uat-delivery.png");
   } finally {
     await context.close();
     await browser.close();
   }
 }
 
-void run().catch((error) => {
-  console.error(error);
+void run().catch(() => {
+  console.error("UAT smoke test failed. Review the generated screenshots.");
   process.exitCode = 1;
 });

@@ -1,16 +1,13 @@
 import type {
-  CompanyRow,
   DeckArchetype,
   DeliveryFormat,
   ImagePolicy,
-  RunQuestionnaire,
   SellerContext,
   Tone,
   VisualContentType,
   VisualDensity,
   VisualStyle,
 } from "@/src/domain/schemas";
-import type { IntegrationProviderKey } from "@/src/server/settings";
 
 /* ─────────────────────────────────────────────
    Multi-Business Types
@@ -27,215 +24,6 @@ export interface Business {
   createdAt: string;
   updatedAt: string;
 }
-
-/* ─────────────────────────────────────────────
-   Deck Scoring Types
-   ───────────────────────────────────────────── */
-
-export interface DeckScoreBreakdown {
-  relevance: number;
-  completeness: number;
-  persuasion: number;
-  visualQuality: number;
-  personalization: number;
-}
-
-export interface DeckScore {
-  deckId: string;
-  overallScore: number;
-  breakdown: DeckScoreBreakdown;
-  feedback: string[];
-  infoRequests: InfoRequest[];
-  scoredAt: string;
-}
-
-export interface InfoRequest {
-  field: string;
-  question: string;
-  priority: "high" | "medium" | "low";
-  businessId: string;
-}
-
-/* ─────────────────────────────────────────────
-   Credit & Pricing Types
-   ───────────────────────────────────────────── */
-
-export type PlanTier = "free" | "starter" | "growth" | "scale" | "enterprise";
-
-export interface UserDecks {
-  userId: string;
-  balance: number;
-  monthlyAllowance: number;
-  bonusDecks: number;
-  planTier: PlanTier;
-  planVolume: number;
-  resetDate: string;
-}
-
-/** @deprecated Use UserDecks instead */
-export type UserCredits = UserDecks;
-
-export interface PricingPlan {
-  tier: PlanTier;
-  name: string;
-  credits: number;
-  priceMonthly: number;
-  pricePerCredit: number;
-  maxAddonCredits: number;
-  addonPricePerCredit: number;
-  features: string[];
-}
-
-/* ─────────────────────────────────────────────
-   Volume-Based Pricing (Slider Model)
-   ───────────────────────────────────────────── */
-
-export const VOLUME_SNAP_POINTS = [50, 100, 250, 500, 1000, 2500, 5000] as const;
-export type VolumeSnapPoint = (typeof VOLUME_SNAP_POINTS)[number];
-
-export interface VolumeTier {
-  volume: number;
-  perDeckPrice: number;
-  monthlyPrice: number;
-  annualMonthlyPrice: number;
-  label: string;
-  popular?: boolean;
-}
-
-const VOLUME_PRICING: Record<number, { perDeck: number; label: string; popular?: boolean }> = {
-  50: { perDeck: 1.40, label: "Starter" },
-  100: { perDeck: 1.10, label: "Growth" },
-  250: { perDeck: 0.80, label: "Pro", popular: true },
-  500: { perDeck: 0.60, label: "Scale", popular: true },
-  1000: { perDeck: 0.40, label: "Business" },
-  2500: { perDeck: 0.25, label: "Agency" },
-  5000: { perDeck: 0.15, label: "Enterprise" },
-};
-
-export function getVolumeTier(volume: number): VolumeTier {
-  // Guard against invalid volumes
-  const safeVolume = Math.max(50, Math.round(volume));
-  const pricing = VOLUME_PRICING[safeVolume];
-  if (!pricing) {
-    // Interpolate for non-snap values (shouldn't happen with slider, but safety)
-    const lower = VOLUME_SNAP_POINTS.filter((v) => v <= safeVolume).at(-1) ?? 50;
-    const upper = VOLUME_SNAP_POINTS.find((v) => v >= safeVolume) ?? 5000;
-    const lowerPrice = VOLUME_PRICING[lower].perDeck;
-    const upperPrice = VOLUME_PRICING[upper].perDeck;
-    const ratio = upper === lower ? 0 : (safeVolume - lower) / (upper - lower);
-    const perDeck = lowerPrice - ratio * (lowerPrice - upperPrice);
-    return {
-      volume: safeVolume,
-      perDeckPrice: Math.round(perDeck * 100) / 100,
-      monthlyPrice: Math.round(safeVolume * perDeck),
-      annualMonthlyPrice: Math.round(safeVolume * perDeck * 0.8),
-      label: "Custom",
-    };
-  }
-  const monthlyPrice = Math.round(safeVolume * pricing.perDeck);
-  return {
-    volume: safeVolume,
-    perDeckPrice: pricing.perDeck,
-    monthlyPrice,
-    annualMonthlyPrice: Math.round(monthlyPrice * 0.8),
-    label: pricing.label,
-    popular: pricing.popular,
-  };
-}
-
-export function getAllVolumeTiers(): VolumeTier[] {
-  return VOLUME_SNAP_POINTS.map(getVolumeTier);
-}
-
-export const SIGNUP_FREE_DECKS = 10;
-
-export const pricingPlans: PricingPlan[] = [
-  {
-    tier: "starter",
-    name: "Starter",
-    credits: 25,
-    priceMonthly: 49,
-    pricePerCredit: 1.96,
-    maxAddonCredits: 25,
-    addonPricePerCredit: 2.50,
-    features: [
-      "25 decks/month",
-      "All deck archetypes",
-      "PDF & PPTX export",
-      "AI quality scoring",
-      "Email support",
-    ],
-  },
-  {
-    tier: "growth",
-    name: "Growth",
-    credits: 100,
-    priceMonthly: 129,
-    pricePerCredit: 1.29,
-    maxAddonCredits: 100,
-    addonPricePerCredit: 1.75,
-    features: [
-      "100 decks/month",
-      "Everything in Starter",
-      "Multiple businesses",
-      "Priority generation",
-      "Advanced analytics",
-      "Priority support",
-    ],
-  },
-  {
-    tier: "scale",
-    name: "Scale",
-    credits: 500,
-    priceMonthly: 399,
-    pricePerCredit: 0.80,
-    maxAddonCredits: 500,
-    addonPricePerCredit: 1.10,
-    features: [
-      "500 decks/month",
-      "Everything in Growth",
-      "Unlimited businesses",
-      "Custom branding",
-      "API access",
-      "Dedicated support",
-      "Team collaboration",
-    ],
-  },
-  {
-    tier: "enterprise",
-    name: "Enterprise",
-    credits: 0,
-    priceMonthly: 0,
-    pricePerCredit: 0,
-    maxAddonCredits: 0,
-    addonPricePerCredit: 0,
-    features: [
-      "Custom volume",
-      "Everything in Scale",
-      "SSO & SAML",
-      "Custom integrations",
-      "SLA guarantee",
-      "Dedicated account manager",
-    ],
-  },
-];
-
-/* ─────────────────────────────────────────────
-   AI Model Preference
-   ───────────────────────────────────────────── */
-
-export type AIModel = "claude" | "gpt" | "gemini" | "kimi";
-
-export const aiModelOptions: Array<{
-  value: AIModel;
-  label: string;
-  description: string;
-}> = [
-  { value: "claude", label: "Claude", description: "Strongest personalization and narrative flow" },
-  { value: "gpt", label: "GPT", description: "Polished layouts with clear structure" },
-  { value: "gemini", label: "Gemini", description: "Data-rich slides with deep research" },
-  { value: "kimi", label: "Kimi K2.5", description: "Sharp visuals and concise messaging" },
-];
 
 /* ─────────────────────────────────────────────
    Form Types
@@ -259,7 +47,6 @@ export interface SellerContextForm {
   websiteUrl: string;
   companyName: string;
   logoUrl: string;
-  logoFile?: File | null;
   offerSummary: string;
   servicesText: string;
   differentiatorsText: string;
@@ -356,21 +143,36 @@ export interface RunEventRecord {
   created_at: string;
 }
 
+export type RunPipelineTargetRecord = Pick<
+  RunTargetRecord,
+  | "id"
+  | "website_url"
+  | "company_name"
+  | "status"
+  | "crawl_provider"
+  | "last_error"
+  | "created_at"
+>;
+
+export type RunPipelineEventRecord = Pick<
+  RunEventRecord,
+  "id" | "stage" | "level" | "message" | "created_at"
+>;
+
 export interface RunDetail {
   id: string;
   status: string;
   targetCount: number;
-  deliveryFormat: DeliveryFormat;
-  reviewGateEnabled: boolean;
-  sellerContext: SellerContext;
-  questionnaire: RunQuestionnaire;
-  sellerBrief?: Record<string, unknown>;
+  sellerContext: Pick<SellerContext, "companyName">;
   lastError?: string;
   createdAt: string;
   updatedAt: string;
-  targets: RunTargetRecord[];
-  artifacts: RunArtifactRecord[];
-  events: RunEventRecord[];
+  targets: RunPipelineTargetRecord[];
+  events: RunPipelineEventRecord[];
+  eventPage: {
+    hasMore: boolean;
+    nextCursor?: string;
+  };
 }
 
 export type Notice =
@@ -572,37 +374,9 @@ export const outputFormatOptions: Array<{
 }> = [
   {
     value: "pptx",
-    label: "PowerPoint (PPTX)",
+    label: "PPTX file",
     description:
-      "Export as a .pptx file. Open in PowerPoint, Keynote, or Google Slides.",
-    badge: "Recommended",
-  },
-  {
-    value: "pdf",
-    label: "PDF export",
-    description:
-      "Download as a portable PDF. Great for email attachments and offline viewing.",
-  },
-  {
-    value: "bestdecks_editor",
-    label: "Bestdecks editor",
-    description:
-      "Edit and present directly in our native editor with live collaboration.",
-    badge: "Coming soon",
-  },
-  {
-    value: "bestdecks_link",
-    label: "Shareable link",
-    description:
-      "Send a bestdecks.co link — recipients view a polished, responsive deck instantly.",
-    badge: "Coming soon",
-  },
-  {
-    value: "google_slides",
-    label: "Google Slides",
-    description:
-      "Push directly to Google Slides for easy sharing and team editing.",
-    badge: "Coming soon",
+      "Download the verified .pptx artifact. Target-suite compatibility remains part of release validation.",
   },
 ];
 
@@ -617,48 +391,22 @@ export const toneOptions: Array<{ value: Tone; label: string; description?: stri
 
 export const visualStyleOptions: Array<{ value: VisualStyle; label: string; description?: string }> =
   [
-    { value: "auto", label: "AI's Choice", description: "AI selects the best design for your content" },
-    { value: "minimal", label: "Minimal", description: "Clean, spacious layouts with understated elegance" },
-    { value: "editorial", label: "Editorial", description: "Bold typography and magazine-quality hierarchy" },
-    { value: "sales_polished", label: "Consulting", description: "McKinsey-style authority with data-forward polish" },
-    { value: "premium_modern", label: "Startup Modern", description: "Contemporary design like Stripe or Linear decks" },
-    { value: "playful", label: "Creative", description: "Dynamic energy with bold color and layout variety" },
-    { value: "dark_executive", label: "Dark Executive", description: "Deep charcoal with neon accents — boardroom-ready" },
-    { value: "dark_minimal", label: "Dark Cinematic", description: "Dark background with moody editorial aesthetic" },
+    { value: "auto", label: "Renderer default", description: "Use the configured template's default direction" },
+    { value: "minimal", label: "Minimal", description: "Request clean, spacious layouts" },
+    { value: "editorial", label: "Editorial", description: "Request stronger typography and hierarchy" },
+    { value: "sales_polished", label: "Consulting", description: "Request structured, data-forward styling" },
+    { value: "premium_modern", label: "Startup Modern", description: "Request contemporary product styling" },
+    { value: "playful", label: "Creative", description: "Request more color and layout variety" },
+    { value: "dark_executive", label: "Dark Executive", description: "Request a dark, high-contrast direction" },
+    { value: "dark_minimal", label: "Dark Cinematic", description: "Request a restrained dark direction" },
     { value: "custom", label: "Custom", description: "Describe your own visual direction" },
-    { value: "mixed", label: "Surprise Me", description: "Random premium theme for each deck" },
+    { value: "mixed", label: "Mixed", description: "Request varied styling within the configured template" },
   ];
 
 export const imagePolicyOptions: Array<{ value: ImagePolicy; label: string; description?: string }> =
   [
-    { value: "auto", label: "Smart auto", description: "AI decides where visuals add value" },
-    { value: "always", label: "Every slide", description: "Include visuals on every slide" },
-    { value: "never", label: "Text only", description: "No images — content and data only" },
+    { value: "never", label: "Verified vector", description: "Rich native layouts without generated or remote media" },
   ];
-
-export const visualContentTypeOptions: Array<{
-  value: VisualContentType;
-  label: string;
-  description: string;
-  icon: string;
-}> = [
-  { value: "stock_photos", label: "Stock photos", description: "Professional photography to set the scene", icon: "📷" },
-  { value: "infographics", label: "Infographics", description: "Visual storytelling with data and processes", icon: "📊" },
-  { value: "charts_graphs", label: "Charts & graphs", description: "Data visualizations, bar charts, pie charts", icon: "📈" },
-  { value: "icons_diagrams", label: "Icons & diagrams", description: "Simple icons, flowcharts, architecture diagrams", icon: "🔷" },
-  { value: "screenshots", label: "Screenshots", description: "Product screenshots, tool interfaces, demos", icon: "🖥️" },
-  { value: "custom_illustrations", label: "Custom illustrations", description: "AI-generated illustrations tailored to content", icon: "🎨" },
-];
-
-export const visualDensityOptions: Array<{
-  value: VisualDensity;
-  label: string;
-  description: string;
-}> = [
-  { value: "minimal", label: "Minimal", description: "1-2 visuals per deck" },
-  { value: "moderate", label: "Moderate", description: "Visuals on key slides" },
-  { value: "rich", label: "Rich", description: "Visuals on most slides" },
-];
 
 /* ─────────────────────────────────────────────
    Default Factories
@@ -683,7 +431,6 @@ export function defaultSellerContext(): SellerContextForm {
     websiteUrl: "",
     companyName: "",
     logoUrl: "",
-    logoFile: null,
     offerSummary: "",
     servicesText: "",
     differentiatorsText: "",
@@ -722,7 +469,6 @@ export interface SellerKnowledgeForm {
   websiteUrl: string;
   companyName: string;
   logoUrl: string;
-  logoFile?: File | null;
   tagline: string;
   foundedYear: string;
   teamSize: string;
@@ -760,7 +506,7 @@ export const pricingModelOptions = [
 
 export function defaultSellerKnowledge(): SellerKnowledgeForm {
   return {
-    websiteUrl: "", companyName: "", logoUrl: "", logoFile: null,
+    websiteUrl: "", companyName: "", logoUrl: "",
     tagline: "", foundedYear: "", teamSize: "", headquarters: "",
     offerSummary: "", servicesText: "", differentiatorsText: "",
     targetCustomer: "", desiredOutcome: "",
@@ -790,13 +536,13 @@ export function defaultQuestionnaire(): QuestionnaireForm {
     customTone: "",
     visualStyle: "auto",
     customVisualStyle: "",
-    imagePolicy: "auto",
+    imagePolicy: "never",
     visualContentTypes: [],
-    visualDensity: "moderate",
+    visualDensity: "rich",
     mustIncludeText: "",
     mustAvoidText: "",
     extraInstructions: "",
-    optionalReview: true,
+    optionalReview: false,
     allowUserApprovedCrawlException: false,
   };
 }
@@ -818,47 +564,47 @@ export const viewMeta: Record<
 > = {
   overview: {
     eyebrow: "COMMAND CENTER",
-    title: "Everything that moves your pipeline",
-    description: "The 30-second view of what\u2019s working, what\u2019s stuck, and what to do next.",
+    title: "Workspace activity",
+    description: "Review saved configuration and the current state of your runs.",
   },
   onboarding: {
-    eyebrow: "LAUNCH SEQUENCE",
-    title: "90 seconds to your first killer deck",
-    description: "Every field you fill here compounds into better personalization. Skip nothing.",
+    eyebrow: "SETUP",
+    title: "Configure your first run",
+    description: "Add the seller context and target inputs the pipeline needs.",
   },
   "seller-context": {
     eyebrow: "YOUR BUSINESS",
-    title: "Your Offer",
-    description: "Every field here becomes a slide. Vague input = vague decks. Specific input = decks that close.",
+    title: "Seller context",
+    description: "Record the seller-supplied facts, constraints, and proof points available to the planner.",
   },
   "run-settings": {
-    eyebrow: "DECK BLUEPRINT",
-    title: "Control exactly how your decks land",
-    description: "These settings shape every slide. Dial them in once, then every deck comes out on-brand and on-target.",
+    eyebrow: "RUN SETTINGS",
+    title: "Configure deck generation",
+    description: "Choose the supported narrative, output, tone, and visual settings for this run.",
   },
   "deck-structure": {
-    eyebrow: "SLIDE ARCHITECTURE",
-    title: "Engineer the exact story your deck tells",
-    description: "Reorder, add, and remove slides. Each one becomes a prompt for the AI \u2014 the more specific, the sharper the output.",
+    eyebrow: "SLIDE STRUCTURE",
+    title: "Define the planned slide sequence",
+    description: "Reorder, add, or remove slide instructions before generation.",
   },
   "target-intake": {
     eyebrow: "TARGET LIST",
-    title: "Feed the machine your hit list",
-    description: "Every URL you add becomes a fully researched, personalized deck. More targets = more pipeline.",
+    title: "Add target companies",
+    description: "Paste website URLs or upload a supported CSV or TSV file for this run.",
   },
   pipeline: {
-    eyebrow: "LIVE PIPELINE",
-    title: "Watch your decks get built in real-time",
-    description: "Each target goes through research, enrichment, and assembly. You\u2019ll see exactly where every deck is.",
+    eyebrow: "RUN PIPELINE",
+    title: "Review processing state",
+    description: "Inspect the recorded research, enrichment, planning, rendering, and failure stages.",
   },
   delivery: {
-    eyebrow: "DECK VAULT",
-    title: "Your finished decks, ready to close deals",
-    description: "Every deck has been researched, personalized, and quality-scored. Download, review, and send.",
+    eyebrow: "DELIVERY",
+    title: "Completed deck artifacts",
+    description: "Download verified artifacts and inspect claim-level evidence coverage plus all five readiness checks. Human review remains required before use.",
   },
   pricing: {
-    eyebrow: "PRICING",
-    title: "More decks, lower price. Simple.",
-    description: "Every deck is fully researched and personalized. Slide to match your outbound volume.",
+    eyebrow: "HOSTED SERVICE",
+    title: "Managed hosting is deferred",
+    description: "Use the Apache-2.0 BYOK core today. Hosted availability and commercial terms are not published.",
   },
 };

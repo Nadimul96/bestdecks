@@ -22,7 +22,7 @@ async function main() {
   );
 }
 
-main().catch((error) => {
-  console.error(error);
+main().catch(() => {
+  console.error("Example run input validation failed.");
   process.exitCode = 1;
 });

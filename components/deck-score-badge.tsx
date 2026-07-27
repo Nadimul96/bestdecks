@@ -1,184 +1,157 @@
 "use client";
 
-import * as React from "react";
 import {
   AlertTriangle,
-  ChevronRight,
-  Lightbulb,
-  Star,
-  TrendingUp,
-  X,
+  CheckCircle2,
+  CircleX,
+  ShieldCheck,
+  ShieldQuestion,
 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import type { DeckScore } from "@/lib/workspace-types";
 import { cn } from "@/lib/utils";
 
-/* ─────────────────────────────────────────────
-   Score Badge — shown on deck cards
-   ───────────────────────────────────────────── */
+export interface DeckEvidenceSummary {
+  coverage: {
+    supportedFactualClaims: number;
+    factualClaims: number;
+    percent: number | null;
+  };
+  unsupportedFactualClaimCount: number;
+  readiness: {
+    requiredSlideFieldsPresent: boolean;
+    ctaPresent: boolean;
+    evidenceGatePassed: boolean;
+    artifactReadable: boolean;
+    providerProvenancePresent: boolean;
+  };
+}
 
-export function DeckScoreBadge({
-  score,
-  onClick,
+const readinessChecks = [
+  ["requiredSlideFieldsPresent", "Required fields"],
+  ["ctaPresent", "CTA"],
+  ["evidenceGatePassed", "Evidence gate"],
+  ["artifactReadable", "Readable artifact"],
+  ["providerProvenancePresent", "Provider provenance"],
+] as const;
+
+function receiptPassed(evidence: DeckEvidenceSummary) {
+  return evidence.coverage.supportedFactualClaims === evidence.coverage.factualClaims
+    && evidence.unsupportedFactualClaimCount === 0
+    && readinessChecks.every(([key]) => evidence.readiness[key]);
+}
+
+export function DeckEvidenceBadge({
+  evidence,
+  tone = "light",
+  className,
 }: {
-  score: number;
-  onClick?: () => void;
+  evidence?: DeckEvidenceSummary;
+  tone?: "light" | "dark";
+  className?: string;
 }) {
-  const color =
-    score >= 80
-      ? "bg-emerald-500/10 text-emerald-600 ring-emerald-500/20 dark:text-emerald-400"
-      : score >= 50
-        ? "bg-amber-500/10 text-amber-600 ring-amber-500/20 dark:text-amber-400"
-        : "bg-red-500/10 text-red-600 ring-red-500/20 dark:text-red-400";
+  const passed = evidence ? receiptPassed(evidence) : false;
+  const label = !evidence
+    ? "Evidence receipt unavailable"
+    : evidence.coverage.factualClaims === 0
+      ? "No external factual claims"
+      : `Evidence ${evidence.coverage.supportedFactualClaims}/${evidence.coverage.factualClaims}`;
+  const title = !evidence
+    ? "No valid claim-level evidence and readiness receipt was found for this artifact."
+    : [
+        `${evidence.coverage.supportedFactualClaims} of ${evidence.coverage.factualClaims} external factual claims are source-backed.`,
+        `${evidence.unsupportedFactualClaimCount} unsupported factual claims.`,
+        ...readinessChecks.map(
+          ([key, checkLabel]) => `${checkLabel}: ${evidence.readiness[key] ? "passed" : "not verified"}.`,
+        ),
+      ].join(" ");
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-bold ring-1 ring-inset tabular-nums transition-all hover:scale-105",
-        color,
+        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset",
+        tone === "dark"
+          ? passed
+            ? "bg-emerald-400/10 text-emerald-200 ring-emerald-300/20"
+            : "bg-white/[0.08] text-white/65 ring-white/10"
+          : passed
+            ? "bg-emerald-500/10 text-emerald-700 ring-emerald-500/20 dark:text-emerald-400"
+            : "bg-amber-500/10 text-amber-700 ring-amber-500/20 dark:text-amber-400",
+        className,
       )}
+      title={title}
+      aria-label={title}
     >
-      <Star className="size-3 fill-current" />
-      {score}
-    </button>
+      {passed ? <ShieldCheck className="size-3" /> : <ShieldQuestion className="size-3" />}
+      {label}
+    </span>
   );
 }
 
-/* ─────────────────────────────────────────────
-   Score Detail Modal — radar breakdown + feedback
-   ───────────────────────────────────────────── */
-
-export function DeckScoreDetail({
-  deckScore,
-  onClose,
+export function DeckEvidenceDetails({
+  evidence,
+  tone = "light",
+  className,
 }: {
-  deckScore: DeckScore;
-  onClose: () => void;
+  evidence?: DeckEvidenceSummary;
+  tone?: "light" | "dark";
+  className?: string;
 }) {
-  const categories = [
-    { key: "relevance", label: "Relevance", value: deckScore.breakdown.relevance },
-    { key: "completeness", label: "Completeness", value: deckScore.breakdown.completeness },
-    { key: "persuasion", label: "Persuasion", value: deckScore.breakdown.persuasion },
-    { key: "visualQuality", label: "Visual Quality", value: deckScore.breakdown.visualQuality },
-    { key: "personalization", label: "Personalization", value: deckScore.breakdown.personalization },
-  ];
+  if (!evidence) {
+    return (
+      <p className={cn(
+        "text-[10px] leading-relaxed",
+        tone === "dark" ? "text-white/40" : "text-muted-foreground",
+        className,
+      )}>
+        Readiness receipt unavailable; no check is treated as passing.
+      </p>
+    );
+  }
 
   return (
-    <div className="animate-scale-in space-y-5 rounded-xl border border-border/50 bg-card p-6 shadow-lg">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-3">
-          <div
+    <div className={cn("flex flex-wrap gap-x-3 gap-y-1", className)}>
+      {readinessChecks.map(([key, label]) => {
+        const passed = evidence.readiness[key];
+        return (
+          <span
+            key={key}
             className={cn(
-              "flex size-12 items-center justify-center rounded-xl text-xl font-bold",
-              deckScore.overallScore >= 80
-                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                : deckScore.overallScore >= 50
-                  ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
-                  : "bg-red-500/10 text-red-600 dark:text-red-400",
+              "inline-flex items-center gap-1 text-[10px]",
+              tone === "dark"
+                ? passed ? "text-emerald-200/75" : "text-amber-200/75"
+                : passed ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400",
             )}
           >
-            {deckScore.overallScore}
-          </div>
-          <div>
-            <p className="text-[15px] font-semibold">Deck Quality Score</p>
-            <p className="text-[12px] text-muted-foreground">
-              {deckScore.overallScore >= 80
-                ? "Great — ready to send"
-                : deckScore.overallScore >= 50
-                  ? "Good — could be improved"
-                  : "Needs work — see suggestions below"}
-            </p>
-          </div>
-        </div>
-        <Button variant="ghost" size="icon" className="size-7" onClick={onClose}>
-          <X className="size-3.5" />
-        </Button>
-      </div>
+            {passed
+              ? <CheckCircle2 className="size-2.5" aria-hidden="true" />
+              : <CircleX className="size-2.5" aria-hidden="true" />}
+            {label}: {passed ? "passed" : "not verified"}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
 
-      {/* Score breakdown — horizontal bar chart */}
-      <div className="space-y-3">
-        {categories.map((cat) => (
-          <div key={cat.key} className="space-y-1">
-            <div className="flex items-center justify-between text-[12px]">
-              <span className="font-medium text-foreground">{cat.label}</span>
-              <span className="tabular-nums text-muted-foreground">
-                {cat.value}/100
-              </span>
-            </div>
-            <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-              <div
-                className={cn(
-                  "h-full rounded-full transition-all duration-500",
-                  cat.value >= 80
-                    ? "bg-emerald-500"
-                    : cat.value >= 50
-                      ? "bg-amber-500"
-                      : "bg-red-500",
-                )}
-                style={{ width: `${cat.value}%` }}
-              />
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* AI Feedback */}
-      {deckScore.feedback.length > 0 && (
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 text-[13px] font-medium text-foreground">
-            <Lightbulb className="size-3.5 text-amber-500" />
-            Suggestions
-          </div>
-          <ul className="space-y-1.5 pl-5">
-            {deckScore.feedback.map((item, i) => (
-              <li
-                key={i}
-                className="text-[12px] leading-relaxed text-muted-foreground list-disc"
-              >
-                {item}
-              </li>
-            ))}
-          </ul>
-        </div>
+export function DeckEvidenceNotice({ className }: { className?: string }) {
+  return (
+    <div
+      className={cn(
+        "flex items-start gap-3 rounded-xl border border-amber-500/25 bg-amber-50/70 p-4 dark:bg-amber-950/20",
+        className,
       )}
-
-      {/* Info requests */}
-      {deckScore.infoRequests.length > 0 && (
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 text-[13px] font-medium text-foreground">
-            <AlertTriangle className="size-3.5 text-amber-500" />
-            More info needed to improve this score
-          </div>
-          <div className="space-y-1.5">
-            {deckScore.infoRequests.map((req, i) => (
-              <a
-                key={i}
-                href="#seller-context"
-                className="flex items-center justify-between rounded-lg border border-border/40 bg-muted/30 px-3 py-2 text-[12px] transition-colors hover:bg-muted/60"
-              >
-                <div className="flex items-center gap-2">
-                  <span
-                    className={cn(
-                      "size-1.5 rounded-full",
-                      req.priority === "high"
-                        ? "bg-red-500"
-                        : req.priority === "medium"
-                          ? "bg-amber-500"
-                          : "bg-blue-500",
-                    )}
-                  />
-                  <span className="text-foreground">{req.question}</span>
-                </div>
-                <ChevronRight className="size-3 text-muted-foreground" />
-              </a>
-            ))}
-          </div>
-        </div>
-      )}
+    >
+      <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-400" />
+      <div>
+        <p className="text-[13px] font-semibold text-amber-950 dark:text-amber-100">
+          Human review required
+        </p>
+        <p className="mt-1 text-[12px] leading-relaxed text-amber-900/75 dark:text-amber-200/70">
+          Delivered decks show source-backed factual-claim coverage and five deterministic
+          readiness checks when a valid receipt exists. A missing receipt abstains instead of
+          passing. Check the claims and source material before sending any deck.
+        </p>
+      </div>
     </div>
   );
 }

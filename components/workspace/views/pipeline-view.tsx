@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   Clock3,
   FileText,
-  ImageIcon,
   Layers3,
   LoaderCircle,
   RefreshCcw,
@@ -36,8 +35,10 @@ const meta = viewMeta.pipeline;
 
 function runStatusToPill(status: string): { status: "ready" | "error" | "running" | "incomplete"; label: string } {
   switch (status) {
+    case "delivered":
+      return { status: "ready", label: "delivered" };
     case "completed":
-      return { status: "ready", label: "completed" };
+      return { status: "incomplete", label: "legacy / unverified" };
     case "failed":
     case "cancelled":
       return { status: "error", label: status };
@@ -74,11 +75,16 @@ function computeProgress(run: RunDetail): { percent: number; stage: string } {
   const total = run.targets.length;
   if (total === 0) return { percent: 0, stage: "Starting..." };
 
-  if (run.status === "completed") return { percent: 100, stage: "Complete" };
+  if (run.status === "delivered") {
+    return { percent: 100, stage: "Delivered" };
+  }
+  if (run.status === "completed") {
+    return { percent: 100, stage: "Legacy status — artifact unverified" };
+  }
   if (run.status === "failed") return { percent: 100, stage: "Failed" };
 
   const doneTargets = run.targets.filter(
-    (t) => t.status === "delivered" || t.status === "completed" || t.status === "failed",
+    (t) => t.status === "delivered" || t.status === "failed",
   ).length;
 
   const events = run.events;
@@ -92,7 +98,6 @@ function computeProgress(run: RunDetail): { percent: number; stage: string } {
     crawl_or_enrichment: 0.3,
     enrichment: 0.5,
     company_brief: 0.6,
-    image_strategy: 0.7,
     slide_planning: 0.8,
     delivery: 0.9,
     run_finished: 1,
@@ -114,7 +119,6 @@ function computeProgress(run: RunDetail): { percent: number; stage: string } {
     crawl_or_enrichment: "Gathering market intelligence...",
     enrichment: "Enriching with market research...",
     company_brief: "Building target company profile...",
-    image_strategy: "Generating supporting visuals...",
     slide_planning: "Planning slide content...",
     delivery: "Assembling personalized deck...",
     target_failed: "Target processing encountered an error",
@@ -129,30 +133,27 @@ function computeProgress(run: RunDetail): { percent: number; stage: string } {
 
 /* ─── Error message humanizer ─── */
 function humanizeError(raw: string): string {
-  if (raw.includes("Plus AI create failed")) return "Deck generation service returned an error — retry in a moment.";
-  if (raw.includes("Plus AI generation timed out")) return "Deck generation took too long — try again shortly.";
-  if (raw.includes("Plus AI presentation generation failed")) return "Deck generation encountered an internal error. Please retry.";
+  if (raw.includes("indeterminate_")) return "A provider accepted work without a durable response. Bestdecks did not replay the paid request; start a new run after checking the provider.";
+  if (raw.includes("unsupported_claim") || raw.includes("evidence_coverage_incomplete")) return "Delivery was blocked because at least one factual claim lacked retained source support.";
+  if (raw.includes("delivery_readiness_failed")) return "The renderer result did not pass every delivery-readiness check.";
+  if (raw.includes("Presenton") || raw.includes("presenton")) return "The configured Presenton renderer could not complete or verify this artifact.";
   if (raw.includes("Cloudflare") && raw.includes("429")) return "Website crawl was rate-limited. Wait a minute and retry.";
-  if (raw.includes("unreachable") || raw.includes("ECONNREFUSED")) return "Could not connect to a required service. Check your API integrations.";
+  if (raw.includes("unreachable") || raw.includes("ECONNREFUSED")) return "Could not connect to a required service. Ask the self-hosting operator to review provider configuration.";
   if (raw.includes("timed out")) return "Run timed out — a pipeline step may have been terminated. Try again with fewer targets.";
-  if (raw.includes("configuration is missing")) return "Required API keys not configured. Check Settings → Integrations.";
-  if (raw.includes("No deck provider configured")) return "No deck generation service configured. Add a Plus AI API key in Settings.";
-  if (raw.length > 120) return raw.slice(0, 120) + "…";
-  return raw;
-}
-
-/** Check if the run has credit refund events */
-function getRefundInfo(events: RunDetail["events"]): string | null {
-  const refundEvent = events.find((e) => e.stage === "credit_refund");
-  return refundEvent?.message ?? null;
+  if (raw.includes("configuration is missing")) return "Required provider configuration is missing. Ask the self-hosting operator to review the environment settings.";
+  if (raw.includes("No deck provider configured")) return "No reference renderer is configured. Ask the self-hosting operator to configure Presenton.";
+  // Stored errors are expected to be stable codes, but legacy records may
+  // contain provider payloads or personal data. Never echo an unknown value.
+  return "Run stopped with a redacted internal error. Ask the self-hosting operator to review the service state.";
 }
 
 /* ─── Target status helpers ─── */
 function targetStatusInfo(status: string): { icon: React.ReactNode; label: string; color: string } {
   switch (status) {
     case "delivered":
-    case "completed":
       return { icon: <CheckCircle2 className="size-3.5 text-emerald-500" />, label: "Completed", color: "text-emerald-500 font-medium" };
+    case "completed":
+      return { icon: <AlertCircle className="size-3.5 text-amber-500" />, label: "Legacy / unverified", color: "text-amber-600 font-medium" };
     case "failed":
       return { icon: <AlertCircle className="size-3.5 text-destructive" />, label: "Failed", color: "text-destructive font-medium" };
     case "queued":
@@ -250,7 +251,7 @@ export function PipelineView() {
     if (runningRun && !selectedRun) {
       selectRun(runningRun.id);
     }
-  }, [runs, loading]);
+  }, [runs, loading, selectedRun]);
 
   // Auto-refresh running runs every 3 seconds
   React.useEffect(() => {
@@ -494,7 +495,6 @@ export function PipelineView() {
                   { key: "seller_brief", altKeys: [], icon: Wand2, label: "Seller brief", color: "text-violet-500" },
                   { key: "crawl", altKeys: ["target_crawl", "crawl_or_enrichment"], icon: Search, label: "Crawl & enrich", color: "text-blue-500" },
                   { key: "company_brief", altKeys: [], icon: Layers3, label: "Company brief", color: "text-amber-500" },
-                  { key: "image_strategy", altKeys: [], icon: ImageIcon, label: "Visuals", color: "text-pink-500" },
                   { key: "slide_planning", altKeys: [], icon: Layers3, label: "Slide plan", color: "text-cyan-500" },
                   { key: "delivery", altKeys: [], icon: FileText, label: "Deck assembly", color: "text-emerald-500" },
                 ];
@@ -552,7 +552,7 @@ export function PipelineView() {
 
                     <div className="flex items-center justify-between pt-2 border-t border-primary/10">
                       <p className="text-[11px] text-muted-foreground">
-                        ~4-6 min per target
+                        Timing varies by provider and target
                       </p>
                       {canRestartQueuedRun ? (
                         <Button
@@ -591,7 +591,7 @@ export function PipelineView() {
               })()}
 
               {/* Completed banner */}
-              {selectedRun.status === "completed" && (
+              {selectedRun.status === "delivered" && (
                 <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-4 py-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -610,20 +610,59 @@ export function PipelineView() {
                 </div>
               )}
 
+              {selectedRun.status === "completed" && (
+                <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="size-4 text-amber-600 dark:text-amber-400" />
+                    <span className="text-[13px] font-medium text-amber-700 dark:text-amber-300">
+                      Legacy completion record: no verified delivered artifact is asserted.
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {/* Failed banner */}
-              {selectedRun.status === "failed" && (() => {
-                const refund = getRefundInfo(selectedRun.events);
-                return (
-                  <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 space-y-2">
-                    <div className="flex items-center gap-3">
-                      <AlertCircle className="size-4 shrink-0 text-destructive" />
-                      <p className="text-[13px] font-medium text-destructive min-w-0 flex-1">
-                        {humanizeError(selectedRun.lastError ?? "Run failed. Check the activity log for details.")}
-                      </p>
+              {selectedRun.status === "failed" && (
+                <div className="space-y-2 rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <AlertCircle className="size-4 shrink-0 text-destructive" />
+                    <p className="min-w-0 flex-1 text-[13px] font-medium text-destructive">
+                      {humanizeError(
+                        selectedRun.lastError ??
+                          "Run failed. Check the activity log for details.",
+                      )}
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0 gap-1.5"
+                      onClick={() => retryRun(selectedRun.id)}
+                      disabled={retrying === selectedRun.id}
+                    >
+                      {retrying === selectedRun.id ? (
+                        <LoaderCircle className="size-3 animate-spin" />
+                      ) : (
+                        <RefreshCcw className="size-3" />
+                      )}
+                      Retry
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Partially completed banner */}
+              {selectedRun.status === "partially_completed" && (
+                <div className="space-y-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <AlertCircle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                    <p className="min-w-0 flex-1 text-[13px] font-medium text-amber-600 dark:text-amber-400">
+                      {humanizeError(selectedRun.lastError ?? "Some targets failed.")}
+                    </p>
+                    <div className="flex shrink-0 items-center gap-2">
                       <Button
                         variant="outline"
                         size="sm"
-                        className="gap-1.5 shrink-0"
+                        className="gap-1.5"
                         onClick={() => retryRun(selectedRun.id)}
                         disabled={retrying === selectedRun.id}
                       >
@@ -632,82 +671,30 @@ export function PipelineView() {
                         ) : (
                           <RefreshCcw className="size-3" />
                         )}
-                        Retry
+                        Retry failed
+                      </Button>
+                      <Button asChild variant="outline" size="sm" className="gap-1.5">
+                        <a href="#delivery">
+                          <FileText className="size-3.5" />
+                          View decks
+                        </a>
                       </Button>
                     </div>
-                    {refund && (
-                      <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
-                        <CheckCircle2 className="size-3 text-emerald-500 shrink-0" />
-                        {refund}
-                      </p>
-                    )}
                   </div>
-                );
-              })()}
-
-              {/* Partially completed banner */}
-              {selectedRun.status === "partially_completed" && (() => {
-                const refund = getRefundInfo(selectedRun.events);
-                return (
-                  <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3 space-y-2">
-                    <div className="flex items-center gap-3">
-                      <AlertCircle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-                      <p className="text-[13px] font-medium text-amber-600 dark:text-amber-400 min-w-0 flex-1">
-                        {humanizeError(selectedRun.lastError ?? "Some targets failed.")}
-                      </p>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="gap-1.5"
-                          onClick={() => retryRun(selectedRun.id)}
-                          disabled={retrying === selectedRun.id}
-                        >
-                          {retrying === selectedRun.id ? (
-                            <LoaderCircle className="size-3 animate-spin" />
-                          ) : (
-                            <RefreshCcw className="size-3" />
-                          )}
-                          Retry failed
-                        </Button>
-                        <Button asChild variant="outline" size="sm" className="gap-1.5">
-                          <a href="#delivery">
-                            <FileText className="size-3.5" />
-                            View decks
-                          </a>
-                        </Button>
-                      </div>
-                    </div>
-                    {refund && (
-                      <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
-                        <CheckCircle2 className="size-3 text-emerald-500 shrink-0" />
-                        {refund}
-                      </p>
-                    )}
-                  </div>
-                );
-              })()}
+                </div>
+              )}
 
               {/* Cancelled banner */}
-              {selectedRun.status === "cancelled" && (() => {
-                const refund = getRefundInfo(selectedRun.events);
-                return (
-                  <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3 space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Ban className="size-4 text-amber-600 dark:text-amber-400" />
-                      <span className="text-[13px] font-medium text-amber-600 dark:text-amber-400">
-                        Run was cancelled.
-                      </span>
-                    </div>
-                    {refund && (
-                      <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
-                        <CheckCircle2 className="size-3 text-emerald-500 shrink-0" />
-                        {refund}
-                      </p>
-                    )}
+              {selectedRun.status === "cancelled" && (
+                <div className="space-y-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <Ban className="size-4 text-amber-600 dark:text-amber-400" />
+                    <span className="text-[13px] font-medium text-amber-600 dark:text-amber-400">
+                      Run was cancelled.
+                    </span>
                   </div>
-                );
-              })()}
+                </div>
+              )}
 
               {/* Target statuses — card grid */}
               <div className="space-y-3">
@@ -726,7 +713,7 @@ export function PipelineView() {
                           "card-elevated group rounded-xl border p-4 transition-all duration-200 hover:shadow-md",
                           target.status === "failed"
                             ? "border-destructive/20 bg-destructive/[0.03]"
-                            : target.status === "delivered" || target.status === "completed"
+                            : target.status === "delivered"
                               ? "border-emerald-500/20 bg-emerald-500/[0.03]"
                               : "border-border/50 bg-card",
                         )}
@@ -737,7 +724,7 @@ export function PipelineView() {
                             "flex size-8 shrink-0 items-center justify-center rounded-lg",
                             target.status === "failed"
                               ? "bg-destructive/10"
-                              : target.status === "delivered" || target.status === "completed"
+                              : target.status === "delivered"
                                 ? "bg-emerald-500/10"
                                 : target.status === "processing" || target.status === "brief_ready"
                                   ? "bg-primary/10"
@@ -749,7 +736,7 @@ export function PipelineView() {
                             "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium",
                             target.status === "failed"
                               ? "bg-destructive/10 text-destructive"
-                              : target.status === "delivered" || target.status === "completed"
+                              : target.status === "delivered"
                                 ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                                 : target.status === "processing" || target.status === "brief_ready"
                                   ? "bg-primary/10 text-primary"

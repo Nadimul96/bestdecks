@@ -1,0 +1,25 @@
+packages:
+  - .
+
+blockExoticSubdeps: true
+minimumReleaseAge: 1440
+minimumReleaseAgeStrict: true
+minimumReleaseAgeExclude:
+  - esbuild@0.28.1
+  - postcss@8.5.19
+  - tsx@4.23.1
+overrides:
+  defu: 6.1.7
+  esbuild: 0.28.1
+  postcss: 8.5.19
+  # Next.js 16.2.x still declares a pre-fix sharp range. Pin the patched
+  # release until the upstream dependency range catches up.
+  sharp: 0.35.0
+  ws: 8.21.0
+allowBuilds:
+  # These packages ship integrity-pinned platform binaries. Their install
+  # scripts are not required for the supported build and include cleanup or
+  # fallback mutation paths that violate this repository's archive policy.
+  esbuild: false
+  sharp: false
+  unrs-resolver: false

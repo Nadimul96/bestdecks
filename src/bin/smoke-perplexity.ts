@@ -20,7 +20,7 @@ async function main() {
       {
         confidence: result.confidence,
         evidenceCount: result.evidence.length,
-        summaryPreview: result.synthesizedSummary.slice(0, 160),
+        summaryPresent: result.synthesizedSummary.trim().length > 0,
       },
       null,
       2,
@@ -28,7 +28,7 @@ async function main() {
   );
 }
 
-main().catch((error) => {
-  console.error(error);
+main().catch(() => {
+  console.error("Perplexity smoke test failed.");
   process.exitCode = 1;
 });

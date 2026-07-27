@@ -22,7 +22,7 @@ async function main() {
   );
 }
 
-main().catch((error) => {
-  console.error(error);
+main().catch(() => {
+  console.error("Unable to build the example run plan.");
   process.exitCode = 1;
 });

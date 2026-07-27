@@ -35,7 +35,7 @@ async function main() {
   );
 }
 
-main().catch((error) => {
-  console.error(error);
+main().catch(() => {
+  console.error("Cloudflare smoke test failed.");
   process.exitCode = 1;
 });

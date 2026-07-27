@@ -24,8 +24,16 @@ export async function GET() {
     countRuns(userId),
   ]);
 
-  return NextResponse.json({
-    decks,
-    totalRuns,
-  });
+  return NextResponse.json(
+    {
+      decks,
+      totalRuns,
+    },
+    {
+      headers: {
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+      },
+    },
+  );
 }

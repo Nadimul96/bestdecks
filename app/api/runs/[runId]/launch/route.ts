@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 
-import { getRun } from "@/src/server/repository";
+import { getOwnedRunState } from "@/src/server/repository";
 import { getSession } from "@/src/server/auth";
-import { launchRunProcessing } from "@/src/server/run-executor";
+import { enqueueRunJob } from "@/src/server/run-queue";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60; // Only kicks off the pipeline — actual work continues in-process
+export const maxDuration = 60; // Only ensures durable queue state; a worker owns execution.
 
 export async function POST(
   _request: Request,
@@ -18,12 +18,18 @@ export async function POST(
 
   const userId = session.user.id;
   const { runId } = await context.params;
-  const run = await getRun(runId, userId);
+  const run = await getOwnedRunState(runId, userId);
 
   if (!run) {
     return NextResponse.json({ error: "Run not found." }, { status: 404 });
   }
+  if (run.deliveryFormat !== "pptx") {
+    return NextResponse.json(
+      { error: "Only PPTX runs can enter the reference worker queue." },
+      { status: 400 },
+    );
+  }
 
-  const launched = launchRunProcessing(runId);
-  return NextResponse.json({ ok: true, launched });
+  const job = await enqueueRunJob(runId);
+  return NextResponse.json({ ok: true, runId, state: job.state }, { status: 202 });
 }

@@ -3,11 +3,9 @@
 import * as React from "react";
 import {
   ArrowRight,
-  Building2,
   ChevronDown,
   FileText,
   Globe,
-  ImageIcon,
   LoaderCircle,
   Plus,
   Save,
@@ -15,9 +13,7 @@ import {
   Sparkles,
   Swords,
   Target,
-  TrendingUp,
   Trophy,
-  Upload,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -29,10 +25,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { ViewLayout, SectionCard, FieldGroup } from "../view-layout";
 import {
   viewMeta,
-  defaultSellerContext,
   defaultSellerKnowledge,
   pricingModelOptions,
-  type SellerContextForm,
   type SellerKnowledgeForm,
   type CaseStudyForm,
   type ObjectionForm,
@@ -40,9 +34,20 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBusinessContext } from "@/lib/business-context";
 import { cn } from "@/lib/utils";
-import { computeOfferStrengthScore, type SellerKnowledge } from "@/src/domain/schemas";
+import {
+  computeSellerContextCompletion,
+  type SellerContextCompletion,
+  type SellerKnowledge,
+} from "@/src/domain/schemas";
 
 const meta = viewMeta["seller-context"];
+
+type SellerKnowledgeResponse = Partial<SellerKnowledge> & {
+  facebookUrl?: string;
+  twitterUrl?: string;
+  instagramUrl?: string;
+  tiktokUrl?: string;
+};
 
 /* ══════════════════════════════════════════════════════
    Tab types
@@ -113,32 +118,44 @@ function SlidingTabs({
 }
 
 /* ══════════════════════════════════════════════════════
-   Offer Strength Gauge
+   Seller-context completion
    ══════════════════════════════════════════════════════ */
 
-function OfferStrengthGauge({ score, suggestions }: { score: number; suggestions: string[] }) {
-  const pct = Math.round((score / 10) * 100);
-  const color = score >= 8 ? "text-emerald-500" : score >= 5 ? "text-amber-500" : "text-red-400";
-  const bgColor = score >= 8 ? "bg-emerald-500" : score >= 5 ? "bg-amber-500" : "bg-red-400";
-
+function SellerContextCompletionSummary({
+  completion,
+  suggestions,
+}: {
+  completion: SellerContextCompletion;
+  suggestions: string[];
+}) {
   return (
     <div className="relative overflow-hidden rounded-xl border border-border/40 bg-gradient-to-br from-card via-card to-primary/[0.03] p-5">
-      <div className="pointer-events-none absolute -right-10 -top-10 size-24 rounded-full opacity-20" style={{ background: `radial-gradient(circle, ${score >= 8 ? "oklch(0.7 0.18 155 / 30%)" : score >= 5 ? "oklch(0.7 0.15 85 / 30%)" : "oklch(0.65 0.2 25 / 30%)"}, transparent 70%)` }} />
+      <div className="pointer-events-none absolute -right-10 -top-10 size-24 rounded-full bg-primary/10 blur-2xl" />
       <div className="flex items-center justify-between mb-3">
         <div>
-          <p className="text-[13px] font-semibold text-foreground">Offer Strength</p>
-          <p className="text-[11px] text-muted-foreground">Better input = better decks</p>
+          <p className="text-[13px] font-semibold text-foreground">Seller context coverage</p>
+          <p className="text-[11px] text-muted-foreground">Tracks input presence only; it does not predict results.</p>
         </div>
-        <div className={cn("text-3xl font-black tabular-nums tracking-tight", color)}>
-          {score}<span className="text-sm font-medium text-muted-foreground/70">/10</span>
+        <div className="text-3xl font-black tabular-nums tracking-tight text-primary">
+          {completion.percentage}<span className="text-sm font-medium text-muted-foreground/70">%</span>
         </div>
       </div>
-      <div className="flex h-2.5 w-full rounded-full bg-muted/60 overflow-hidden mb-3">
+      <div
+        className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted/60 mb-2"
+        role="progressbar"
+        aria-label="Seller context checks completed"
+        aria-valuemin={0}
+        aria-valuemax={completion.total}
+        aria-valuenow={completion.completed}
+      >
         <div
-          className={cn("h-full rounded-full transition-all duration-700", bgColor)}
-          style={{ width: `${pct}%` }}
+          className="h-full rounded-full bg-primary transition-all duration-700"
+          style={{ width: `${completion.percentage}%` }}
         />
       </div>
+      <p className="mb-3 text-[11px] tabular-nums text-muted-foreground">
+        {completion.completed} of {completion.total} planning-input checks complete
+      </p>
       {suggestions.length > 0 && (
         <div className="space-y-1.5">
           {suggestions.slice(0, 3).map((s, i) => (
@@ -204,16 +221,16 @@ function CaseStudyCard({
         <Textarea
           value={study.challenge}
           onChange={(e) => upd("challenge", e.target.value)}
-          placeholder="Low conversion rates on landing pages — losing $50K/mo in pipeline"
+          placeholder="Qualified visitors left before requesting a demo"
           className="min-h-[60px] resize-none text-[13px]"
         />
       </FieldGroup>
 
-      <FieldGroup label="Your result" hint="This becomes the 'money slide'">
+      <FieldGroup label="Your result" hint="Use only an outcome you can substantiate">
         <Textarea
           value={study.results}
           onChange={(e) => upd("results", e.target.value)}
-          placeholder="2.4x increase in demo requests, $180K recovered pipeline in 90 days"
+          placeholder="Describe the documented outcome and where it was measured"
           className="min-h-[60px] resize-none text-[13px]"
         />
       </FieldGroup>
@@ -222,7 +239,7 @@ function CaseStudyCard({
         <Textarea
           value={study.testimonialQuote}
           onChange={(e) => upd("testimonialQuote", e.target.value)}
-          placeholder='"Best agency we ever worked with. They moved faster than our own team."'
+          placeholder="Paste an approved customer quote with attribution"
           className="min-h-[50px] resize-none text-[13px]"
         />
       </FieldGroup>
@@ -278,18 +295,19 @@ function formToKnowledge(form: SellerKnowledgeForm): SellerKnowledge {
   };
 }
 
-function computeSuggestions(k: SellerKnowledge): string[] {
+function computeSuggestions(completion: SellerContextCompletion): string[] {
+  const { checks } = completion;
   const suggestions: string[] = [];
-  if (!k.offerSummary?.trim()) suggestions.push("Add your elevator pitch — it opens every deck");
-  if ((k.services?.length ?? 0) < 2) suggestions.push("List 2+ deliverables for richer solution slides");
-  if ((k.differentiators?.length ?? 0) < 2) suggestions.push("Add differentiators — what makes you the obvious choice?");
-  if (!k.targetCustomer?.trim()) suggestions.push("Describe your ideal customer for better targeting");
-  if (!k.desiredOutcome?.trim()) suggestions.push("Set the desired outcome so CTAs land correctly");
-  if ((k.proofPoints?.length ?? 0) < 3) suggestions.push("Add 3+ proof points for a credibility bar");
-  if (!k.caseStudies?.some((cs) => cs.challenge?.trim() && cs.results?.trim())) suggestions.push("Add a case study with specific results — this is the money slide");
-  if ((k.commonObjections?.length ?? 0) === 0) suggestions.push("Tell us your top objection so decks preempt it");
-  if (!k.pricingModel) suggestions.push("Set your pricing model for better CTA framing");
-  if (!k.competitorNotes?.trim()) suggestions.push("Share competitor context so decks position you correctly");
+  if (!checks.hasOfferSummary) suggestions.push("Add an elevator pitch to complete the offer-summary check");
+  if (!checks.hasAtLeastTwoServices) suggestions.push("List at least two deliverables");
+  if (!checks.hasAtLeastTwoDifferentiators) suggestions.push("List at least two differentiators");
+  if (!checks.hasTargetCustomer) suggestions.push("Describe your target customer");
+  if (!checks.hasDesiredOutcome) suggestions.push("State the desired next step or outcome");
+  if (!checks.hasAtLeastThreeProofPoints) suggestions.push("Add at least three proof points");
+  if (!checks.hasCaseStudyWithChallengeAndResult) suggestions.push("Add a named case study with its challenge and result");
+  if (!checks.hasObjectionWithResponse) suggestions.push("Add an objection and your response");
+  if (!checks.hasPricingModel) suggestions.push("Select a pricing model");
+  if (!checks.hasCompetitorNotes) suggestions.push("Add competitor context");
   return suggestions;
 }
 
@@ -298,14 +316,11 @@ function computeSuggestions(k: SellerKnowledge): string[] {
    ══════════════════════════════════════════════════════ */
 
 export function SellerContextView() {
-  const { currentBusiness, updateBusiness } = useBusinessContext();
+  const { refreshBusinesses } = useBusinessContext();
   const [form, setForm] = React.useState<SellerKnowledgeForm>(defaultSellerKnowledge());
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
-  const [crawling, setCrawling] = React.useState(false);
-  const [crawlStatus, setCrawlStatus] = React.useState<{ step: number; total: number; message: string; detail: string } | null>(null);
   const [activeTab, setActiveTab] = React.useState<ContextTab>("offer");
-  const [logoPreview, setLogoPreview] = React.useState<string | null>(null);
 
   // Brief state
   const [briefMd, setBriefMd] = React.useState<string | null>(null);
@@ -314,25 +329,28 @@ export function SellerContextView() {
   const [briefSaving, setBriefSaving] = React.useState(false);
   const [briefDirty, setBriefDirty] = React.useState(false);
 
-  const logoInputRef = React.useRef<HTMLInputElement>(null);
+  const newBusinessMarkerRef = React.useRef<string | null | undefined>(undefined);
 
   // Load existing data on mount
   React.useEffect(() => {
-    const isNewBusiness = sessionStorage.getItem("bestdecks_new_business");
-    if (isNewBusiness) {
+    if (newBusinessMarkerRef.current === undefined) {
+      newBusinessMarkerRef.current = sessionStorage.getItem("bestdecks_new_business");
+    }
+    if (newBusinessMarkerRef.current) {
       sessionStorage.removeItem("bestdecks_new_business");
-      setLoading(false);
-      return;
+      const timer = window.setTimeout(() => setLoading(false), 0);
+      return () => window.clearTimeout(timer);
     }
 
-    (async () => {
+    const controller = new AbortController();
+    void (async () => {
       try {
         const [ctxRes, briefRes] = await Promise.all([
-          fetch("/api/onboarding/seller-context"),
-          fetch("/api/onboarding/seller-brief"),
+          fetch("/api/onboarding/seller-context", { signal: controller.signal }),
+          fetch("/api/onboarding/seller-brief", { signal: controller.signal }),
         ]);
         if (ctxRes.ok) {
-          const data = await ctxRes.json();
+          const data = (await ctxRes.json()) as SellerKnowledgeResponse;
           if (data) {
             setForm((prev) => ({
               ...prev,
@@ -351,19 +369,19 @@ export function SellerContextView() {
               pricingModel: data.pricingModel ?? prev.pricingModel,
               pricingContext: data.pricingContext ?? prev.pricingContext,
               proofPointsText: Array.isArray(data.proofPoints) ? data.proofPoints.join("\n") : prev.proofPointsText,
-              caseStudies: Array.isArray(data.caseStudies) ? data.caseStudies.map((cs: any) => ({
+              caseStudies: Array.isArray(data.caseStudies) ? data.caseStudies.map((cs) => ({
                 id: cs.id || randomUUID(),
                 clientName: cs.clientName ?? "",
                 industry: cs.industry ?? "",
                 challenge: cs.challenge ?? "",
                 solution: cs.solution ?? "",
                 results: cs.results ?? "",
-                metricsText: Array.isArray(cs.metrics) ? cs.metrics.map((m: any) => `${m.label}: ${m.value}`).join("\n") : "",
+                metricsText: Array.isArray(cs.metrics) ? cs.metrics.map((m) => `${m.label}: ${m.value}`).join("\n") : "",
                 testimonialQuote: cs.testimonialQuote ?? "",
               })) : prev.caseStudies,
               clientLogosText: Array.isArray(data.clientLogos) ? data.clientLogos.join("\n") : prev.clientLogosText,
               awardsText: Array.isArray(data.awards) ? data.awards.join("\n") : prev.awardsText,
-              commonObjections: Array.isArray(data.commonObjections) ? data.commonObjections.map((o: any) => ({
+              commonObjections: Array.isArray(data.commonObjections) ? data.commonObjections.map((o) => ({
                 objection: o.objection ?? "",
                 response: o.response ?? "",
               })) : prev.commonObjections,
@@ -375,7 +393,6 @@ export function SellerContextView() {
               instagramUrl: data.instagramUrl ?? prev.instagramUrl,
               tiktokUrl: data.tiktokUrl ?? prev.tiktokUrl,
             }));
-            if (data.logoUrl) setLogoPreview(data.logoUrl);
           }
         }
         if (briefRes.ok) {
@@ -388,103 +405,17 @@ export function SellerContextView() {
       } catch {
         // Non-blocking
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     })();
+    return () => controller.abort();
   }, []);
 
   function update(field: keyof SellerKnowledgeForm, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
 
-  function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith("image/")) { toast.error("Upload an image file."); return; }
-    if (file.size > 5 * 1024 * 1024) { toast.error("Logo must be under 5MB."); return; }
-    setLogoPreview(URL.createObjectURL(file));
-    setForm((prev) => ({ ...prev, logoFile: file, logoUrl: "" }));
-  }
-
-  async function handleCrawl() {
-    if (!form.websiteUrl) return;
-    setCrawling(true);
-    setCrawlStatus(null);
-
-    try {
-      const res = await fetch("/api/onboarding/crawl-seller", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ websiteUrl: form.websiteUrl }),
-      });
-
-      if (!res.ok || !res.body) {
-        toast.error("Could not analyze website. Try entering details manually.");
-        setCrawling(false);
-        setCrawlStatus(null);
-        return;
-      }
-
-      // Stream SSE events from the crawl pipeline
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? ""; // Keep incomplete line in buffer
-
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          try {
-            const event = JSON.parse(line.slice(6));
-
-            if (event.type === "status") {
-              setCrawlStatus({ step: event.step, total: event.total, message: event.message, detail: event.detail });
-            } else if (event.type === "complete") {
-              setCrawlStatus(null);
-              const sc = event.sellerContext;
-              if (sc) {
-                setForm((prev) => ({
-                  ...prev,
-                  companyName: sc.companyName ?? prev.companyName,
-                  offerSummary: sc.offerSummary ?? prev.offerSummary,
-                  servicesText: sc.services?.join("\n") ?? prev.servicesText,
-                  differentiatorsText: sc.differentiators?.join("\n") ?? prev.differentiatorsText,
-                  targetCustomer: sc.targetCustomer ?? prev.targetCustomer,
-                  desiredOutcome: sc.desiredOutcome ?? prev.desiredOutcome,
-                  proofPointsText: sc.proofPoints?.join("\n") ?? prev.proofPointsText,
-                }));
-                if (sc.logoUrl) { update("logoUrl", sc.logoUrl); setLogoPreview(sc.logoUrl); }
-              }
-              if (event.sellerBriefMd) {
-                setBriefMd(event.sellerBriefMd);
-                setBriefEdited(event.sellerBriefMd);
-                setBriefDirty(false);
-              }
-              toast.success("Business context auto-filled from your website.");
-            } else if (event.type === "error") {
-              setCrawlStatus(null);
-              toast.error(event.message ?? "Analysis failed.");
-            }
-          } catch {
-            // Skip malformed SSE lines
-          }
-        }
-      }
-    } catch {
-      toast.error("Network error. Please try again.");
-    } finally {
-      setCrawling(false);
-      setCrawlStatus(null);
-    }
-  }
-
-  async function handleSave() {
+  async function handleSave(): Promise<boolean> {
     setSaving(true);
     try {
       const knowledge = formToKnowledge(form);
@@ -495,25 +426,22 @@ export function SellerContextView() {
       });
       if (res.ok) {
         toast.success("Business context saved.");
-        if (currentBusiness && form.companyName) {
-          updateBusiness(currentBusiness.id, {
-            name: form.companyName,
-            websiteUrl: form.websiteUrl,
-            setupComplete: !!(form.companyName && form.offerSummary),
-          });
-        }
+        await refreshBusinesses();
+        return true;
       } else {
         toast.error("Failed to save. Please try again.");
+        return false;
       }
     } catch {
       toast.error("Network error. Please try again.");
+      return false;
     } finally {
       setSaving(false);
     }
   }
 
   async function handleSaveAndContinue() {
-    await handleSave();
+    if (!await handleSave()) return;
     window.location.hash = "run-settings";
     // Scroll to top after hash navigation
     requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
@@ -581,10 +509,10 @@ export function SellerContextView() {
     }));
   }
 
-  // Compute strength score
+  // Completion reports literal field-presence checks, not a proposal rating.
   const knowledge = formToKnowledge(form);
-  const strengthScore = computeOfferStrengthScore(knowledge);
-  const suggestions = computeSuggestions(knowledge);
+  const completion = computeSellerContextCompletion(knowledge);
+  const suggestions = computeSuggestions(completion);
 
   if (loading) {
     return (
@@ -602,7 +530,7 @@ export function SellerContextView() {
     <ViewLayout
       eyebrow="YOUR BUSINESS"
       title="Your Offer"
-      description="Every field here becomes a slide. Vague input = vague decks. Specific input = decks that close."
+      description="Seller context becomes planning input. Specific, verifiable details produce more grounded drafts."
       headerGradient
       actions={
         <Button onClick={handleSave} disabled={saving}>
@@ -610,7 +538,7 @@ export function SellerContextView() {
         </Button>
       }
     >
-      {/* ═══ Hero: Auto-fill from website ═══ */}
+      {/* Seller website anchor. Automatic analysis is intentionally unavailable. */}
       <div className="relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/[0.06] via-blue-500/[0.03] to-violet-500/[0.04]">
         <div className="pointer-events-none absolute -right-20 -top-20 size-40 rounded-full opacity-40" style={{ background: "radial-gradient(circle, oklch(0.55 0.18 255 / 20%), transparent 70%)" }} />
         <div className="pointer-events-none absolute -left-16 -bottom-16 size-32 rounded-full opacity-25" style={{ background: "radial-gradient(circle, oklch(0.6 0.15 290 / 25%), transparent 70%)" }} />
@@ -621,87 +549,26 @@ export function SellerContextView() {
             </div>
             <div className="flex-1 min-w-0 space-y-3">
               <div>
-                <h2 className="text-[15px] font-semibold text-foreground">Auto-fill from your website</h2>
-                <p className="mt-0.5 text-[13px] text-muted-foreground">Paste your URL and we&apos;ll extract company details, services, positioning, even your logo.</p>
+                <h2 className="text-[15px] font-semibold text-foreground">Seller website</h2>
+                <p className="mt-0.5 text-[13px] text-muted-foreground">Automatic analysis is paused until it runs as a durable, resumable worker job. Enter the details below.</p>
               </div>
               <div className="flex gap-2">
                 <div className="relative flex-1">
                   <Globe className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/50" />
-                  <Input value={form.websiteUrl} onChange={(e) => update("websiteUrl", e.target.value)} placeholder="yourcompany.com" className="h-11 pl-10 text-[14px] bg-background/80" onKeyDown={(e) => { if (e.key === "Enter" && form.websiteUrl && !crawling) handleCrawl(); }} />
+                  <Input value={form.websiteUrl} onChange={(e) => update("websiteUrl", e.target.value)} placeholder="yourcompany.com" className="h-11 pl-10 text-[14px] bg-background/80" />
                 </div>
-                <Button onClick={handleCrawl} disabled={crawling || !form.websiteUrl} className="h-11 px-5 gap-2">
-                  {crawling ? <><LoaderCircle className="size-4 animate-spin" /> Analyzing…</> : <><Sparkles className="size-4" /> Auto-fill</>}
+                <Button disabled title="Automatic analysis requires a future durable worker job." className="h-11 px-5 gap-2">
+                  <Sparkles className="size-4" /> Manual entry
                 </Button>
               </div>
-              {crawling && (
-                <div className="space-y-2 animate-fade-in">
-                  {/* Progress bar */}
-                  <div className="flex items-center gap-3">
-                    <div className="h-1.5 flex-1 max-w-[280px] rounded-full bg-primary/10 overflow-hidden">
-                      {crawlStatus ? (
-                        <div
-                          className="h-full rounded-full bg-primary transition-all duration-700 ease-out"
-                          style={{ width: `${Math.round((crawlStatus.step / crawlStatus.total) * 100)}%` }}
-                        />
-                      ) : (
-                        <div className="h-full w-1/4 rounded-full bg-primary/50 animate-shimmer" style={{ backgroundImage: "linear-gradient(90deg, transparent, oklch(0.55 0.18 255 / 40%), transparent)", backgroundSize: "200% 100%" }} />
-                      )}
-                    </div>
-                    {crawlStatus && (
-                      <span className="text-[11px] tabular-nums text-muted-foreground">
-                        {crawlStatus.step}/{crawlStatus.total}
-                      </span>
-                    )}
-                  </div>
-                  {/* Status message */}
-                  <div className="flex items-center gap-2">
-                    <LoaderCircle className="size-3.5 animate-spin text-primary" />
-                    <span className="text-[13px] font-medium text-foreground">
-                      {crawlStatus?.message ?? "Starting analysis…"}
-                    </span>
-                  </div>
-                  {crawlStatus?.detail && (
-                    <p className="text-[11px] text-muted-foreground pl-5.5">
-                      {crawlStatus.detail}
-                    </p>
-                  )}
-                </div>
-              )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* ═══ Offer Strength Score + Identity row ═══ */}
-      <div className="grid gap-5 lg:grid-cols-[1fr_auto]">
-        <OfferStrengthGauge score={strengthScore} suggestions={suggestions} />
-
-        {/* Logo card */}
-        <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-border/50 bg-card px-6 py-5 lg:w-[180px]">
-          {logoPreview ? (
-            <div className="relative group">
-              <div className="flex size-20 items-center justify-center overflow-hidden rounded-xl border border-border/40 bg-muted/20">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={logoPreview} alt="Company logo" className="size-full object-contain p-2" onError={() => { setLogoPreview(null); setForm((prev) => ({ ...prev, logoUrl: "" })); }} />
-              </div>
-              <button type="button" onClick={() => { setLogoPreview(null); setForm((prev) => ({ ...prev, logoFile: null, logoUrl: "" })); if (logoInputRef.current) logoInputRef.current.value = ""; }} aria-label="Remove logo" className="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-sm opacity-0 transition-opacity group-hover:opacity-100">
-                <X className="size-3" />
-              </button>
-            </div>
-          ) : (
-            <button type="button" onClick={() => logoInputRef.current?.click()} className="flex size-20 flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-border/50 bg-muted/10 text-muted-foreground transition-all hover:border-primary/30 hover:bg-primary/[0.03] hover:text-primary">
-              <ImageIcon className="size-5" />
-              <span className="text-[10px] font-medium">Logo</span>
-            </button>
-          )}
-          {logoPreview && (
-            <p className="text-[10px] text-muted-foreground text-center">Company logo</p>
-          )}
-          {!logoPreview && (
-            <Input value={form.logoUrl} onChange={(e) => { update("logoUrl", e.target.value); if (e.target.value) setLogoPreview(e.target.value); }} placeholder="or paste logo URL" className="h-8 text-[11px] w-full text-center" />
-          )}
-          <input ref={logoInputRef} type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" aria-label="Upload company logo" />
-        </div>
+      {/* Seller-context completion */}
+      <div>
+        <SellerContextCompletionSummary completion={completion} suggestions={suggestions} />
       </div>
 
       {/* ═══ Tab Navigation ═══ */}
@@ -712,7 +579,7 @@ export function SellerContextView() {
       {/* ── YOUR OFFER ── */}
       {activeTab === "offer" && (
         <div className="space-y-5 animate-fade-in">
-          <SectionCard title="Identity" description="How your brand appears on generated decks.">
+          <SectionCard title="Identity" description="Seller identity supplied to the planner.">
             <div className="grid gap-4 sm:grid-cols-2">
               <FieldGroup label="Company name">
                 <Input value={form.companyName} onChange={(e) => update("companyName", e.target.value)} placeholder="Acme Agency" className="h-10" />
@@ -723,17 +590,17 @@ export function SellerContextView() {
             </div>
           </SectionCard>
 
-          <SectionCard title="Your Pitch" description="This becomes the opening line of every deck. Make it specific enough that the prospect thinks 'that's exactly what I need.'">
+          <SectionCard title="Your Pitch" description="Seller-supplied positioning available to the planner. Keep it specific and supportable.">
             <FieldGroup label="Elevator pitch" hint="One sentence — if a stranger asked what you do">
-              <Textarea value={form.offerSummary} onChange={(e) => update("offerSummary", e.target.value)} placeholder="We build high-converting landing pages for SaaS companies that want to 2-3x their demo requests." className="min-h-[80px] resize-none" />
+              <Textarea value={form.offerSummary} onChange={(e) => update("offerSummary", e.target.value)} placeholder="We design and implement landing pages for B2B software teams." className="min-h-[80px] resize-none" />
             </FieldGroup>
 
             <div className="grid gap-4 sm:grid-cols-2 mt-4">
               <FieldGroup label="What you deliver" hint="One per line — not categories, specific deliverables">
-                <Textarea value={form.servicesText} onChange={(e) => update("servicesText", e.target.value)} placeholder={`Custom landing page design (Figma + code)\nConversion rate audit with prioritized recs\nMonthly A/B testing program (3 tests/mo)`} className="min-h-[110px] resize-none" />
+                <Textarea value={form.servicesText} onChange={(e) => update("servicesText", e.target.value)} placeholder={`Landing-page strategy\nDesign and implementation\nMeasurement plan`} className="min-h-[110px] resize-none" />
               </FieldGroup>
               <FieldGroup label="Why you win" hint="One per line — what makes you the obvious choice?">
-                <Textarea value={form.differentiatorsText} onChange={(e) => update("differentiatorsText", e.target.value)} placeholder={`12+ years in SaaS\n200+ pages launched\nAvg 2.4x lift in demo requests`} className="min-h-[110px] resize-none" />
+                <Textarea value={form.differentiatorsText} onChange={(e) => update("differentiatorsText", e.target.value)} placeholder={`B2B software specialization\nDocumented launch portfolio\nMeasured results available on request`} className="min-h-[110px] resize-none" />
               </FieldGroup>
             </div>
           </SectionCard>
@@ -756,7 +623,7 @@ export function SellerContextView() {
         <div className="space-y-5 animate-fade-in">
           <SectionCard
             title="Case Studies"
-            description="Prospects don't believe claims. They believe evidence. The AI picks the case study most similar to each target company."
+            description="Approved seller evidence the planner may use when it is relevant to the target."
           >
             <div className="space-y-4">
               {form.caseStudies.map((cs, i) => (
@@ -769,18 +636,18 @@ export function SellerContextView() {
               ))}
               <Button variant="outline" onClick={addCaseStudy} className="w-full h-11 gap-2 border-dashed">
                 <Plus className="size-4" />
-                {form.caseStudies.length === 0 ? "Add your first case study — this is the money slide" : "Add another case study"}
+                {form.caseStudies.length === 0 ? "Add your first case study" : "Add another case study"}
               </Button>
             </div>
           </SectionCard>
 
-          <SectionCard title="Credibility Signals" description="These fill the 'why trust us' layer across every deck.">
+          <SectionCard title="Credibility Signals" description="Seller-supplied proof available to the evidence-aware planner.">
             <div className="grid gap-4 sm:grid-cols-2">
-              <FieldGroup label="Proof points" hint="One per line — metrics, logos, numbers">
-                <Textarea value={form.proofPointsText} onChange={(e) => update("proofPointsText", e.target.value)} placeholder={`50% average response rate\n100+ companies trust us\nNPS score: 72`} className="min-h-[100px] resize-none" />
+              <FieldGroup label="Proof points" hint="One per line — retain evidence for every claim">
+                <Textarea value={form.proofPointsText} onChange={(e) => update("proofPointsText", e.target.value)} placeholder={`Paste a sourced customer result\nList an approved customer reference\nAdd a documented third-party rating`} className="min-h-[100px] resize-none" />
               </FieldGroup>
               <FieldGroup label="Awards & press" hint="One per line">
-                <Textarea value={form.awardsText} onChange={(e) => update("awardsText", e.target.value)} placeholder={`ProductHunt #1 Product of the Day\nFeatured in TechCrunch\nGoogle Premier Partner`} className="min-h-[100px] resize-none" />
+                <Textarea value={form.awardsText} onChange={(e) => update("awardsText", e.target.value)} placeholder={`List a verified award\nAdd a publication and source\nRecord an approved partner designation`} className="min-h-[100px] resize-none" />
               </FieldGroup>
             </div>
           </SectionCard>
@@ -792,7 +659,7 @@ export function SellerContextView() {
         <div className="space-y-5 animate-fade-in">
           <SectionCard
             title="Objections"
-            description="When we know what stops people from buying, the deck preemptively addresses it. This is what makes prospects think 'they get us.'"
+            description="Approved objection handling the planner may use when it fits the target and evidence."
           >
             <div className="space-y-3">
               {form.commonObjections.map((obj, i) => (
@@ -804,7 +671,7 @@ export function SellerContextView() {
                     <Input value={obj.objection} onChange={(e) => updateObjection(i, "objection", e.target.value)} placeholder="Too expensive compared to freelancers" className="h-9 text-[13px]" />
                   </FieldGroup>
                   <FieldGroup label="You respond…">
-                    <Input value={obj.response} onChange={(e) => updateObjection(i, "response", e.target.value)} placeholder="ROI within 30 days, guaranteed" className="h-9 text-[13px]" />
+                    <Input value={obj.response} onChange={(e) => updateObjection(i, "response", e.target.value)} placeholder="Propose a reversible pilot with clear success criteria" className="h-9 text-[13px]" />
                   </FieldGroup>
                 </div>
               ))}
@@ -815,13 +682,13 @@ export function SellerContextView() {
             </div>
           </SectionCard>
 
-          <SectionCard title="Competitive Context" description="Who do you lose deals to? The AI uses this to position your unique angle.">
+          <SectionCard title="Competitive Context" description="Seller-supplied context only; comparative claims still require support.">
             <FieldGroup label="Competitor notes" hint="Who you compete with and why clients choose you">
-              <Textarea value={form.competitorNotes} onChange={(e) => update("competitorNotes", e.target.value)} placeholder="Main competitors are Toptal (marketplace, less ownership) and traditional agencies (slower, cost-plus). We win because of fixed-price contracts and ex-FAANG talent." className="min-h-[100px] resize-none" />
+              <Textarea value={form.competitorNotes} onChange={(e) => update("competitorNotes", e.target.value)} placeholder="Describe competitors and differentiation using supportable, current facts." className="min-h-[100px] resize-none" />
             </FieldGroup>
           </SectionCard>
 
-          <SectionCard title="Pricing & Process" description="Knowing your pricing model changes how the CTA is framed. A $5K deal gets a different ask than a $500K deal.">
+          <SectionCard title="Pricing & Process" description="Optional seller context the planner may use to frame an appropriate call to action.">
             <div className="grid gap-4 sm:grid-cols-2">
               <FieldGroup label="Pricing model">
                 <select
@@ -866,12 +733,12 @@ export function SellerContextView() {
                 <div>
                   <p className="text-[13px] font-medium text-foreground">Business intelligence brief</p>
                   <p className="text-[11px] text-muted-foreground">
-                    {briefMd ? "AI-generated dossier — edit to refine" : "Run auto-fill to generate"}
+                    {briefMd ? "Saved operator brief — edit to refine" : "Optional operator-authored context"}
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                {briefMd && <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600 ring-1 ring-inset ring-emerald-500/20">Generated</span>}
+                {briefMd && <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600 ring-1 ring-inset ring-emerald-500/20">Saved</span>}
                 <ChevronDown className={cn("size-4 text-muted-foreground transition-transform", showBrief && "rotate-180")} />
               </div>
             </button>
@@ -881,7 +748,7 @@ export function SellerContextView() {
                   <div className="flex flex-col items-center py-8 text-center">
                     <FileText className="size-8 text-muted-foreground mb-2" />
                     <p className="text-[13px] font-medium">No brief yet</p>
-                    <p className="mt-1 max-w-sm text-[12px] text-muted-foreground">Enter your website URL above and click Auto-fill.</p>
+                    <p className="mt-1 max-w-sm text-[12px] text-muted-foreground">No separate brief is saved. The seller context above remains the source of truth.</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -904,9 +771,9 @@ export function SellerContextView() {
       <div className="sticky bottom-0 z-10 flex items-center justify-between rounded-xl border border-border/50 bg-card/95 px-6 py-4 shadow-lg backdrop-blur-sm">
         <div className="hidden sm:flex items-center gap-2.5">
           <div className="flex h-2 w-24 rounded-full bg-muted overflow-hidden">
-            <div className={cn("h-full rounded-full transition-all duration-500", strengthScore >= 8 ? "bg-emerald-500" : strengthScore >= 5 ? "bg-amber-500" : "bg-red-400")} style={{ width: `${Math.round((strengthScore / 10) * 100)}%` }} />
+            <div className="h-full rounded-full bg-primary transition-all duration-500" style={{ width: `${completion.percentage}%` }} />
           </div>
-          <span className="text-[12px] tabular-nums text-muted-foreground">{strengthScore}/10 strength</span>
+          <span className="text-[12px] tabular-nums text-muted-foreground">{completion.completed}/{completion.total} context checks</span>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={handleSave} disabled={saving}>

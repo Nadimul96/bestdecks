@@ -1,11 +1,42 @@
 import type { DeliveryFormat, ImagePolicy } from "../domain/schemas";
+import {
+  providerCallObservabilitySchema,
+  type ProviderCallObservability,
+} from "../domain/provider-observability";
 import type {
   DeckArchetype,
   Tone,
   VisualStyle,
 } from "../domain/schemas";
+import type {
+  RichStaticLayoutId,
+  VisualProfileVerification,
+} from "../domain/visual-profile";
 
 export type CrawlProviderName = "cloudflare" | "deepcrawl";
+
+export interface ProviderCallOptions {
+  signal?: AbortSignal;
+  /** Receives normalized, non-secret metadata after a successful provider call. */
+  onObservability?: (observability: ProviderCallObservability) => void;
+}
+
+/**
+ * Observability is best-effort instrumentation: a consumer callback must not
+ * turn an already-billable successful call into a retryable provider failure.
+ */
+export function reportProviderObservability(
+  options: ProviderCallOptions,
+  observability: ProviderCallObservability | undefined,
+) {
+  if (!observability) return;
+  const parsed = providerCallObservabilitySchema.parse(observability);
+  try {
+    options.onObservability?.(parsed);
+  } catch {
+    // Never replay a paid side effect because a local metrics sink failed.
+  }
+}
 
 export interface CrawlPage {
   url: string;
@@ -29,7 +60,6 @@ export interface CrawlRequest {
   includeSubdomains?: boolean;
   rejectResourceTypes?: string[];
   requestedFormats: Array<"html" | "markdown" | "json">;
-  userApprovedException?: boolean;
 }
 
 export interface CrawlResult {
@@ -43,7 +73,16 @@ export interface CrawlResult {
 
 export interface CrawlProvider {
   name: CrawlProviderName;
-  crawlSite(request: CrawlRequest): Promise<CrawlResult>;
+  crawlSite(request: CrawlRequest, options?: ProviderCallOptions): Promise<CrawlResult>;
+}
+
+export interface ResumableCrawlProvider extends CrawlProvider {
+  startCrawl(request: CrawlRequest, options?: ProviderCallOptions): Promise<string>;
+  resumeCrawl(
+    jobId: string,
+    request: CrawlRequest,
+    options?: ProviderCallOptions,
+  ): Promise<CrawlResult>;
 }
 
 export interface SellerDiscoveryInput {
@@ -87,7 +126,10 @@ export interface EnrichmentResult {
 
 export interface EnrichmentProvider {
   name: "perplexity";
-  enrichCompany(request: EnrichmentRequest): Promise<EnrichmentResult>;
+  enrichCompany(
+    request: EnrichmentRequest,
+    options?: ProviderCallOptions,
+  ): Promise<EnrichmentResult>;
 }
 
 export interface CompanyBrief {
@@ -102,6 +144,15 @@ export interface CompanyBrief {
   proofPoints: string[];
   pitchAngles: string[];
   sourceUrls: string[];
+  /**
+   * Verbatim target facts retained with the URL whose captured text contains
+   * them. Slide planning may call a fact source-backed only through this
+   * provenance list; `sourceUrls` alone is not evidence of entailment.
+   */
+  sourceClaims?: Array<{
+    text: string;
+    sourceUrl: string;
+  }>;
   /** The single most compelling metric that quantifies this company's core challenge */
   anchorMetric?: string;
   /** A contrarian framing of their situation that competitors wouldn't use */
@@ -120,7 +171,9 @@ export interface DeckGenerationInput {
   cardCount: number;
   callToAction: string;
   tone: Tone;
+  customTone?: string;
   visualStyle: VisualStyle;
+  customVisualStyle?: string;
   mustInclude: string[];
   mustAvoid: string[];
   outputFormat: DeliveryFormat;
@@ -145,6 +198,7 @@ export interface ImageProvider {
   name: "gemini";
   generateSupportingAssets(
     request: ImageGenerationRequest,
+    options?: ProviderCallOptions,
   ): Promise<ImageGenerationResult>;
 }
 
@@ -161,53 +215,69 @@ export interface PresentonResult {
   pdfExportUrl?: string;
   /** Direct PPTX export URL */
   pptxExportUrl?: string;
+  usage?: {
+    unit: "credits";
+    amount: number;
+  };
+}
+
+export interface ArtifactVerification {
+  url: string;
+  sha256: string;
+  /** Must not exceed MAX_DELIVERY_ARTIFACT_BYTES. */
+  byteLength: number;
+  contentType?: string;
+  verifiedAt: string;
+  contentVerification: {
+    method: "pptx_ooxml_rich_static_v2";
+    sha256: string;
+    slideCount: number;
+  };
+  visualProfile: VisualProfileVerification;
+}
+
+export interface ArtifactVerificationOptions extends ProviderCallOptions {
+  /** Exact evidence-gated visible text the renderer must preserve per slide. */
+  expectedSlides: Array<{
+    headline: string;
+    bulletPoints: string[];
+  }>;
+  /** Exact closed-set layout request used for the render being verified. */
+  layoutIds: RichStaticLayoutId[];
 }
 
 export type DeckProviderName = "presenton" | "plusai" | "alai";
+
+export interface ExactVisibleSlide {
+  headline: string;
+  bulletPoints: string[];
+}
+
+export interface DeckCreateOptions extends ProviderCallOptions {
+  /** A validated, evidence-gated slide plan to preserve during rendering. */
+  slidePlanPrompt?: string;
+  /** Exact per-slide Markdown for renderers that support structured input. */
+  slidesMarkdown?: string[];
+  /** Exact evidence-gated visible text for deterministic renderers. */
+  exactSlides?: ExactVisibleSlide[];
+  /** Exact locally selected layout IDs; provider-side auto-selection is forbidden. */
+  layoutIds?: RichStaticLayoutId[];
+  /** Stable across retries. Providers that support it can deduplicate side effects. */
+  idempotencyKey?: string;
+}
 
 export interface DeckProvider {
   name: DeckProviderName;
   createDeck(
     input: DeckGenerationInput,
     imageUrls?: string[],
+    options?: DeckCreateOptions,
   ): Promise<PresentonResult>;
+  verifyArtifact?(
+    result: PresentonResult,
+    options: ArtifactVerificationOptions,
+  ): Promise<ArtifactVerification>;
 }
 
 /** @deprecated Use DeckProvider instead */
 export type PresentonProvider = DeckProvider;
-
-export class UnconfiguredCloudflareCrawler implements CrawlProvider {
-  public readonly name = "cloudflare" as const;
-
-  public async crawlSite(_request: CrawlRequest): Promise<CrawlResult> {
-    throw new Error("Cloudflare crawler is not configured.");
-  }
-}
-
-export class UnconfiguredDeepcrawlCrawler implements CrawlProvider {
-  public readonly name = "deepcrawl" as const;
-
-  public async crawlSite(_request: CrawlRequest): Promise<CrawlResult> {
-    throw new Error("Deepcrawl fallback crawler is not configured.");
-  }
-}
-
-export async function crawlWithFallback(
-  request: CrawlRequest,
-  primary: CrawlProvider,
-  fallback: CrawlProvider,
-): Promise<CrawlResult> {
-  try {
-    return await primary.crawlSite(request);
-  } catch (error) {
-    if (request.userApprovedException && primary.name === "cloudflare") {
-      return fallback.crawlSite(request);
-    }
-
-    if (error instanceof Error) {
-      return fallback.crawlSite(request);
-    }
-
-    throw error;
-  }
-}

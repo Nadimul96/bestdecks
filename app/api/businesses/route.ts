@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getSession } from "@/src/server/auth";
 import { getOnboarding } from "@/src/server/repository";
+import { evaluateRunConfigurationReadiness } from "@/src/domain/run-configuration-readiness";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,7 @@ export async function GET() {
     const data = await getOnboarding(userId);
     const seller = data.sellerContext;
     const quest = data.questionnaire;
+    const readiness = evaluateRunConfigurationReadiness(seller, quest);
 
     // If no onboarding data exists yet, return empty array (fresh user)
     if (!seller && !quest && !data.profile.companyName) {
@@ -51,7 +53,7 @@ export async function GET() {
       id: "default",
       name: seller?.companyName || data.profile.companyName || "My Business",
       websiteUrl: seller?.websiteUrl || data.profile.websiteUrl || "",
-      setupComplete: !!(seller?.companyName && seller?.offerSummary),
+      setupComplete: readiness.ready,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       sellerContext: sellerContextForm,

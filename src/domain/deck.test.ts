@@ -185,6 +185,22 @@ test("buildPresentationAdditionalInstructions includes images for auto policy", 
   assert.doesNotMatch(text, /Do not include images/);
 });
 
+test("buildPresentationAdditionalInstructions makes no borrowed success or benchmark claim", () => {
+  const text = buildPresentationAdditionalInstructions({
+    archetype: "cold_outreach",
+    tone: "consultative",
+    visualStyle: "minimal",
+    imagePolicy: "never",
+    cardCount: 6,
+  });
+
+  assert.match(text, /Never invent metrics, dates, customers, outcomes, studies, or recent events/);
+  assert.doesNotMatch(
+    text,
+    /billion-dollar|Snyk|Anthropic|Y Combinator|Apple|McKinsey|Bain|Stripe|SpaceX/u,
+  );
+});
+
 test("buildPresentationAdditionalInstructions replaces underscores in archetype", () => {
   const text = buildPresentationAdditionalInstructions({
     archetype: "competitive_displacement",

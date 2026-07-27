@@ -1,6 +1,6 @@
 import {
   Briefcase,
-  CreditCard,
+  Cloud,
   FileText,
   LayoutDashboard,
   ListTree,
@@ -109,10 +109,10 @@ export const workspaceNavGroups: NavGroup[] = [
     label: "Account",
     items: [
       {
-        title: "Plans & Credits",
+        title: "OSS & Cloud",
         url: "#pricing",
-        icon: CreditCard,
-        description: "Manage your plan and credits",
+        icon: Cloud,
+        description: "Review the BYOK and managed-service boundary",
       },
     ],
   },

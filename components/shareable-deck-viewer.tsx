@@ -3,10 +3,6 @@
 import * as React from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-import {
-  SlidePreview,
-  type ExampleSlide,
-} from "@/components/archetype-preview-modal";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -20,7 +16,9 @@ import { cn } from "@/lib/utils";
 import {
   alaiPreviewThemes,
   getAlaiPreviewTheme,
+  type AlaiPreviewTheme,
 } from "@/src/examples/alai-preview-themes";
+import type { PublicShareSlide } from "@/src/server/shareable-decks";
 
 interface ShareableDeckViewerProps {
   title: string;
@@ -30,7 +28,7 @@ interface ShareableDeckViewerProps {
   coverEyebrow: string;
   coverFooter: string;
   defaultThemeKey: string;
-  slides: ExampleSlide[];
+  slides: PublicShareSlide[];
 }
 
 function hostnameFromUrl(value: string) {
@@ -39,6 +37,109 @@ function hostnameFromUrl(value: string) {
   } catch {
     return value;
   }
+}
+
+/**
+ * Recipient-facing slides intentionally use a separate renderer from the
+ * sample archetype previews. Only persisted public titles and bullets enter
+ * this component; it has no sample charts, testimonials, offers, or contacts.
+ */
+function PublicShareSlideCanvas({
+  slide,
+  theme,
+  watermark,
+  coverEyebrow,
+  coverFooter,
+}: {
+  slide: PublicShareSlide;
+  theme: AlaiPreviewTheme;
+  watermark: string;
+  coverEyebrow: string;
+  coverFooter: string;
+}) {
+  const isLight = theme.family === "light";
+  const headingColor = isLight ? "#111827" : "#F8FAFC";
+  const bodyColor = isLight ? "#4B5563" : "rgba(248,250,252,0.68)";
+  const mutedColor = isLight ? "#6B7280" : "rgba(248,250,252,0.42)";
+  const eyebrow = slide.type === "cover"
+    ? coverEyebrow
+    : slide.type === "closing" ? "Closing" : "Proposal";
+
+  return (
+    <div
+      className="relative h-full w-full overflow-hidden rounded-2xl border shadow-2xl"
+      style={{
+        borderColor: theme.border,
+        background:
+          `radial-gradient(circle at 82% 18%, ${theme.surfaceGlow} 0%, transparent 34%), linear-gradient(140deg, ${theme.surface} 0%, ${theme.surfaceAlt} 100%)`,
+      }}
+    >
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.08]"
+        style={{
+          backgroundImage: isLight
+            ? "linear-gradient(rgba(15,23,42,0.16) 1px, transparent 1px), linear-gradient(90deg, rgba(15,23,42,0.16) 1px, transparent 1px)"
+            : "radial-gradient(rgba(255,255,255,0.7) 1px, transparent 1px)",
+          backgroundSize: isLight ? "56px 56px" : "28px 28px",
+        }}
+      />
+
+      <div className="relative flex h-full flex-col px-8 py-7 sm:px-12 sm:py-10">
+        <div className="flex items-center justify-between gap-6">
+          <div className="flex items-center gap-2">
+            <span className="size-2 rounded-full" style={{ background: theme.accent }} />
+            <p
+              className="text-[10px] font-semibold uppercase tracking-[0.18em]"
+              style={{ color: mutedColor }}
+            >
+              {eyebrow}
+            </p>
+          </div>
+          <p
+            className="max-w-[40%] truncate text-[10px] font-semibold uppercase tracking-[0.14em]"
+            style={{ color: mutedColor }}
+          >
+            {watermark}
+          </p>
+        </div>
+
+        <div className="flex flex-1 flex-col justify-center">
+          <h2
+            className="max-w-5xl text-3xl font-bold leading-[1.08] tracking-tight sm:text-5xl"
+            style={{ color: headingColor }}
+          >
+            {slide.title}
+          </h2>
+          {slide.bullets.length > 0 ? (
+            <ul className="mt-6 grid max-w-4xl gap-3 sm:grid-cols-2">
+              {slide.bullets.map((bullet, index) => (
+                <li
+                  key={`${bullet}-${index}`}
+                  className="flex items-start gap-3 text-xs leading-relaxed sm:text-sm"
+                  style={{ color: bodyColor }}
+                >
+                  <span
+                    className="mt-1.5 size-1.5 shrink-0 rounded-full"
+                    style={{ background: theme.accent }}
+                  />
+                  <span>{bullet}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+
+        {slide.type === "cover" ? (
+          <p
+            className="text-[10px] font-medium uppercase tracking-[0.18em]"
+            style={{ color: mutedColor }}
+          >
+            {coverFooter}
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
 }
 
 export function ShareableDeckViewer({
@@ -85,6 +186,8 @@ export function ShareableDeckViewer({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [currentIndex, goToSlide]);
+
+  if (!currentSlide) return null;
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(14,165,233,0.1),_transparent_35%),linear-gradient(180deg,_#f8fafc_0%,_#eef2ff_100%)] text-foreground">
@@ -133,7 +236,7 @@ export function ShareableDeckViewer({
 
         <section className="rounded-3xl border border-border/50 bg-background/70 p-3 shadow-sm backdrop-blur sm:p-4">
           <div className="aspect-[16/9] w-full">
-            <SlidePreview
+            <PublicShareSlideCanvas
               slide={currentSlide}
               theme={currentTheme}
               watermark={watermark}
@@ -205,7 +308,7 @@ export function ShareableDeckViewer({
               >
                 BestDecks
               </a>
-              {" "}— AI-powered decks that close deals
+              {" "}— open-source proposal deck tooling
             </p>
             <p className="mt-1 text-[12px] text-muted-foreground">
               <a

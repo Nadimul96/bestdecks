@@ -7,6 +7,8 @@ import {
   getOwnedDeliveryDeck,
 } from "@/src/server/repository";
 import { buildPublicShareUrl } from "@/src/server/share-url";
+import { ShareLinkQuotaExceededError } from "@/src/server/shareable-decks";
+import { readBoundedJson, RequestBodyTooLargeError } from "@/src/server/request-body";
 
 export const dynamic = "force-dynamic";
 
@@ -46,11 +48,22 @@ export async function POST(
   let expiresAt: string | undefined;
 
   try {
-    const body = await request.json().catch(() => ({}));
+    const body = await readBoundedJson(request);
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      throw new SyntaxError("Share request body must be a JSON object.");
+    }
     expiresAt = toExpiresAt((body as { expiresInDays?: unknown }).expiresInDays);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Invalid request body.";
-    return NextResponse.json({ error: message }, { status: 400 });
+    if (error instanceof RequestBodyTooLargeError) {
+      return NextResponse.json({ error: "Request body is too large." }, { status: 413 });
+    }
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
+    }
+    return NextResponse.json(
+      { error: "expiresInDays must be a number between 1 and 365." },
+      { status: 400 },
+    );
   }
 
   try {
@@ -66,9 +79,31 @@ export async function POST(
       url: buildPublicShareUrl(request, slug),
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to create share link.";
-    const status = message === "Deck is not ready to share." ? 409 : 500;
-    return NextResponse.json({ error: message }, { status });
+    if (error instanceof ShareLinkQuotaExceededError) {
+      return NextResponse.json(
+        {
+          error: "Share link quota exceeded.",
+          code: error.code,
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(error.retryAfterSeconds),
+            "Cache-Control": "private, no-store",
+          },
+        },
+      );
+    }
+
+    if (error instanceof Error && error.message === "Deck is not ready to share.") {
+      return NextResponse.json({ error: "Deck is not ready to share." }, { status: 409 });
+    }
+
+    console.error("[shareable-decks] create failed", {
+      operation: "create",
+      code: "internal_error",
+    });
+    return NextResponse.json({ error: "Failed to create share link." }, { status: 500 });
   }
 }
 
@@ -86,9 +121,18 @@ export async function DELETE(
   try {
     await deactivateShareableLink(deckId, session.user.id);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to deactivate share link.";
-    const status = message === "Deck not found." ? 404 : 500;
-    return NextResponse.json({ error: message }, { status });
+    if (error instanceof Error && error.message === "Deck not found.") {
+      return NextResponse.json({ error: "Deck not found." }, { status: 404 });
+    }
+
+    console.error("[shareable-decks] deactivate failed", {
+      operation: "deactivate",
+      code: "internal_error",
+    });
+    return NextResponse.json(
+      { error: "Failed to deactivate share link." },
+      { status: 500 },
+    );
   }
 
   return NextResponse.json({ ok: true });

@@ -2,27 +2,18 @@
 
 import { createAuthClient } from "better-auth/react";
 
-function resolveAuthBaseUrl() {
-  if (typeof window === "undefined") {
-    return process.env.NEXT_PUBLIC_BETTER_AUTH_URL ?? "http://localhost:3000";
-  }
+import { resolveBrowserAuthOrigin } from "@/src/config/browser-auth-origin";
 
-  // In local development, always use the current origin so stale env ports
-  // don't break email/password auth requests.
-  if (["localhost", "127.0.0.1"].includes(window.location.hostname)) {
-    return window.location.origin;
-  }
-
-  // In production, route auth through the main domain so cookies and OAuth
-  // flows continue to work across app and console subdomains.
-  return (
-    process.env.NEXT_PUBLIC_BETTER_AUTH_URL ??
-    `${window.location.protocol}//${window.location.hostname.replace(/^console\./, "")}${window.location.port ? `:${window.location.port}` : ""}`
-  );
-}
-
-const baseURL = resolveAuthBaseUrl();
+const environment = process.env.NODE_ENV === "development"
+  || process.env.NODE_ENV === "test"
+  ? process.env.NODE_ENV
+  : "production";
+const authOrigin = resolveBrowserAuthOrigin({
+  environment,
+  configuredOrigin: process.env.NEXT_PUBLIC_BETTER_AUTH_URL,
+  currentOrigin: typeof window === "undefined" ? undefined : window.location.origin,
+});
 
 export const authClient = createAuthClient({
-  baseURL: `${baseURL}/api/auth`,
+  baseURL: authOrigin ? `${authOrigin}/api/auth` : "/api/auth",
 });

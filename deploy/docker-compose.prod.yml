@@ -3,52 +3,162 @@ services:
     build:
       context: ..
       dockerfile: deploy/app/Dockerfile
-    container_name: bestdecks-app
+      target: runner
+      args:
+        NODE_IMAGE: ${NODE_IMAGE:?Set NODE_IMAGE to a digest-pinned Node image}
     restart: unless-stopped
-    env_file:
-      - ../.env.production
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
     environment:
       NODE_ENV: production
-      LOCAL_DB_PATH: .data/custom-proposals.sqlite
+      LOCAL_DB_PATH: /app/.data/custom-proposals.sqlite
+      BESTDECKS_COMMIT_SHA: ${BESTDECKS_COMMIT_SHA:?Set BESTDECKS_COMMIT_SHA to the exact source commit}
+      APP_SECRETS_KEY: ${APP_SECRETS_KEY:?Set APP_SECRETS_KEY for encrypted tenant settings}
+      APP_SECRETS_KEY_PREVIOUS: ${APP_SECRETS_KEY_PREVIOUS:-}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:?Set BETTER_AUTH_URL to the canonical application origin}
+      APP_DOMAIN: ${APP_DOMAIN:?Set APP_DOMAIN to the canonical application host}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set an independent BETTER_AUTH_SECRET}
+      SEED_ADMIN_ON_STARTUP: ${SEED_ADMIN_ON_STARTUP:-0}
+      ADMIN_NAME: ${ADMIN_NAME:-}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      PRESENTON_BASE_URL: http://presenton
+      PRESENTON_AUTH_USERNAME: ${PRESENTON_AUTH_USERNAME:?Set PRESENTON_AUTH_USERNAME}
+      PRESENTON_AUTH_PASSWORD: ${PRESENTON_AUTH_PASSWORD:?Set PRESENTON_AUTH_PASSWORD}
+      PRESENTON_TEMPLATE: ${PRESENTON_TEMPLATE:-bestdecks_inline_vector_v1}
+      ALLOW_PRIVATE_PROVIDER_URLS: "1"
+      ALLOW_USER_PROVIDER_ENDPOINTS: "0"
+      ALLOW_SHARED_PROVIDER_CREDENTIALS: ${ALLOW_SHARED_PROVIDER_CREDENTIALS:?Set 1 for single-tenant shared credentials or 0 for tenant-owned credentials}
     volumes:
       - bestdecks-data:/app/.data
+    tmpfs:
+      - /app/.next/cache:rw,noexec,nosuid,nodev,size=128m,uid=10001,gid=10001,mode=0700
+      - /home/bestdecks:rw,noexec,nosuid,nodev,size=16m,uid=10001,gid=10001,mode=0700
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001,mode=1770
     depends_on:
       - presenton
+    networks:
+      - frontend
+      - backend
+
+  worker:
+    build:
+      context: ..
+      dockerfile: deploy/app/Dockerfile
+      target: worker
+      args:
+        NODE_IMAGE: ${NODE_IMAGE:?Set NODE_IMAGE to a digest-pinned Node image}
+    restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    environment:
+      NODE_ENV: production
+      LOCAL_DB_PATH: /app/.data/custom-proposals.sqlite
+      BESTDECKS_COMMIT_SHA: ${BESTDECKS_COMMIT_SHA:?Set BESTDECKS_COMMIT_SHA to the exact source commit}
+      APP_SECRETS_KEY: ${APP_SECRETS_KEY:?Set APP_SECRETS_KEY for encrypted tenant settings}
+      APP_SECRETS_KEY_PREVIOUS: ${APP_SECRETS_KEY_PREVIOUS:-}
+      CLOUDFLARE_ACCOUNT_ID: ${CLOUDFLARE_ACCOUNT_ID:-}
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
+      PERPLEXITY_API_KEY: ${PERPLEXITY_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      PRESENTON_BASE_URL: http://presenton
+      PRESENTON_AUTH_USERNAME: ${PRESENTON_AUTH_USERNAME:?Set PRESENTON_AUTH_USERNAME}
+      PRESENTON_AUTH_PASSWORD: ${PRESENTON_AUTH_PASSWORD:?Set PRESENTON_AUTH_PASSWORD}
+      PRESENTON_TEMPLATE: ${PRESENTON_TEMPLATE:-bestdecks_inline_vector_v1}
+      ALLOW_PRIVATE_PROVIDER_URLS: "1"
+      ALLOW_USER_PROVIDER_ENDPOINTS: "0"
+      ALLOW_SHARED_PROVIDER_CREDENTIALS: ${ALLOW_SHARED_PROVIDER_CREDENTIALS:?Set 1 for single-tenant shared credentials or 0 for tenant-owned credentials}
+    volumes:
+      - bestdecks-data:/app/.data
+    tmpfs:
+      - /home/bestdecks:rw,noexec,nosuid,nodev,size=16m,uid=10001,gid=10001,mode=0700
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001,mode=1770
+    depends_on:
+      - presenton
+    networks:
+      - backend
+      - provider-egress
 
   presenton:
     build:
       context: ..
       dockerfile: deploy/presenton/Dockerfile
-    container_name: bestdecks-presenton
+      args:
+        PRESENTON_IMAGE: ${PRESENTON_IMAGE:?Set PRESENTON_IMAGE to a digest-pinned Presenton image}
     restart: unless-stopped
+    init: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 512
     environment:
-      CAN_CHANGE_KEYS: "false"
+      # Upstream requires an LLM selector at startup. Bestdecks uses only the
+      # deterministic create/update/export path, and this service has no
+      # provider-egress network, so it cannot make provider calls.
+      CAN_CHANGE_KEYS: "true"
       LLM: openai
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      OPENAI_MODEL: gpt-4.1
+      AUTH_USERNAME: ${PRESENTON_AUTH_USERNAME:?Set PRESENTON_AUTH_USERNAME for Presenton HTTP Basic auth}
+      AUTH_PASSWORD: ${PRESENTON_AUTH_PASSWORD:?Set PRESENTON_AUTH_PASSWORD for Presenton HTTP Basic auth}
       DISABLE_IMAGE_GENERATION: "true"
     volumes:
       - presenton-data:/app_data
-    ports:
-      - "5050:80"
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=128m,mode=1770
+    expose:
+      - "80"
+    networks:
+      - backend
 
   caddy:
-    image: caddy:2
-    container_name: bestdecks-caddy
+    build:
+      context: ..
+      dockerfile: deploy/caddy/Dockerfile
+      args:
+        CADDY_IMAGE: ${CADDY_IMAGE:?Set CADDY_IMAGE to a digest-pinned Caddy image}
     restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
     depends_on:
       - app
-      - presenton
     ports:
       - "80:80"
       - "443:443"
     environment:
-      APP_DOMAIN: ${APP_DOMAIN}
-      PRESENTON_DOMAIN: ${PRESENTON_DOMAIN}
+      APP_DOMAIN: ${APP_DOMAIN:?Set APP_DOMAIN to the canonical application host}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m,mode=1770
+    networks:
+      - frontend
+
+networks:
+  frontend:
+  backend:
+    internal: true
+  provider-egress:
 
 volumes:
   bestdecks-data:

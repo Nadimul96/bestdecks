@@ -81,12 +81,10 @@ The business appears to value clarity, trust, and simple developer-facing experi
   console.log(
     JSON.stringify(
       {
-        briefCompanyName: companyBrief.companyName,
-        briefIndustry: companyBrief.industry,
         slideCount: plan.slides.length,
-        presentationId: result.presentationId,
-        exportUrl: result.exportUrl,
-        editorUrl: result.editorUrl,
+        generated: Boolean(result.presentationId),
+        exportAvailable: Boolean(result.exportUrl),
+        editorAvailable: Boolean(result.editorUrl),
       },
       null,
       2,
@@ -94,7 +92,7 @@ The business appears to value clarity, trust, and simple developer-facing experi
   );
 }
 
-main().catch((error) => {
-  console.error(error);
+main().catch(() => {
+  console.error("Planned Plus AI smoke test failed.");
   process.exitCode = 1;
 });

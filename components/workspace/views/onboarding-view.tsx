@@ -30,13 +30,12 @@ import { ViewLayout, SectionCard, FieldGroup } from "../view-layout";
 import {
   viewMeta,
   intentOptions,
-  type CurrentUser,
   type DeckIntent,
-  type Business,
 } from "@/lib/workspace-types";
 import { useBusinessContext } from "@/lib/business-context";
-import { dispatchRunStart } from "@/lib/run-launch";
+import { submitSetup } from "@/lib/setup-submission";
 import { cn } from "@/lib/utils";
+import { TARGET_CSV_COLUMNS } from "@/src/domain/intake-fields";
 
 const meta = viewMeta.onboarding;
 
@@ -58,31 +57,40 @@ const steps = [
   },
 ] as const;
 
-type StepId = (typeof steps)[number]["id"];
-
 interface OnboardingState {
   websiteUrl: string;
   companyName: string;
   offerSummary: string;
+  servicesText: string;
+  differentiatorsText: string;
   targetCustomer: string;
+  desiredOutcome: string;
   intent: DeckIntent;
+  audience: string;
+  objective: string;
+  callToAction: string;
   websitesText: string;
   contactsCsvText: string;
   showCsv: boolean;
 }
 
-export function OnboardingView({ currentUser }: { currentUser: CurrentUser }) {
-  const { currentBusiness, addBusiness, updateBusiness } = useBusinessContext();
+export function OnboardingView() {
+  const { currentBusiness, refreshBusinesses } = useBusinessContext();
 
   const [currentStep, setCurrentStep] = React.useState<number>(0);
-  const [crawling, setCrawling] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [state, setState] = React.useState<OnboardingState>({
     websiteUrl: currentBusiness?.websiteUrl ?? "",
     companyName: currentBusiness?.name ?? "",
     offerSummary: currentBusiness?.sellerContext?.offerSummary ?? "",
+    servicesText: currentBusiness?.sellerContext?.servicesText ?? "",
+    differentiatorsText: currentBusiness?.sellerContext?.differentiatorsText ?? "",
     targetCustomer: currentBusiness?.sellerContext?.targetCustomer ?? "",
+    desiredOutcome: currentBusiness?.sellerContext?.desiredOutcome ?? "",
     intent: "cold_pitch",
+    audience: currentBusiness?.questionnaire?.audience ?? "",
+    objective: currentBusiness?.questionnaire?.objective ?? "",
+    callToAction: currentBusiness?.questionnaire?.callToAction ?? "",
     websitesText: "",
     contactsCsvText: "",
     showCsv: false,
@@ -96,37 +104,6 @@ export function OnboardingView({ currentUser }: { currentUser: CurrentUser }) {
     value: OnboardingState[K],
   ) {
     setState((prev) => ({ ...prev, [field]: value }));
-  }
-
-  async function handleAutofill() {
-    if (!state.websiteUrl) return;
-    setCrawling(true);
-    try {
-      const res = await fetch("/api/onboarding/crawl-seller", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ websiteUrl: state.websiteUrl }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.sellerContext) {
-          setState((prev) => ({
-            ...prev,
-            companyName: data.sellerContext.companyName ?? prev.companyName,
-            offerSummary: data.sellerContext.offerSummary ?? prev.offerSummary,
-            targetCustomer:
-              data.sellerContext.targetCustomer ?? prev.targetCustomer,
-          }));
-          toast.success("We analyzed your website and filled in the details.");
-        }
-      } else {
-        toast.error("Couldn\u2019t analyze that website. Fill in the fields manually.");
-      }
-    } catch {
-      toast.error("Network error. Please try again.");
-    } finally {
-      setCrawling(false);
-    }
   }
 
   function handleNext() {
@@ -144,111 +121,20 @@ export function OnboardingView({ currentUser }: { currentUser: CurrentUser }) {
   async function handleFinish() {
     setSaving(true);
     try {
-      // Save seller context
-      await fetch("/api/onboarding/seller-context", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          websiteUrl: state.websiteUrl,
-          companyName: state.companyName,
-          offerSummary: state.offerSummary,
-          targetCustomer: state.targetCustomer,
-          desiredOutcome: "",
-          servicesText: "",
-          differentiatorsText: "",
-          proofPointsText: "",
-          constraintsText: "",
-        }),
-      });
+      const result = await submitSetup(state);
+      await refreshBusinesses();
 
-      // Save questionnaire with archetype derived from intent
-      const archetypeMap: Record<DeckIntent, string> = {
-        cold_pitch: "cold_outreach",
-        post_call: "warm_intro",
-        agency_rfp: "agency_proposal",
-        investor: "cold_outreach",
-        partnership: "warm_intro",
-        event_sponsor: "agency_proposal",
-        product_demo: "warm_intro",
-        upsell: "warm_intro",
-        board_update: "agency_proposal",
-        custom: "cold_outreach",
-      };
-      await fetch("/api/onboarding/questionnaire", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ archetype: archetypeMap[state.intent] }),
-      });
-
-      // If targets were provided, create a run
-      const urls = state.websitesText
-        .split("\n")
-        .filter((l) => l.trim().length > 0);
-      if (urls.length > 0) {
-        const runResponse = await fetch("/api/runs", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            websitesText: state.websitesText,
-            contactsCsvText: state.contactsCsvText || undefined,
-            autoLaunch: false,
-          }),
-        });
-
-        const runPayload = await runResponse.json().catch(() => null) as
-          | { runId?: string; error?: string }
-          | null;
-
-        if (!runResponse.ok || !runPayload?.runId) {
-          throw new Error(runPayload?.error ?? "Failed to create the initial run.");
-        }
-
-        dispatchRunStart(runPayload.runId);
-      }
-
-      // Create or update the business entity in context
-      const now = new Date().toISOString();
-      if (currentBusiness && currentBusiness.id !== "default") {
-        updateBusiness(currentBusiness.id, {
-          name: state.companyName || currentBusiness.name,
-          websiteUrl: state.websiteUrl,
-          setupComplete: true,
-          updatedAt: now,
-        });
-      } else {
-        const newBiz: Business = {
-          id: crypto.randomUUID(),
-          name: state.companyName || "My Business",
-          websiteUrl: state.websiteUrl,
-          setupComplete: true,
-          createdAt: now,
-          updatedAt: now,
-        };
-        addBusiness(newBiz);
-
-        // Persist to API (may not exist yet)
-        try {
-          await fetch("/api/businesses", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(newBiz),
-          });
-        } catch {
-          // context state is already updated
-        }
-      }
-
-      if (urls.length > 0) {
+      if (result.targetCount > 0) {
         toast.success(
-          `Setup complete! Launched a run with ${urls.length} target${urls.length > 1 ? "s" : ""}.`,
+          `Setup complete! Queued a run with ${result.targetCount} target${result.targetCount > 1 ? "s" : ""}.`,
         );
       } else {
         toast.success("Setup complete! Add targets whenever you\u2019re ready.");
       }
 
       window.location.hash = "overview";
-    } catch {
-      toast.error("Something went wrong. Please try again.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to save setup.");
     } finally {
       setSaving(false);
     }
@@ -260,9 +146,17 @@ export function OnboardingView({ currentUser }: { currentUser: CurrentUser }) {
 
   const canAdvance =
     step.id === "business"
-      ? state.websiteUrl.length > 0
+      ? [
+          state.websiteUrl,
+          state.offerSummary,
+          state.servicesText,
+          state.differentiatorsText,
+          state.targetCustomer,
+          state.desiredOutcome,
+        ].every((value) => value.trim().length > 0)
       : step.id === "intent"
-        ? !!state.intent
+        ? [state.audience, state.objective, state.callToAction]
+          .every((value) => value.trim().length > 0)
         : true;
 
   return (
@@ -317,7 +211,7 @@ export function OnboardingView({ currentUser }: { currentUser: CurrentUser }) {
       {/* ───────── Step 1: Business ───────── */}
       {step.id === "business" && (
         <div className="space-y-6">
-          {/* Hero card — website input + auto-fill */}
+          {/* Seller website anchor. Automatic analysis is intentionally unavailable. */}
           <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/5 via-background to-background p-6">
             <div className="mb-4 flex items-center gap-3">
               <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10">
@@ -328,7 +222,7 @@ export function OnboardingView({ currentUser }: { currentUser: CurrentUser }) {
                   Start with your website
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  We&apos;ll analyze it and auto-fill everything below
+                  Automatic analysis is paused; enter the details below.
                 </p>
               </div>
             </div>
@@ -341,30 +235,20 @@ export function OnboardingView({ currentUser }: { currentUser: CurrentUser }) {
                   onChange={(e) => update("websiteUrl", e.target.value)}
                   placeholder="https://yourcompany.com"
                   className="h-11 pl-10 text-sm"
-                  onKeyDown={(e) => e.key === "Enter" && handleAutofill()}
                 />
               </div>
               <Button
-                onClick={handleAutofill}
-                disabled={crawling || !state.websiteUrl}
+                disabled
+                title="Automatic analysis requires a future durable worker job."
                 className="h-11 px-5"
               >
-                {crawling ? (
-                  <>
-                    <LoaderCircle className="size-4 animate-spin" />
-                    Analyzing…
-                  </>
-                ) : (
-                  <>
-                    <Zap className="size-4" />
-                    Auto-fill
-                  </>
-                )}
+                <Zap className="size-4" />
+                Manual entry
               </Button>
             </div>
           </div>
 
-          {/* Auto-filled fields */}
+          {/* Seller-entered fields */}
           <SectionCard
             title="Confirm your details"
             description="Edit anything that doesn\u2019t look right."
@@ -390,8 +274,32 @@ export function OnboardingView({ currentUser }: { currentUser: CurrentUser }) {
                 <Textarea
                   value={state.offerSummary}
                   onChange={(e) => update("offerSummary", e.target.value)}
-                  placeholder="We build high-converting landing pages for SaaS companies that want to 2-3x their demo requests."
+                  placeholder="We design and implement landing pages for B2B software teams."
                   className="min-h-[80px] resize-none"
+                />
+              </FieldGroup>
+              <FieldGroup label="Services" hint="One per line">
+                <Textarea
+                  value={state.servicesText}
+                  onChange={(e) => update("servicesText", e.target.value)}
+                  placeholder={"Landing-page strategy\nDesign and implementation"}
+                  className="min-h-[96px] resize-none"
+                />
+              </FieldGroup>
+              <FieldGroup label="Differentiators" hint="One per line">
+                <Textarea
+                  value={state.differentiatorsText}
+                  onChange={(e) => update("differentiatorsText", e.target.value)}
+                  placeholder={"Operator-led delivery\nEvidence-backed recommendations"}
+                  className="min-h-[96px] resize-none"
+                />
+              </FieldGroup>
+              <FieldGroup label="Desired customer outcome" className="sm:col-span-2">
+                <Textarea
+                  value={state.desiredOutcome}
+                  onChange={(e) => update("desiredOutcome", e.target.value)}
+                  placeholder="The concrete outcome your buyer should achieve."
+                  className="min-h-[72px] resize-none"
                 />
               </FieldGroup>
             </div>
@@ -450,6 +358,36 @@ export function OnboardingView({ currentUser }: { currentUser: CurrentUser }) {
               </div>
             </TooltipProvider>
           </SectionCard>
+
+          <SectionCard
+            title="Define the campaign"
+            description="These operator-supplied facts are required; Bestdecks will not invent them."
+          >
+            <div className="grid gap-5 sm:grid-cols-2">
+              <FieldGroup label="Audience">
+                <Input
+                  value={state.audience}
+                  onChange={(e) => update("audience", e.target.value)}
+                  placeholder="VP Sales at mid-market B2B SaaS companies"
+                />
+              </FieldGroup>
+              <FieldGroup label="Call to action">
+                <Input
+                  value={state.callToAction}
+                  onChange={(e) => update("callToAction", e.target.value)}
+                  placeholder="Review the evidence together in a 20-minute call"
+                />
+              </FieldGroup>
+              <FieldGroup label="Objective" className="sm:col-span-2">
+                <Textarea
+                  value={state.objective}
+                  onChange={(e) => update("objective", e.target.value)}
+                  placeholder="What this deck should help the recipient understand or decide."
+                  className="min-h-[72px] resize-none"
+                />
+              </FieldGroup>
+            </div>
+          </SectionCard>
         </div>
       )}
 
@@ -471,7 +409,7 @@ export function OnboardingView({ currentUser }: { currentUser: CurrentUser }) {
               <Textarea
                 value={state.websitesText}
                 onChange={(e) => update("websitesText", e.target.value)}
-                placeholder={`https://acmeplumbing.com\nhttps://northshoreclinic.com\nhttps://sunsetlogistics.io`}
+                placeholder={`https://target-one.example\nhttps://target-two.example\nhttps://target-three.example`}
                 className="min-h-[160px] resize-none font-mono text-xs leading-relaxed"
               />
             </FieldGroup>
@@ -486,10 +424,10 @@ export function OnboardingView({ currentUser }: { currentUser: CurrentUser }) {
             >
               <div>
                 <p className="text-sm font-medium text-foreground">
-                  Have a CSV with contacts?
+                  Have a CSV with target metadata?
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Optional — personalizes greetings and CTAs per person
+                  Optional — adds names, roles, goals, and notes. No recipient-email columns.
                 </p>
               </div>
               <ChevronDown
@@ -502,19 +440,18 @@ export function OnboardingView({ currentUser }: { currentUser: CurrentUser }) {
 
             {state.showCsv && (
               <div className="border-t border-border/40 px-5 py-4 space-y-3">
-                <FieldGroup label="Contacts CSV" hint="Optional">
+                <FieldGroup label="Target CSV" hint="Optional">
                   <Textarea
                     value={state.contactsCsvText}
                     onChange={(e) => update("contactsCsvText", e.target.value)}
-                    placeholder={`websiteUrl,firstName,lastName,role,email\nhttps://acmeplumbing.com,Sarah,Lee,Founder,sarah@acmeplumbing.com\nhttps://northshoreclinic.com,Marcus,Reed,Director,marcus@northshoreclinic.com`}
+                    placeholder={`websiteUrl,firstName,lastName,role,campaignGoal,notes\nhttps://target-one.example,Casey,Lee,Founder,Review operations,"Regional expansion, 2026"\nhttps://target-two.example,Morgan,Reed,Director,Assess workflow,New service line`}
                     className="min-h-[120px] resize-none font-mono text-xs leading-relaxed"
                   />
                 </FieldGroup>
                 <p className="text-xs text-muted-foreground">
                   Columns:{" "}
                   <code className="rounded bg-muted px-1 py-0.5 text-xs">
-                    websiteUrl, firstName, lastName, role, email, campaignGoal,
-                    notes
+                    {TARGET_CSV_COLUMNS.join(", ")}
                   </code>
                 </p>
               </div>

@@ -21,16 +21,16 @@ const baseIntake: IntakeRun = {
     audience: "Founder",
     objective: "Book a call",
     callToAction: "Book a call",
-    outputFormat: "bestdecks_editor",
+    outputFormat: "pptx",
     desiredCardCount: 8,
     tone: "consultative",
     visualStyle: "premium_modern",
-    imagePolicy: "auto",
+    imagePolicy: "never",
     visualContentTypes: [],
-    visualDensity: "moderate",
+    visualDensity: "minimal",
     mustInclude: [],
     mustAvoid: [],
-    optionalReview: true,
+    optionalReview: false,
     allowUserApprovedCrawlException: false,
   },
   targets: [
@@ -71,8 +71,8 @@ test("buildRunPlan all stages are marked required", () => {
 test("buildRunPlan preserves questionnaire and seller context", () => {
   const plan = buildRunPlan(baseIntake);
 
-  assert.equal(plan.deliveryFormat, "bestdecks_editor");
-  assert.equal(plan.reviewGateEnabled, true);
+  assert.equal(plan.deliveryFormat, "pptx");
+  assert.equal(plan.reviewGateEnabled, false);
   assert.equal(plan.questionnaire.archetype, "cold_outreach");
   assert.equal(plan.sellerContext.companyName, "Bestdecks");
 });
@@ -92,35 +92,25 @@ test("buildRunPlan adapts seller_discovery reason when no website", () => {
   assert.match(sellerStage.reason, /missing/i);
 });
 
-test("buildRunPlan includes correct image_strategy reason for never policy", () => {
-  const neverImages: IntakeRun = {
-    ...baseIntake,
-    questionnaire: {
-      ...baseIntake.questionnaire,
-      imagePolicy: "never",
-    },
-  };
-
-  const plan = buildRunPlan(neverImages);
-  const imageStage = plan.companyJobs[0]?.stages.find((s) => s.stage === "image_strategy");
-  assert.ok(imageStage);
-  assert.match(imageStage.reason, /disabled/i);
+test("buildRunPlan omits the unsupported image strategy stage", () => {
+  const plan = buildRunPlan(baseIntake);
+  assert.doesNotMatch(JSON.stringify(plan), /image_strategy/u);
 });
 
 test("buildRunPlan includes delivery format in delivery stage reason", () => {
   const plan = buildRunPlan(baseIntake);
   const deliveryStage = plan.companyJobs[0]?.stages.find((s) => s.stage === "delivery");
   assert.ok(deliveryStage);
-  assert.match(deliveryStage.reason, /bestdecks_editor/);
+  assert.match(deliveryStage.reason, /pptx/);
 });
 
 test("summarizePlan returns correct summary", () => {
   const plan = buildRunPlan(baseIntake);
   const summary = summarizePlan(plan);
 
-  assert.equal(summary.deliveryFormat, "bestdecks_editor");
+  assert.equal(summary.deliveryFormat, "pptx");
   assert.equal(summary.companyCount, 2);
-  assert.equal(summary.reviewGateEnabled, true);
+  assert.equal(summary.reviewGateEnabled, false);
   assert.equal(summary.sellerDiscoveryMode, "crawl");
 });
 

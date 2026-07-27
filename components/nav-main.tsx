@@ -18,12 +18,43 @@ import {
 import { cn } from "@/lib/utils";
 
 const STORAGE_KEY = "sidebar_collapsed_sections";
+const STORAGE_CHANGE_EVENT = "bestdecks:sidebar-sections-change";
+const EMPTY_COLLAPSED_SECTIONS = "{}";
 
-function getCollapsedSections(): Record<string, boolean> {
-  if (typeof window === "undefined") return {};
+function getCollapsedSectionsSnapshot(): string {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : {};
+    return localStorage.getItem(STORAGE_KEY) ?? EMPTY_COLLAPSED_SECTIONS;
+  } catch {
+    return EMPTY_COLLAPSED_SECTIONS;
+  }
+}
+
+function getServerCollapsedSectionsSnapshot(): string {
+  return EMPTY_COLLAPSED_SECTIONS;
+}
+
+function subscribeToCollapsedSections(onStoreChange: () => void) {
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === STORAGE_KEY) onStoreChange();
+  };
+
+  window.addEventListener("storage", onStorage);
+  window.addEventListener(STORAGE_CHANGE_EVENT, onStoreChange);
+  return () => {
+    window.removeEventListener("storage", onStorage);
+    window.removeEventListener(STORAGE_CHANGE_EVENT, onStoreChange);
+  };
+}
+
+function parseCollapsedSections(snapshot: string): Record<string, boolean> {
+  try {
+    const parsed: unknown = JSON.parse(snapshot);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return Object.fromEntries(
+      Object.entries(parsed).filter((entry): entry is [string, boolean] =>
+        typeof entry[1] === "boolean",
+      ),
+    );
   } catch {
     return {};
   }
@@ -32,6 +63,7 @@ function getCollapsedSections(): Record<string, boolean> {
 function setCollapsedSections(sections: Record<string, boolean>) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(sections));
+    window.dispatchEvent(new Event(STORAGE_CHANGE_EVENT));
   } catch {
     // Non-blocking
   }
@@ -41,7 +73,15 @@ export function NavMain({ items }: { items: readonly NavGroup[] }) {
   const [activeHash, setActiveHash] = React.useState(
     `#${DEFAULT_WORKSPACE_VIEW}`,
   );
-  const [collapsed, setCollapsed] = React.useState<Record<string, boolean>>({});
+  const collapsedSnapshot = React.useSyncExternalStore(
+    subscribeToCollapsedSections,
+    getCollapsedSectionsSnapshot,
+    getServerCollapsedSectionsSnapshot,
+  );
+  const collapsed = React.useMemo(
+    () => parseCollapsedSections(collapsedSnapshot),
+    [collapsedSnapshot],
+  );
 
   React.useEffect(() => {
     const syncHash = () => {
@@ -54,17 +94,8 @@ export function NavMain({ items }: { items: readonly NavGroup[] }) {
     return () => window.removeEventListener("hashchange", syncHash);
   }, []);
 
-  // Load collapsed state from localStorage on mount
-  React.useEffect(() => {
-    setCollapsed(getCollapsedSections());
-  }, []);
-
   function toggleSection(id: string) {
-    setCollapsed((prev) => {
-      const next = { ...prev, [id]: !prev[id] };
-      setCollapsedSections(next);
-      return next;
-    });
+    setCollapsedSections({ ...collapsed, [id]: !collapsed[id] });
   }
 
   return (

@@ -7,7 +7,9 @@ import {
   saveSellerKnowledge,
   getSellerKnowledge,
 } from "@/src/server/repository";
+import { sellerContextDraftSchema } from "@/src/domain/onboarding";
 import { sellerKnowledgeSchema } from "@/src/domain/schemas";
+import { readBoundedJson, RequestBodyTooLargeError } from "@/src/server/request-body";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +47,7 @@ export async function POST(request: Request) {
   const userId = session.user.id;
 
   try {
-    const body = await request.json();
+    const body = await readBoundedJson(request) as Record<string, unknown>;
 
     const isRichPayload = body.caseStudies !== undefined ||
       body.commonObjections !== undefined ||
@@ -54,13 +56,15 @@ export async function POST(request: Request) {
 
     if (isRichPayload) {
       const parsed = sellerKnowledgeSchema.safeParse(body);
-      if (parsed.success) {
-        await saveSellerKnowledge(parsed.data, userId);
-      } else {
-        await saveSellerKnowledge(body, userId);
+      if (!parsed.success) {
+        return NextResponse.json(
+          { error: "Seller context is invalid." },
+          { status: 400 },
+        );
       }
+      await saveSellerKnowledge(parsed.data, userId);
     } else {
-      const sellerContext = {
+      const parsed = sellerContextDraftSchema.safeParse({
         websiteUrl: body.websiteUrl ?? "",
         companyName: body.companyName ?? "",
         offerSummary: body.offerSummary ?? "",
@@ -82,21 +86,27 @@ export async function POST(request: Request) {
           typeof body.constraintsText === "string"
             ? body.constraintsText.split("\n").map((s: string) => s.trim()).filter(Boolean)
             : body.constraints ?? [],
-      };
+      });
+      if (!parsed.success) {
+        return NextResponse.json({ error: "Seller context is invalid." }, { status: 400 });
+      }
 
       await saveOnboarding({
         profile: {
-          companyName: body.companyName,
-          websiteUrl: body.websiteUrl,
+          companyName: typeof body.companyName === "string" ? body.companyName : undefined,
+          websiteUrl: typeof body.websiteUrl === "string" ? body.websiteUrl : undefined,
         },
-        sellerContext,
+        sellerContext: parsed.data,
       }, userId);
     }
 
     return NextResponse.json({ ok: true });
   } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return NextResponse.json({ error: "Request body is too large." }, { status: 413 });
+    }
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unable to save seller context." },
+      { error: "Unable to save seller context." },
       { status: 400 },
     );
   }

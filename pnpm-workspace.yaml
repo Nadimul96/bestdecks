@@ -9,8 +9,12 @@ minimumReleaseAgeExclude:
   - postcss@8.5.19
   - tsx@4.23.1
 overrides:
+  # ESLint's retained minimatch 3.x dependency permits an affected brace-expansion
+  # range. Use the patched implementation until its upstream graph is updated.
+  brace-expansion: 5.0.8
   defu: 6.1.7
   esbuild: 0.28.1
+  minimatch: 10.2.5
   postcss: 8.5.19
   # Next.js 16.2.x still declares a pre-fix sharp range. Pin the patched
   # release until the upstream dependency range catches up.

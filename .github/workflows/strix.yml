@@ -1,0 +1,47 @@
+name: Strix security assessment
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_budget_usd:
+        description: Maximum LLM spend for this explicitly requested assessment.
+        required: true
+        default: "20"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  assess:
+    name: Source-aware security assessment
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      STRIX_LLM: ${{ secrets.STRIX_LLM }}
+      LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+    steps:
+      # actions/checkout v6.0.2, pinned to the immutable release commit.
+      - name: Check out the repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require explicitly configured Strix credentials
+        shell: bash
+        run: |
+          if [[ -z "${STRIX_LLM}" || -z "${LLM_API_KEY}" ]]; then
+            echo "::error::Configure repository secrets STRIX_LLM and LLM_API_KEY before dispatching this assessment."
+            exit 1
+          fi
+
+      - name: Install Strix
+        shell: bash
+        run: curl -sSfL https://strix.ai/install | bash
+
+      - name: Assess the full source tree
+        shell: bash
+        run: |
+          "${HOME}/.strix/bin/strix" -n --target . -m standard --scope-mode full \
+            --max-budget-usd "${{ inputs.max_budget_usd }}"

@@ -1,0 +1,86 @@
+{
+  "title": "Synthetic evidence-ledger example",
+  "slides": [
+    {
+      "slideNumber": 1,
+      "purpose": "hook",
+      "headline": "Example Domain is reserved for documentation examples.",
+      "headlineClaimId": "claim:slide-01-headline",
+      "bulletPoints": [],
+      "bulletClaimIds": [],
+      "speakerNotes": "Sample data. This factual headline maps to the retained example.com source.",
+      "suggestImage": false
+    },
+    {
+      "slideNumber": 2,
+      "purpose": "solution",
+      "headline": "Seller provides evidence-backed proposal decks.",
+      "headlineClaimId": "claim:slide-02-headline",
+      "bulletPoints": [],
+      "bulletClaimIds": [],
+      "speakerNotes": "Sample data. This is explicitly seller-supplied, not independently verified.",
+      "suggestImage": false
+    },
+    {
+      "slideNumber": 3,
+      "purpose": "recommendation",
+      "headline": "[Inference] A source-linked proposal may help the buyer evaluate fit.",
+      "headlineClaimId": "claim:slide-03-headline",
+      "bulletPoints": [],
+      "bulletClaimIds": [],
+      "speakerNotes": "Sample data. This interpretation is visibly labeled as a model inference.",
+      "suggestImage": false
+    },
+    {
+      "slideNumber": 4,
+      "purpose": "path_forward",
+      "headline": "Book a discovery call.",
+      "headlineClaimId": "claim:slide-04-headline",
+      "bulletPoints": [],
+      "bulletClaimIds": [],
+      "speakerNotes": "Sample data. This call to action is seller-supplied.",
+      "suggestImage": false
+    }
+  ],
+  "evidence": {
+    "sources": [
+      {
+        "id": "source:example-domain",
+        "url": "https://example.com/",
+        "title": "Example Domain",
+        "retrievedAt": "2026-07-13T00:00:00.000Z",
+        "provider": "fixture"
+      }
+    ],
+    "claims": [
+      {
+        "id": "claim:slide-01-headline",
+        "text": "Example Domain is reserved for documentation examples.",
+        "claimClass": "external_fact",
+        "supportStatus": "source_backed",
+        "citedSourceIds": ["source:example-domain"]
+      },
+      {
+        "id": "claim:slide-02-headline",
+        "text": "Seller provides evidence-backed proposal decks.",
+        "claimClass": "seller_claim",
+        "supportStatus": "seller_supplied",
+        "citedSourceIds": []
+      },
+      {
+        "id": "claim:slide-03-headline",
+        "text": "[Inference] A source-linked proposal may help the buyer evaluate fit.",
+        "claimClass": "model_inference",
+        "supportStatus": "model_inference",
+        "citedSourceIds": ["source:example-domain"]
+      },
+      {
+        "id": "claim:slide-04-headline",
+        "text": "Book a discovery call.",
+        "claimClass": "seller_claim",
+        "supportStatus": "seller_supplied",
+        "citedSourceIds": []
+      }
+    ]
+  }
+}

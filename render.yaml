@@ -1,0 +1,5 @@
+# Hosted deployment is intentionally disabled in the public core.
+# The previous blueprint exposed a credentialed renderer as a public web service and did not run a
+# durable worker. Use the self-hosted Docker profile after its image digests are configured, or the
+# separately reviewed private bestdecks-cloud deployment.
+services: []

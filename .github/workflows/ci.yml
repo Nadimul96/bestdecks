@@ -1,0 +1,136 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secret-scan:
+    name: Repository and history secret scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      # actions/checkout v6.0.2, pinned to the immutable release commit.
+      - name: Check out the complete repository history
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+          # The runner starts empty. Keep checkout from issuing git clean/reset anyway.
+          clean: false
+
+      # actions/setup-node v6.4.0, pinned to the immutable release commit.
+      - name: Use the repository's Node 24 release
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Verify the scanner's decision rules
+        run: node scripts/check-secrets.mjs --self-test
+
+      - name: Scan the worktree and every reachable Git blob
+        run: node scripts/check-secrets.mjs --worktree --history
+
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      # actions/checkout v6.0.2, pinned to the immutable release commit.
+      - name: Check out the repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          clean: false
+
+      # actions/dependency-review-action v5.0.0, pinned to the immutable release commit.
+      - name: Reject newly introduced vulnerable dependencies
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294
+        with:
+          fail-on-severity: moderate
+
+  quality:
+    name: Lint, typecheck, unit tests, and build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      ALLOW_PRIVATE_PROVIDER_URLS: "0"
+      ALLOW_USER_PROVIDER_ENDPOINTS: "0"
+      APP_SECRETS_KEY: ci-only-encryption-placeholder-different-from-auth-0000
+      BETTER_AUTH_SECRET: ci-only-placeholder-not-a-real-secret-000000000000
+      BETTER_AUTH_URL: https://build.invalid
+      CI: "true"
+      LOCAL_DB_PATH: /tmp/bestdecks-ci.sqlite
+      NEXT_TELEMETRY_DISABLED: "1"
+      SEED_ADMIN_ON_STARTUP: "0"
+    steps:
+      # actions/checkout v6.0.2, pinned to the immutable release commit.
+      - name: Check out the repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          # The runner starts empty. Keep checkout from issuing git clean/reset anyway.
+          clean: false
+
+      # actions/setup-node v6.4.0, pinned to the immutable release commit.
+      - name: Use the repository's Node 24 release
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Activate pnpm 11.7.0
+        shell: bash
+        run: |
+          corepack enable pnpm
+          corepack install --global pnpm@11.7.0
+          actual_version="$(pnpm --version)"
+          if [[ "${actual_version}" != "11.7.0" ]]; then
+            echo "::error::Expected pnpm 11.7.0; received ${actual_version}."
+            exit 1
+          fi
+
+      - name: Install the locked dependency graph
+        run: pnpm install --frozen-lockfile
+
+      - name: Require an explicit lint contract
+        shell: bash
+        run: |
+          node --input-type=module -e '
+            import { readFileSync } from "node:fs";
+            const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+            if (typeof pkg.scripts?.lint !== "string" || pkg.scripts.lint.trim() === "") {
+              console.error("::error::package.json must define a non-empty lint script.");
+              process.exit(1);
+            }
+          '
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Run unit tests
+        run: pnpm test:unit
+
+      - name: Build the production application
+        run: pnpm build
+
+      - name: Verify the standalone runtime boundary
+        run: pnpm verify:standalone

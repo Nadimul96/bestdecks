@@ -1,0 +1,1090 @@
+"use client";
+
+import * as React from "react";
+import { ArrowRight, Building2, Check, Eye, Flame, Info, LoaderCircle, Palette, Save, Settings2, Sparkles, Target, User, Users } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { ViewLayout, SectionCard, FieldGroup } from "../view-layout";
+import { ArchetypePreviewModal, archetypeExamples } from "@/components/archetype-preview-modal";
+import {
+  viewMeta,
+  defaultQuestionnaire,
+  archetypeOptions,
+  outputFormatOptions,
+  toneOptions,
+  visualStyleOptions,
+  imagePolicyOptions,
+  type QuestionnaireForm,
+} from "@/lib/workspace-types";
+import { cn } from "@/lib/utils";
+
+const meta = viewMeta["run-settings"];
+
+/* ─── Sub-tab types ─── */
+type SettingsTab = "strategy" | "design" | "advanced";
+
+const settingsTabs: Array<{ key: SettingsTab; label: string; icon: React.ElementType }> = [
+  { key: "strategy", label: "Strategy", icon: Target },
+  { key: "design", label: "Design", icon: Palette },
+  { key: "advanced", label: "Advanced", icon: Settings2 },
+];
+
+/* ─── Sliding pill tab bar (Dribbble-inspired micro-interaction) ─── */
+function SlidingTabs<T extends string>({
+  tabs,
+  activeTab,
+  onTabChange,
+}: {
+  tabs: Array<{ key: T; label: string; icon?: React.ElementType }>;
+  activeTab: T;
+  onTabChange: (key: T) => void;
+}) {
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const [pillStyle, setPillStyle] = React.useState<React.CSSProperties>({});
+
+  // Measure on mount + when active tab changes
+  const measure = React.useCallback(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const activeEl = container.querySelector<HTMLButtonElement>(`[data-tab="${activeTab}"]`);
+    if (!activeEl) return;
+    const containerRect = container.getBoundingClientRect();
+    const activeRect = activeEl.getBoundingClientRect();
+    setPillStyle({
+      width: activeRect.width,
+      transform: `translateX(${activeRect.left - containerRect.left - 6}px)`,
+    });
+  }, [activeTab]);
+
+  React.useEffect(() => {
+    measure();
+    // Re-measure after fonts load (can shift widths)
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [measure]);
+
+  return (
+    <div
+      ref={containerRef}
+      className="relative flex items-center rounded-2xl bg-muted/50 p-1.5"
+    >
+      {/* Sliding pill indicator */}
+      <div
+        className="absolute top-1.5 bottom-1.5 rounded-xl bg-background shadow-md ring-1 ring-black/[0.04] transition-all duration-[400ms]"
+        style={{
+          ...pillStyle,
+          transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
+        }}
+      />
+      {tabs.map((tab) => {
+        const Icon = tab.icon;
+        return (
+          <button
+            key={tab.key}
+            data-tab={tab.key}
+            type="button"
+            onClick={() => onTabChange(tab.key)}
+            className={cn(
+              "relative z-10 flex-1 flex items-center justify-center gap-2 rounded-xl px-6 py-2.5 text-sm font-medium transition-colors duration-200",
+              activeTab === tab.key
+                ? "text-foreground"
+                : "text-muted-foreground/60 hover:text-muted-foreground",
+            )}
+          >
+            {Icon && <Icon className="size-3.5" />}
+            {tab.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ─── Archetype accent colors for ChromaGrid-inspired cards ─── */
+const archetypeAccents: Record<string, { gradient: string; restGradient: string; border: string; restBorder: string; glow: string; restGlow: string }> = {
+  cold_outreach:            { gradient: "from-blue-600/20 to-transparent",    restGradient: "from-blue-500/[0.06] to-transparent",    border: "hover:border-blue-500/40",    restBorder: "border-blue-400/20",    glow: "group-hover:shadow-blue-500/10",    restGlow: "shadow-blue-500/[0.04]" },
+  warm_intro:               { gradient: "from-amber-500/20 to-transparent",   restGradient: "from-amber-400/[0.06] to-transparent",   border: "hover:border-amber-500/40",   restBorder: "border-amber-400/20",   glow: "group-hover:shadow-amber-500/10",   restGlow: "shadow-amber-500/[0.04]" },
+  agency_proposal:          { gradient: "from-violet-600/20 to-transparent",  restGradient: "from-violet-500/[0.06] to-transparent",  border: "hover:border-violet-500/40",  restBorder: "border-violet-400/20",  glow: "group-hover:shadow-violet-500/10",  restGlow: "shadow-violet-500/[0.04]" },
+  investor_pitch:           { gradient: "from-emerald-600/20 to-transparent", restGradient: "from-emerald-500/[0.06] to-transparent", border: "hover:border-emerald-500/40", restBorder: "border-emerald-400/20", glow: "group-hover:shadow-emerald-500/10", restGlow: "shadow-emerald-500/[0.04]" },
+  case_study:               { gradient: "from-cyan-600/20 to-transparent",    restGradient: "from-cyan-500/[0.06] to-transparent",    border: "hover:border-cyan-500/40",    restBorder: "border-cyan-400/20",    glow: "group-hover:shadow-cyan-500/10",    restGlow: "shadow-cyan-500/[0.04]" },
+  competitive_displacement: { gradient: "from-rose-600/20 to-transparent",    restGradient: "from-rose-500/[0.06] to-transparent",    border: "hover:border-rose-500/40",    restBorder: "border-rose-400/20",    glow: "group-hover:shadow-rose-500/10",    restGlow: "shadow-rose-500/[0.04]" },
+  thought_leadership:       { gradient: "from-indigo-600/20 to-transparent",  restGradient: "from-indigo-500/[0.06] to-transparent",  border: "hover:border-indigo-500/40",  restBorder: "border-indigo-400/20",  glow: "group-hover:shadow-indigo-500/10",  restGlow: "shadow-indigo-500/[0.04]" },
+  product_launch:           { gradient: "from-orange-500/20 to-transparent",  restGradient: "from-orange-400/[0.06] to-transparent",  border: "hover:border-orange-500/40",  restBorder: "border-orange-400/20",  glow: "group-hover:shadow-orange-500/10",  restGlow: "shadow-orange-500/[0.04]" },
+  custom:                   { gradient: "from-fuchsia-600/20 to-transparent", restGradient: "from-fuchsia-500/[0.06] to-transparent", border: "hover:border-fuchsia-500/40", restBorder: "border-fuchsia-400/20", glow: "group-hover:shadow-fuchsia-500/10", restGlow: "shadow-fuchsia-500/[0.04]" },
+};
+
+/* ─── Visual style color swatches ─── */
+const styleSwatches: Record<string, string> = {
+  auto: "bg-gradient-to-r from-violet-400 via-blue-400 to-emerald-400",
+  minimal: "bg-gray-200 dark:bg-gray-600",
+  editorial: "bg-stone-700 dark:bg-stone-300",
+  sales_polished: "bg-blue-600 dark:bg-blue-400",
+  premium_modern: "bg-indigo-900 dark:bg-indigo-300",
+  playful: "bg-gradient-to-r from-rose-400 via-amber-400 to-cyan-400",
+  dark_executive: "bg-slate-900 dark:bg-slate-200",
+  dark_minimal: "bg-neutral-900 dark:bg-neutral-200",
+  custom: "bg-gradient-to-br from-muted-foreground/20 to-muted-foreground/40",
+  mixed: "bg-gradient-to-r from-rose-500 via-violet-500 to-cyan-500",
+};
+
+/* ─── Reusable option grid ─── */
+function OptionGrid<T extends string>({
+  options,
+  value,
+  onChange,
+  columns = 3,
+  disabledValues = [],
+}: {
+  options: Array<{ value: T; label: string; description?: string; badge?: string }>;
+  value: T;
+  onChange: (v: T) => void;
+  columns?: number;
+  disabledValues?: T[];
+}) {
+  return (
+    <div
+      className={cn("grid gap-3", {
+        "sm:grid-cols-2": columns === 2,
+        "sm:grid-cols-3": columns === 3,
+        "sm:grid-cols-5": columns === 5,
+      })}
+    >
+      {options.map((opt) => {
+        const isDisabled = disabledValues.includes(opt.value);
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => !isDisabled && onChange(opt.value)}
+            disabled={isDisabled}
+            className={cn(
+              "rounded-xl border p-4 text-left transition-all relative focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2",
+              isDisabled
+                ? "border-border/30 bg-muted/30 opacity-60 cursor-not-allowed"
+                : value === opt.value
+                  ? "border-primary bg-primary/5 ring-1 ring-primary/20"
+                  : "border-border/50 bg-card hover:border-border hover:shadow-sm",
+            )}
+          >
+            {opt.badge && (
+              <span className={cn(
+                "absolute right-2.5 top-2.5 rounded-full px-2 py-0.5 text-[10px] font-medium",
+                opt.badge === "Coming soon"
+                  ? "bg-muted text-muted-foreground"
+                  : "bg-primary/10 text-primary",
+              )}>
+                {opt.badge}
+              </span>
+            )}
+            <p className="text-[13px] font-medium text-foreground">{opt.label}</p>
+            {opt.description && (
+              <p className="mt-0.5 text-[12px] text-muted-foreground pr-16">
+                {opt.description}
+              </p>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ─── Chip grid with descriptions and custom input ─── */
+function ChipGridWithCustom<T extends string>({
+  options,
+  value,
+  onChange,
+  customValue,
+  onCustomChange,
+  customPlaceholder,
+}: {
+  options: Array<{ value: T; label: string; description?: string }>;
+  value: T;
+  onChange: (v: T) => void;
+  customValue?: string;
+  onCustomChange?: (v: string) => void;
+  customPlaceholder?: string;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-2">
+        {options.map((opt) => (
+          <Tooltip key={opt.value}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => onChange(opt.value)}
+                className={cn(
+                  "rounded-full border px-3.5 py-1.5 text-[12px] font-medium transition-all focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2",
+                  value === opt.value
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border/50 bg-card text-muted-foreground hover:border-border hover:text-foreground",
+                )}
+              >
+                {opt.label}
+              </button>
+            </TooltipTrigger>
+            {opt.description && (
+              <TooltipContent side="top" className="max-w-[220px] text-xs">
+                {opt.description}
+              </TooltipContent>
+            )}
+          </Tooltip>
+        ))}
+      </div>
+      {value === ("custom" as T) && onCustomChange && (
+        <Input
+          value={customValue ?? ""}
+          onChange={(e) => onCustomChange(e.target.value.slice(0, 500))}
+          maxLength={500}
+          placeholder={customPlaceholder ?? "Describe your preference..."}
+          className="h-9 animate-fade-in text-sm"
+        />
+      )}
+    </div>
+  );
+}
+
+export function RunSettingsView() {
+  const [form, setForm] = React.useState<QuestionnaireForm>(() => ({
+    ...defaultQuestionnaire(),
+    optionalReview: false,
+    allowUserApprovedCrawlException: false,
+  }));
+  const [loading, setLoading] = React.useState(true);
+  const [saving, setSaving] = React.useState(false);
+  const [autofilling, setAutofilling] = React.useState(false);
+  const [hasSellerContext, setHasSellerContext] = React.useState(false);
+  const [activeTab, setActiveTab] = React.useState<SettingsTab>("strategy");
+  const [previewArchetype, setPreviewArchetype] = React.useState<string | null>(null);
+
+  /* Load saved questionnaire on mount */
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/onboarding/questionnaire");
+        if (res.ok) {
+          const data = await res.json();
+          if (data && (data.audience || data.objective || data.archetype)) {
+            setForm((prev) => ({
+              ...prev,
+              archetype: data.archetype ?? prev.archetype,
+              customArchetypePrompt: data.customArchetypePrompt ?? prev.customArchetypePrompt,
+              audience: data.audience ?? prev.audience,
+              audienceSize: data.audienceSize ?? prev.audienceSize,
+              audienceIndustry: data.audienceIndustry ?? prev.audienceIndustry,
+              audiencePainPoints: data.audiencePainPoints ?? prev.audiencePainPoints,
+              objective: data.objective ?? prev.objective,
+              successMetric: data.successMetric ?? prev.successMetric,
+              callToAction: data.callToAction ?? prev.callToAction,
+              ctaUrgency: data.ctaUrgency ?? prev.ctaUrgency,
+              outputFormat: "pptx",
+              desiredCardCount:
+                data.desiredCardCount?.toString() ?? prev.desiredCardCount,
+              tone: data.tone ?? prev.tone,
+              customTone: (data.tone ?? prev.tone) === "custom"
+                ? data.customTone ?? prev.customTone
+                : "",
+              visualStyle: data.visualStyle ?? prev.visualStyle,
+              customVisualStyle: (data.visualStyle ?? prev.visualStyle) === "custom"
+                ? data.customVisualStyle ?? prev.customVisualStyle
+                : "",
+              imagePolicy: "never",
+              visualContentTypes: [],
+              visualDensity: "rich",
+              mustIncludeText: Array.isArray(data.mustInclude)
+                ? data.mustInclude.join("\n")
+                : data.mustIncludeText ?? prev.mustIncludeText,
+              mustAvoidText: Array.isArray(data.mustAvoid)
+                ? data.mustAvoid.join("\n")
+                : data.mustAvoidText ?? prev.mustAvoidText,
+              extraInstructions:
+                data.extraInstructions ?? prev.extraInstructions,
+              // These controls are not implemented by the durable worker. Do
+              // not let stale persisted values advertise or reactivate them.
+              optionalReview: false,
+              allowUserApprovedCrawlException: false,
+            }));
+          }
+        }
+      } catch {
+        // Non-blocking — start from defaults
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  /* Check if seller context exists (for autofill button visibility) */
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/onboarding/seller-context");
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.targetCustomer || data?.desiredOutcome || data?.companyName) {
+            setHasSellerContext(true);
+          }
+        }
+      } catch {
+        // ignore
+      }
+    })();
+  }, []);
+
+  function update<K extends keyof QuestionnaireForm>(
+    field: K,
+    value: QuestionnaireForm[K],
+  ) {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  async function handleAutofill() {
+    setAutofilling(true);
+    try {
+      const [sellerRes, audienceRes] = await Promise.all([
+        fetch("/api/onboarding/seller-context"),
+        fetch("/api/onboarding/audience-context"),
+      ]);
+
+      const seller = sellerRes.ok ? await sellerRes.json() : null;
+      const audience = audienceRes.ok ? await audienceRes.json() : null;
+      let filled = false;
+
+      if (seller?.targetCustomer && !form.audience) {
+        update("audience", seller.targetCustomer);
+        filled = true;
+      }
+      if (seller?.desiredOutcome && !form.objective) {
+        update("objective", seller.desiredOutcome);
+        filled = true;
+      }
+      if (seller?.desiredOutcome && !form.callToAction) {
+        update("callToAction", "Book a 20-minute call to discuss how we can help");
+        filled = true;
+      }
+
+      if (audience?.audienceIndustry && !form.audienceIndustry) {
+        update("audienceIndustry", audience.audienceIndustry);
+        filled = true;
+      }
+      if (audience?.audienceSize && !form.audienceSize) {
+        update("audienceSize", audience.audienceSize);
+        filled = true;
+      }
+      if (audience?.audiencePainPoints && !form.audiencePainPoints) {
+        update("audiencePainPoints", audience.audiencePainPoints);
+        filled = true;
+      }
+
+      if (audience?.mustInclude?.length && !form.mustIncludeText) {
+        update("mustIncludeText", audience.mustInclude.join("\n"));
+        filled = true;
+      }
+      if (audience?.mustAvoid?.length && !form.mustAvoidText) {
+        update("mustAvoidText", audience.mustAvoid.join("\n"));
+        filled = true;
+      }
+
+      if (filled) {
+        toast.success("Fields auto-filled from your business context.");
+      } else if (seller || audience) {
+        toast.info(
+          "Fields already have values. Clear them first to auto-fill.",
+        );
+      } else {
+        toast.error("No business context found. Complete the seller context step first.");
+      }
+    } catch {
+      toast.error("Could not load business context.");
+    } finally {
+      setAutofilling(false);
+    }
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      if (form.tone === "custom" && !form.customTone.trim()) {
+        toast.error("Describe the custom tone before saving.");
+        return;
+      }
+      if (form.visualStyle === "custom" && !form.customVisualStyle.trim()) {
+        toast.error("Describe the custom visual direction before saving.");
+        return;
+      }
+      // Transform text fields to arrays for the API
+      const payload = {
+        ...form,
+        optionalReview: false,
+        allowUserApprovedCrawlException: false,
+        imagePolicy: "never" as const,
+        visualContentTypes: [],
+        visualDensity: "rich" as const,
+        mustInclude: form.mustIncludeText
+          ? form.mustIncludeText.split("\n").map((s: string) => s.trim()).filter(Boolean)
+          : [],
+        mustAvoid: form.mustAvoidText
+          ? form.mustAvoidText.split("\n").map((s: string) => s.trim()).filter(Boolean)
+          : [],
+      };
+      const res = await fetch("/api/onboarding/questionnaire", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        toast.success("Deck style saved.");
+      } else {
+        toast.error("Failed to save settings. Please try again.");
+      }
+    } catch {
+      toast.error("Network error. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSaveAndContinue() {
+    await handleSave();
+    // Progress through tabs: strategy → design → advanced → target-intake
+    if (activeTab === "strategy") {
+      setActiveTab("design");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } else if (activeTab === "design") {
+      setActiveTab("advanced");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      window.location.hash = "target-intake";
+    }
+  }
+
+  if (loading) {
+    return (
+      <ViewLayout eyebrow={meta.eyebrow} title={meta.title} description={meta.description}>
+        {/* Sub-tab skeleton */}
+        <div className="flex items-center gap-1 rounded-lg border border-border/40 bg-muted/30 p-1">
+          {settingsTabs.map((t) => (
+            <Skeleton key={t.key} className="h-9 flex-1 rounded-md" />
+          ))}
+        </div>
+        {/* Archetype grid skeleton */}
+        <div className="rounded-xl border border-border/50 bg-card">
+          <div className="border-b border-border/40 px-5 py-4 sm:px-6">
+            <Skeleton className="h-4 w-32" />
+          </div>
+          <div className="grid gap-3 p-5 sm:grid-cols-2 lg:grid-cols-4 sm:p-6">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <Skeleton key={i} className="h-24 rounded-xl" />
+            ))}
+          </div>
+        </div>
+        {/* Form fields skeleton */}
+        <div className="rounded-xl border border-border/50 bg-card">
+          <div className="border-b border-border/40 px-5 py-4 sm:px-6">
+            <Skeleton className="h-4 w-40" />
+          </div>
+          <div className="space-y-5 p-5 sm:p-6">
+            <div className="grid gap-5 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Skeleton className="h-3 w-24" />
+                <Skeleton className="h-10 w-full rounded-md" />
+              </div>
+              <div className="space-y-2">
+                <Skeleton className="h-3 w-28" />
+                <Skeleton className="h-10 w-full rounded-md" />
+              </div>
+            </div>
+            <div className="grid gap-5 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="h-10 w-full rounded-md" />
+              </div>
+              <div className="space-y-2">
+                <Skeleton className="h-3 w-32" />
+                <Skeleton className="h-10 w-full rounded-md" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </ViewLayout>
+    );
+  }
+
+  return (
+    <TooltipProvider delayDuration={200}>
+      <ViewLayout
+        eyebrow={meta.eyebrow}
+        title={meta.title}
+        description={meta.description}
+        actions={
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? (
+              <>
+                <LoaderCircle className="size-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="size-4" />
+                Save settings
+              </>
+            )}
+          </Button>
+        }
+      >
+        {/* ─── Sliding pill tab bar ─── */}
+        <SlidingTabs
+          tabs={settingsTabs}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+        />
+
+        {/* ═══════════════════════════════════════════
+            STRATEGY TAB
+            ═══════════════════════════════════════════ */}
+        {activeTab === "strategy" && (
+          <>
+            {/* Archetype — ChromaGrid-inspired */}
+            <SectionCard title="Deck archetype" description="Choose the primary framing for your outreach decks. You can customize design, typography, and themes in the next step.">
+              <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+                {archetypeOptions.map((opt) => {
+                  const isSelected = form.archetype === opt.value;
+                  const accent = archetypeAccents[opt.value] ?? archetypeAccents.cold_outreach;
+                  const previewExample = archetypeExamples[opt.value];
+                  return (
+                    <div
+                      key={opt.value}
+                      role="button"
+                      tabIndex={0}
+                      aria-pressed={isSelected}
+                      onClick={() => update("archetype", opt.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          update("archetype", opt.value);
+                        }
+                      }}
+                      className={cn(
+                        "group relative overflow-hidden rounded-2xl border p-4 text-left transition-all duration-300 focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2",
+                        isSelected
+                          ? "border-primary/50 bg-primary/[0.04] ring-1 ring-primary/20 shadow-lg"
+                          : cn("bg-card/80", accent.restBorder, accent.border, accent.restGlow),
+                        !isSelected && accent.glow,
+                        !isSelected && "hover:shadow-md",
+                      )}
+                    >
+                      {/* Gradient accent overlay — visible at rest, amplified on hover */}
+                      <div className={cn(
+                        "pointer-events-none absolute inset-0 bg-gradient-to-br transition-opacity duration-500",
+                        isSelected ? "opacity-0" : "opacity-100 group-hover:opacity-100",
+                        isSelected ? accent.gradient : accent.restGradient,
+                      )} />
+                      <div className={cn(
+                        "pointer-events-none absolute inset-0 bg-gradient-to-br opacity-0 transition-opacity duration-500 group-hover:opacity-100",
+                        accent.gradient,
+                      )} />
+
+                      {/* Content */}
+                      <div className="relative z-10 flex items-start gap-3">
+                        <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted/60 text-base transition-transform duration-300 group-hover:scale-110">
+                          {opt.emoji}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[13px] font-semibold text-foreground pr-6">
+                            {opt.label}
+                          </p>
+                          <p className="mt-0.5 min-h-[2.9rem] text-[11.5px] leading-relaxed text-muted-foreground">
+                            {opt.description}
+                          </p>
+
+                          {previewExample && (
+                            <div className="mt-3 flex flex-wrap items-center gap-2.5">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="rounded-full border border-border/40 bg-muted/30 px-2 py-1 text-[10px] font-medium text-muted-foreground">
+                                  {previewExample.slides.length} slides
+                                </span>
+                              </div>
+                              <div className="h-4 w-px bg-border/50" />
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setPreviewArchetype(opt.value);
+                                  }}
+                                  className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/[0.08] px-3 py-1.5 text-[11px] font-semibold text-primary transition-all hover:-translate-y-0.5 hover:border-primary/35 hover:bg-primary/[0.12]"
+                                >
+                                  <Eye className="size-3" />
+                                  Quick preview
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Selected check */}
+                      {isSelected && (
+                        <span className="absolute right-3 top-3 flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
+                          <Check className="size-3" strokeWidth={2.5} />
+                        </span>
+                      )}
+                      {!isSelected && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span
+                              className="absolute right-3 top-3 shrink-0 rounded-full p-0.5 text-muted-foreground/30 transition-colors group-hover:text-muted-foreground/60"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Info className="size-3.5" />
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent
+                            side="top"
+                            className="max-w-[280px] text-xs leading-relaxed"
+                          >
+                            {opt.detail}
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {form.archetype === "custom" && (
+                <Textarea
+                  value={form.customArchetypePrompt}
+                  onChange={(e) => update("customArchetypePrompt", e.target.value.slice(0, 2000))}
+                  maxLength={2000}
+                  placeholder="e.g., Lead with a case study, then show 3 ROI scenarios tailored to their industry. End with a competitive comparison..."
+                  className="mt-4 min-h-[80px] resize-none animate-fade-in"
+                />
+              )}
+            </SectionCard>
+
+            {/* Audience & objective */}
+            <SectionCard title="Audience & objective" description="Define who receives these decks and what they should achieve.">
+              <div className="space-y-6">
+                {hasSellerContext && (
+                  <div className="flex items-center justify-between rounded-xl border border-primary/20 bg-gradient-to-r from-primary/[0.04] to-transparent px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10">
+                        <Sparkles className="size-4 text-primary" />
+                      </div>
+                      <div>
+                        <p className="text-[13px] font-medium text-foreground">
+                          Auto-fill from your business profile
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          We&apos;ll use your seller context to pre-populate these fields.
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-primary/30 hover:bg-primary/5"
+                      onClick={handleAutofill}
+                      disabled={autofilling}
+                    >
+                      {autofilling ? (
+                        <>
+                          <LoaderCircle className="size-3.5 animate-spin" />
+                          Filling...
+                        </>
+                      ) : (
+                        "Auto-fill"
+                      )}
+                    </Button>
+                  </div>
+                )}
+
+                {/* ── Who are you targeting? ── */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="flex size-6 items-center justify-center rounded-md bg-blue-500/10">
+                      <Users className="size-3 text-blue-500" />
+                    </div>
+                    <p className="text-[12px] font-semibold uppercase tracking-wider text-foreground/70">Who receives this deck</p>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <FieldGroup label="Target role">
+                      <div className="relative">
+                        <User className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground/40" />
+                        <Input
+                          value={form.audience}
+                          onChange={(e) => update("audience", e.target.value)}
+                          placeholder={form.archetype === "investor_pitch" ? "Series A partner at top-tier VC" : form.archetype === "agency_proposal" ? "CMO or Head of Marketing" : "VP of Marketing at mid-market SaaS"}
+                          className="h-10 pl-9"
+                        />
+                      </div>
+                    </FieldGroup>
+                    <FieldGroup label="Industry">
+                      <div className="relative">
+                        <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground/40" />
+                        <Input
+                          value={form.audienceIndustry}
+                          onChange={(e) => update("audienceIndustry", e.target.value)}
+                          placeholder={form.archetype === "investor_pitch" ? "Enterprise SaaS, AI/ML" : "Healthcare, FinTech, Real Estate..."}
+                          className="h-10 pl-9"
+                        />
+                      </div>
+                    </FieldGroup>
+                    <FieldGroup label="Company size">
+                      <div className="relative">
+                        <Users className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground/40" />
+                        <Input
+                          value={form.audienceSize}
+                          onChange={(e) => update("audienceSize", e.target.value)}
+                          placeholder="50-500 employees"
+                          className="h-10 pl-9"
+                        />
+                      </div>
+                    </FieldGroup>
+                  </div>
+                  <FieldGroup label="Key pain points" hint="What keeps them up at night?">
+                    <div className="relative">
+                      <Flame className="absolute left-3 top-3 size-3.5 text-muted-foreground/40" />
+                      <Input
+                        value={form.audiencePainPoints}
+                        onChange={(e) => update("audiencePainPoints", e.target.value)}
+                        placeholder={form.archetype === "competitive_displacement" ? "Stuck on legacy tools, frustrated with workarounds, migration anxiety..." : "Manual processes, scaling bottlenecks, tool fragmentation..."}
+                        className="h-10 pl-9"
+                      />
+                    </div>
+                  </FieldGroup>
+                </div>
+
+                <div className="border-t border-border/30" />
+
+                {/* ── What should this deck achieve? ── */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="flex size-6 items-center justify-center rounded-md bg-emerald-500/10">
+                      <Target className="size-3 text-emerald-500" />
+                    </div>
+                    <p className="text-[12px] font-semibold uppercase tracking-wider text-foreground/70">What it should achieve</p>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <FieldGroup label="Goal">
+                      <Input
+                        value={form.objective}
+                        onChange={(e) => update("objective", e.target.value)}
+                        placeholder={form.archetype === "investor_pitch" ? "Secure a partner meeting" : form.archetype === "case_study" ? "Prove we can solve their exact problem" : "Get a discovery call booked"}
+                        className="h-10"
+                      />
+                    </FieldGroup>
+                    <FieldGroup label="Success metric">
+                      <Input
+                        value={form.successMetric}
+                        onChange={(e) => update("successMetric", e.target.value)}
+                        placeholder={form.archetype === "investor_pitch" ? "Data room request or follow-up meeting" : "Qualified replies and meetings booked"}
+                        className="h-10"
+                      />
+                    </FieldGroup>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <FieldGroup label="Call to action">
+                      <Input
+                        value={form.callToAction}
+                        onChange={(e) => update("callToAction", e.target.value)}
+                        placeholder={form.archetype === "investor_pitch" ? "Schedule a 30-minute deep dive" : "Book a 20-minute call this week"}
+                        className="h-10"
+                      />
+                    </FieldGroup>
+                    <FieldGroup label="Urgency / timing">
+                      <Input
+                        value={form.ctaUrgency}
+                        onChange={(e) => update("ctaUrgency", e.target.value)}
+                        placeholder={form.archetype === "investor_pitch" ? "Round closing end of month" : "Q1 budget cycle, limited spots..."}
+                        className="h-10"
+                      />
+                    </FieldGroup>
+                  </div>
+                </div>
+              </div>
+            </SectionCard>
+          </>
+        )}
+
+        {/* ═══════════════════════════════════════════
+            DESIGN TAB
+            ═══════════════════════════════════════════ */}
+        {activeTab === "design" && (
+          <>
+            {/* Tone */}
+            <SectionCard title="Tone" description="How your deck sounds to the reader.">
+              <ChipGridWithCustom
+                options={toneOptions}
+                value={form.tone}
+                onChange={(v) => setForm((previous) => ({
+                  ...previous,
+                  tone: v,
+                  ...(v === "custom" ? {} : { customTone: "" }),
+                }))}
+                customValue={form.customTone}
+                onCustomChange={(v) => update("customTone", v)}
+                customPlaceholder="e.g., Warm but data-driven, like a smart friend who did the research..."
+              />
+
+              {/* Persona quick-fills */}
+              <div className="mt-4 border-t border-border/40 pt-4">
+                <p className="text-[11px] font-medium text-muted-foreground mb-2.5">
+                  Or write like a persona — click to fill:
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { label: "Direct", value: "Direct, specific, and free of filler. Use short sentences, name the problem clearly, and avoid unsupported emphasis." },
+                    { label: "Contrarian", value: "Challenge the default assumption, explain the alternative plainly, and label interpretation as inference." },
+                    { label: "Minimal", value: "Simple and restrained. Use one idea per slide, short sentences, and deliberate pacing." },
+                    { label: "Analytical", value: "Structured, evidence-led, and executive-ready. Keep every external factual claim bound to retained support." },
+                    { label: "Concise", value: "Use plain language, remove jargon and repetition, and state the core point in one sentence when possible." },
+                  ].map((persona) => (
+                    <button
+                      key={persona.label}
+                      type="button"
+                      onClick={() => {
+                        update("tone", "custom");
+                        update("customTone", persona.value);
+                      }}
+                      className="rounded-full border border-border/50 bg-muted/30 px-3 py-1.5 text-[11px] font-medium text-muted-foreground transition-all hover:border-primary/40 hover:bg-primary/5 hover:text-foreground"
+                    >
+                      {persona.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </SectionCard>
+
+            {/* Visual style */}
+            <SectionCard title="Visual style" description="Set the look and feel of your slides.">
+              <div className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {visualStyleOptions.map((opt) => {
+                    const isSelected = form.visualStyle === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setForm((previous) => ({
+                          ...previous,
+                          visualStyle: opt.value,
+                          ...(opt.value === "custom" ? {} : { customVisualStyle: "" }),
+                        }))}
+                        className={cn(
+                          "group flex items-center gap-3 rounded-xl border p-3.5 text-left transition-all relative focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2",
+                          isSelected
+                            ? "border-primary bg-primary/5 ring-1 ring-primary/20"
+                            : "border-border/50 bg-card hover:border-border hover:shadow-sm",
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "size-8 shrink-0 rounded-lg",
+                            styleSwatches[opt.value] ?? "bg-muted",
+                          )}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[13px] font-medium text-foreground">
+                            {opt.label}
+                          </p>
+                          {opt.description && (
+                            <p className="mt-0.5 text-[11px] text-muted-foreground line-clamp-1">
+                              {opt.description}
+                            </p>
+                          )}
+                        </div>
+                        {isSelected && (
+                          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                            <Check className="size-3" strokeWidth={2.5} />
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                {form.visualStyle === "custom" && (
+                  <Input
+                    value={form.customVisualStyle}
+                    onChange={(e) => update("customVisualStyle", e.target.value.slice(0, 1000))}
+                    maxLength={1000}
+                    placeholder="e.g., Dark mode with neon accents, tech-forward, geometric patterns..."
+                    className="h-10 animate-fade-in"
+                  />
+                )}
+              </div>
+            </SectionCard>
+
+            {/* Richness comes from attested vector layouts, never untracked media. */}
+            <SectionCard title="Visual content" description="Mandatory rich-static v0.1 profile.">
+              <div className="space-y-3">
+                <FieldGroup label="Image generation">
+                  <div className="flex flex-wrap gap-2">
+                    {imagePolicyOptions.map((opt) => (
+                      <Tooltip key={opt.value}>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            onClick={() => update("imagePolicy", opt.value)}
+                            className={cn(
+                              "rounded-full border px-3.5 py-1.5 text-[12px] font-medium transition-all focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2",
+                              form.imagePolicy === opt.value
+                                ? "border-primary bg-primary/10 text-primary"
+                                : "border-border/50 bg-card text-muted-foreground hover:border-border hover:text-foreground",
+                            )}
+                          >
+                            {opt.label}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-[200px] text-xs">
+                          {opt.description}
+                        </TooltipContent>
+                      </Tooltip>
+                    ))}
+                  </div>
+                </FieldGroup>
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  Every delivered deck must pass the rich vector-layout receipt. Generated images,
+                  charts, screenshots, and other media remain unavailable until their provenance,
+                  storage, and exact renderer placement can be attested.
+                </p>
+              </div>
+            </SectionCard>
+
+            {/* Output format & card count */}
+            <SectionCard title="Output" description="Configure PPTX delivery and slide count.">
+              <div className="space-y-6">
+                <FieldGroup label="Export format">
+                  <OptionGrid
+                    options={outputFormatOptions}
+                    value={form.outputFormat}
+                    onChange={(v) => update("outputFormat", v)}
+                    columns={1}
+                  />
+                </FieldGroup>
+
+                <FieldGroup label="Slide count">
+                  <Input
+                    type="number"
+                    value={form.desiredCardCount}
+                    onChange={(e) => update("desiredCardCount", e.target.value)}
+                    placeholder="8"
+                    className="h-10 w-24"
+                  />
+                </FieldGroup>
+              </div>
+            </SectionCard>
+          </>
+        )}
+
+        {/* ═══════════════════════════════════════════
+            ADVANCED TAB
+            ═══════════════════════════════════════════ */}
+        {activeTab === "advanced" && (
+          <>
+            <SectionCard title="Content rules">
+              <div className="space-y-6">
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <FieldGroup label="Must include" hint="Topics or phrases to always cover">
+                    <Textarea
+                      value={form.mustIncludeText}
+                      onChange={(e) => update("mustIncludeText", e.target.value)}
+                      placeholder="ROI metrics, customer success story"
+                      className="min-h-[80px] resize-none"
+                    />
+                  </FieldGroup>
+                  <FieldGroup label="Must avoid" hint="Topics or phrases to never use">
+                    <Textarea
+                      value={form.mustAvoidText}
+                      onChange={(e) => update("mustAvoidText", e.target.value)}
+                      placeholder="Competitor names, aggressive pricing claims"
+                      className="min-h-[80px] resize-none"
+                    />
+                  </FieldGroup>
+                </div>
+
+                <FieldGroup label="Extra instructions">
+                  <Textarea
+                    value={form.extraInstructions}
+                    onChange={(e) => update("extraInstructions", e.target.value)}
+                    placeholder="Any additional guidance for the AI..."
+                    className="min-h-[80px] resize-none"
+                  />
+                </FieldGroup>
+              </div>
+            </SectionCard>
+
+            <SectionCard title="Delivery safeguards">
+              <div className="flex items-start gap-3 rounded-lg border border-border/40 bg-muted/30 p-4">
+                <Info className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                <div>
+                  <p className="text-[13px] font-medium">Verified delivery</p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                    Automatic delivery occurs only after evidence coverage and
+                    artifact verification pass. Manual approval pauses and
+                    crawl-failure fallbacks are not available.
+                  </p>
+                </div>
+              </div>
+            </SectionCard>
+          </>
+        )}
+
+        {/* ─── Bottom action bar ─── */}
+        <div className="sticky bottom-0 z-10 flex items-center justify-between rounded-xl border border-border/50 bg-card/95 px-6 py-4 shadow-lg backdrop-blur-sm">
+          <p className="text-[13px] text-muted-foreground">
+            {form.archetype
+              ? `Blueprint: ${archetypeOptions.find((a) => a.value === form.archetype)?.label ?? form.archetype}`
+              : "Configure your deck blueprint"}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={handleSave} disabled={saving}>
+              {saving ? (
+                <>
+                  <LoaderCircle className="size-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="size-4" />
+                  Save
+                </>
+              )}
+            </Button>
+            <Button onClick={handleSaveAndContinue} disabled={saving}>
+              {saving ? (
+                <>
+                  <LoaderCircle className="size-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  {activeTab === "strategy" ? "Continue to Design" : activeTab === "design" ? "Continue to Advanced" : "Continue to Targets"}
+                  <ArrowRight className="size-4" />
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      </ViewLayout>
+
+      {/* Archetype example preview modal */}
+      <ArchetypePreviewModal
+        archetype={previewArchetype ?? ""}
+        open={previewArchetype !== null}
+        onClose={() => setPreviewArchetype(null)}
+      />
+    </TooltipProvider>
+  );
+}

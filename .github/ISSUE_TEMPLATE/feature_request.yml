@@ -1,0 +1,70 @@
+name: Feature proposal
+description: Propose a scoped addition to the OSS core or its provider contracts.
+title: "[Proposal]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Proposals are evaluated against the OSS/cloud boundary and capability-truth contract in `docs/adr/`. A proposal is not an availability commitment.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Preflight
+      options:
+        - label: I searched existing issues, pull requests, the roadmap, and ADRs.
+          required: true
+        - label: This proposal contains no credentials, customer data, or private provider material.
+          required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: User problem and evidence
+      description: Describe the observed user problem separately from the proposed solution.
+    validations:
+      required: true
+
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired behavior
+      description: Define the smallest observable behavior that would resolve the problem.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: boundary
+    attributes:
+      label: Proposed boundary
+      options:
+        - OSS core
+        - Provider adapter
+        - Private managed-cloud operations
+        - Unsure
+    validations:
+      required: true
+
+  - type: textarea
+    id: contract
+    attributes:
+      label: Contract and failure cases
+      description: Include inputs, outputs, privacy/security concerns, retries, idempotency, and degraded behavior.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proof
+    attributes:
+      label: Acceptance evidence
+      description: State the tests, receipt, or user-visible proof required before the capability can be called implemented or reference-verified.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Include the cost of leaving the behavior unchanged.

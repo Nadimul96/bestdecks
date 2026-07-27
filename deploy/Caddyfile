@@ -1,0 +1,37 @@
+{
+  auto_https disable_redirects
+}
+
+(security_headers) {
+  header {
+    -Server
+    -X-Powered-By
+    # APP_DOMAIN is operator-configurable, so do not impose HSTS on unrelated subdomains.
+    Strict-Transport-Security "max-age=31536000"
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "DENY"
+    Referrer-Policy "strict-origin-when-cross-origin"
+    Permissions-Policy "camera=(), geolocation=(), microphone=(), payment=(), usb=()"
+
+    # Next.js emits the request-scoped nonce CSP after rendering. Defining a
+    # second static policy here would either weaken that contract or break its
+    # generated nonces.
+  }
+}
+
+{$APP_DOMAIN} {
+  import security_headers
+  request_body {
+    max_size 1MB
+  }
+  reverse_proxy app:3000
+}
+
+www.{$APP_DOMAIN} {
+  import security_headers
+  redir https://{$APP_DOMAIN}{uri} permanent
+}
+
+:80 {
+  redir https://{$APP_DOMAIN}{uri} permanent
+}

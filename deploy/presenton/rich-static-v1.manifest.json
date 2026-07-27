@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "profileId": "rich_static_v1",
+  "verificationMethod": "pptx_ooxml_rich_static_v2",
+  "rendererMode": "deterministic_create_update_export_v1",
+  "upstreamPackageProfileId": "python_pptx_2013_static_v1",
+  "presentonSourceCommit": "882a826f274ddbd4650cdb21b3a9ff4d16276fe9",
+  "presentonImage": "ghcr.io/presenton/presenton@sha256:8757c5d0b842e4572aeaa6bbc79817ee201a05c73909fb46bb2972165eac0a88",
+  "templateId": "bestdecks_inline_vector_v1",
+  "templateSha256": "3e229b0b08e9e89b834d0fa54fa54a8df76200795b0a7acd15ce98bb47a12d2f",
+  "themeId": "bestdecks_green_v1",
+  "layoutIds": [
+    "bestdecks_split_panel_v1",
+    "bestdecks_card_grid_v1",
+    "bestdecks_index_grid_v1",
+    "bestdecks_spotlight_v1"
+  ],
+  "palette": [
+    "111827",
+    "168C2A",
+    "0B3D1F",
+    "1B8C2D",
+    "D8F3DC",
+    "F2F7F3",
+    "B7E4C7",
+    "FFFFFF"
+  ],
+  "fontFamilies": [
+    "Arial"
+  ],
+  "imagePolicy": "never",
+  "visualDensity": "rich",
+  "visualContentTypes": []
+}

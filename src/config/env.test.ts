@@ -60,6 +60,45 @@ test("empty optional origin variables remain unset", () => {
   assert.equal(parsed.NEXT_PUBLIC_BETTER_AUTH_URL, undefined);
 });
 
+test("empty optional template values remain unset", () => {
+  const parsed = envSchema.parse({
+    NODE_ENV: "development",
+    BESTDECKS_COMMIT_SHA: "",
+    CLOUDFLARE_ACCOUNT_ID: "",
+    CLOUDFLARE_API_TOKEN: "",
+    DEEPCRAWL_API_KEY: "",
+    PERPLEXITY_API_KEY: "",
+    GEMINI_API_KEY: "",
+    OPENAI_API_KEY: "",
+    PRESENTON_BASE_URL: "",
+    PRESENTON_API_KEY: "",
+    PRESENTON_AUTH_USERNAME: "",
+    PRESENTON_AUTH_PASSWORD: "",
+    PRESENTON_TEMPLATE: "",
+    ALLOW_PRIVATE_PROVIDER_URLS: "",
+    ALLOW_USER_PROVIDER_ENDPOINTS: "",
+    ALLOW_SHARED_PROVIDER_CREDENTIALS: "",
+    PLUSAI_API_KEY: "",
+    ALAI_API_KEY: "",
+    APP_DOMAIN: "",
+    ADMIN_NAME: "",
+    ADMIN_EMAIL: "",
+    ADMIN_PASSWORD: "",
+    SEED_ADMIN_ON_STARTUP: "",
+    APP_SECRETS_KEY: "",
+    APP_SECRETS_KEY_PREVIOUS: "",
+    LOCAL_DB_PATH: "",
+    TURSO_DATABASE_URL: "",
+    TURSO_AUTH_TOKEN: "",
+  });
+
+  assert.equal(parsed.CLOUDFLARE_ACCOUNT_ID, undefined);
+  assert.equal(parsed.GEMINI_API_KEY, undefined);
+  assert.equal(parsed.PRESENTON_BASE_URL, undefined);
+  assert.equal(parsed.ADMIN_EMAIL, undefined);
+  assert.equal(parsed.TURSO_DATABASE_URL, undefined);
+});
+
 test("production Compose origins must agree with the served application host", () => {
   assert.doesNotThrow(() => envSchema.parse({
     NODE_ENV: "production",

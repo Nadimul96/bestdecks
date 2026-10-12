@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 
 import { NextResponse, type NextRequest } from "next/server";
 
+import { SONNER_INLINE_STYLE_HASHES } from "@/src/config/inline-style-hashes";
 import { resolveAuthBaseUrl } from "@/src/server/auth-origin";
 import {
   isTrustedMutationRequest,
@@ -43,7 +44,7 @@ export function buildContentSecurityPolicy(nonce: string, isDevelopment = false)
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDevelopment ? " 'unsafe-eval'" : ""}`,
     "script-src-attr 'none'",
     `style-src 'self' 'nonce-${nonce}'`,
-    `style-src-elem 'self' 'nonce-${nonce}'`,
+    `style-src-elem 'self' 'nonce-${nonce}' ${SONNER_INLINE_STYLE_HASHES.map((hash) => `'${hash}'`).join(" ")}`,
     // React style objects are data-only declarations, not executable script.
     // Keep this narrower CSP3 exception separate from style elements.
     "style-src-attr 'unsafe-inline'",

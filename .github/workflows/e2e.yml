@@ -134,11 +134,15 @@ jobs:
           jq '{ready, missingVariables, failed: [.checks[] | select(.ok | not) | .id]}' "${RUNNER_TEMP}/doctor-no-key.json"
           jq -e '.ready == false and .missingVariables == ["GEMINI_API_KEY"]' "${RUNNER_TEMP}/doctor-no-key.json"
 
-      - name: TEMP probe the Presenton export runtime
+      - name: TEMP debug the render contract
         continue-on-error: true
         shell: bash
         run: |
-          docker compose exec -T presenton sh -c 'mount | grep " /tmp "; df -h /tmp /dev/shm; cd /tmp && timeout 60 /app/presentation-export/py/convert-linux-x64 --help 2>&1 | tail -5; echo "converter exit $?"; df -h /tmp; timeout 30 /usr/bin/chromium --headless --no-sandbox --disable-gpu --dump-dom about:blank 2>&1 | tail -5; echo "chromium exit $?"' 
+          mkdir -p "${RUNNER_TEMP}/compose-diagnostics"
+          docker compose exec -T worker sh -c 'cat > /tmp/debug-render.ts' < e2e/debug-render.tmp.ts
+          docker compose exec -T worker node --import tsx docker-entrypoint.mjs /tmp/debug-render.ts \
+            | base64 -d > "${RUNNER_TEMP}/compose-diagnostics/deck.pptx" || true
+          ls -la "${RUNNER_TEMP}/compose-diagnostics"
 
       - name: Render a fixture deck through the pinned Presenton and verify the PPTX
         shell: bash

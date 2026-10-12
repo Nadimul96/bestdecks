@@ -28,7 +28,7 @@ depend on private cloud modules. See
 | Repository | Tenant-scoped persistence and idempotent artifact/event writes | `src/server/repository.ts` |
 | Durable queue | Leases, attempts, transitions, checkpoints, cancellation, and recovery | `src/server/run-queue.ts` |
 | Worker | Separately claims leased runs and records terminal evidence | `src/bin/run-worker.ts`, `src/server/run-executor.ts` |
-| Provider adapters | Cloudflare crawl, Perplexity research, Gemini planning, Presenton rendering | `src/integrations/`, `src/server/ai-brief-builder.ts`, `src/server/slide-planner.ts` |
+| Provider adapters | Built-in or Cloudflare crawl, first-party site or Perplexity research, Gemini planning, Presenton rendering | `src/integrations/`, `src/server/ai-brief-builder.ts`, `src/server/slide-planner.ts` |
 | Database | SQLite locally or libSQL/Turso when configured | `src/server/db.ts` |
 | Authentication | Better Auth sessions and user ownership | `src/server/auth.ts` |
 
@@ -45,8 +45,8 @@ runs remain queued.
 authenticated intake
   -> atomically persist run, targets, event, and queued job
   -> worker claims a bounded lease
-  -> Cloudflare Browser Rendering crawl
-  -> Perplexity enrichment
+  -> crawl: built-in HTTPS crawler (default) or Cloudflare Browser Rendering
+  -> research: first-party site research with Gemini (default) or Perplexity
   -> Gemini brief construction
   -> Gemini slide plan with claim provenance
   -> deterministic evidence evaluation
@@ -56,9 +56,9 @@ authenticated intake
   -> persist artifacts, checkpoints, receipt, and terminal state
 ```
 
-The canonical provider sequence is Cloudflare → Perplexity → Gemini → Presenton. Alai, Plus AI,
+The default provider sequence is built-in crawl → site research → Gemini → Presenton; `CRAWL_PROVIDER` and `RESEARCH_PROVIDER` select Cloudflare and Perplexity instead (`src/config/provider-selection.ts`). Alai, Plus AI,
 and Deepcrawl adapters are outside the durable reference path and are never automatic fallbacks.
-The run API rejects the legacy crawl-exception flag; a failed Cloudflare crawl blocks that target
+The run API rejects the legacy crawl-exception flag; a failed crawl blocks that target
 instead of silently changing which provider receives its URL.
 
 No live reference receipt is checked in yet. Until one exists, the sequence above is an implemented
@@ -138,7 +138,7 @@ internet -> Caddy -> app -------------------> shared SQLite volume
                     (no egress)                    |
                                                     v
                                           provider-only egress
-                                    (Cloudflare, Perplexity, Gemini)
+                                    (target sites, Gemini, optional providers)
 ```
 
 `deploy/app/Dockerfile` has distinct `runner` and `worker` targets. `runner` contains the minimal
@@ -149,7 +149,7 @@ the persistent `/app/.data` mount plus isolated writable home, temporary, and ap
 mounts.
 
 The `backend` network is internal and connects app, worker, and Presenton. Only the worker joins the
-separate provider-egress network used for Cloudflare, Perplexity, and Gemini; Presenton has no
+separate provider-egress network used for target sites, Gemini, and any optional providers; Presenton has no
 provider-egress network and receives no provider credential. Neither worker nor Presenton publishes
 a port, and neither joins the Caddy-facing frontend network. The SQLite volume assumes app and worker run on the same host.
 Moving workers to another host requires a reviewed shared database contract, not a shared SQLite

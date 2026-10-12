@@ -2,6 +2,52 @@
 
 These notes capture the implementation constraints that shape the current repository.
 
+## Built-in crawler (default)
+
+`src/integrations/builtin-crawler.ts`, `src/integrations/web-fetcher.ts`
+
+- Plain HTTPS GETs with a `BestdecksBot` user agent. No JavaScript rendering, so client-rendered
+  sites yield less text than Cloudflare's rendered crawl.
+- robots.txt follows RFC 9309: a 4xx means no restrictions, an unreachable or 5xx robots.txt means
+  complete disallow, the most specific rule wins, and `BestdecksBot` groups take precedence over
+  `*`. Robots meta `noindex`/`nofollow` are honored. `Crawl-delay` is not part of the RFC and is
+  ignored; the crawler is sequential and capped at 25 pages.
+- Every request, redirect hop, and robots.txt fetch passes `resolveSafeOutboundTarget` (HTTPS only,
+  no private or special-use addresses) and is pinned to the validated address.
+- Retention matches the Cloudflare adapter: 64 KiB per page, 256 KiB per crawl. Text extraction
+  only removes markup, so retained sentences appear verbatim on the page.
+- Starting a crawl has no side effect; the job ID is a hash of the target URL, so the durable
+  worker's resume logic treats both crawl adapters the same way.
+
+## First-party site research (default)
+
+`src/integrations/site-research.ts`
+
+- Reads the target's own signal pages (customers, about, newsroom, careers, pricing, team) linked
+  from its homepage, plus its advertised RSS/Atom feed, through the same fetcher and policy.
+- Retains whole paragraphs verbatim, keyed by the canonical URL they were fetched from, so the
+  downstream evidence gate works unchanged. Feed text is attributed to the feed URL.
+- One Gemini `generateContent` call (no tools) summarizes only those passages. Sentences that
+  carry numbers the passages do not contain are dropped. If no page is retrievable, no Gemini call
+  is made.
+- Limitation: it sees only what the company publishes about itself. External signals (press
+  coverage, funding news) need `RESEARCH_PROVIDER=perplexity`.
+
+### Why not Gemini with Google Search grounding
+
+Grounding was evaluated as the free replacement for Perplexity and rejected:
+
+- A grounded response's `groundingMetadata.groundingChunks[].web` carries only a `uri` and a
+  `title`; `groundingSupports[].segment.text` is the model's own output. No source text is
+  returned, so a verbatim evidence check has nothing to match against.
+- Recovering source text would mean fetching the cited pages, and the Gemini API additional terms
+  prohibit using grounding links to identify pages for crawling or scraping. They also require
+  showing Google's Search Suggestions next to grounded results and forbid interspersing other
+  content with them, which does not fit a generated deck.
+
+References: https://ai.google.dev/api/generate-content (GroundingMetadata),
+https://ai.google.dev/gemini-api/docs/google-search, https://ai.google.dev/gemini-api/terms
+
 ## Cloudflare Browser Rendering `/crawl`
 
 - Primary crawler for V1.

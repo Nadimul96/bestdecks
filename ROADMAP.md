@@ -6,7 +6,7 @@ This roadmap records intended sequence, not dates, availability promises, or com
 
 - typed seller context and target intake;
 - eight named deck archetypes plus custom framing in the runtime schema;
-- Cloudflare crawl, Perplexity enrichment, Gemini planning, and renderer adapter code;
+- built-in and Cloudflare crawl, first-party and Perplexity research, Gemini planning, and renderer adapter code;
 - local persistence and artifact delivery paths;
 - Apache-2.0 licensing and BYOK self-hosting documentation.
 
@@ -23,7 +23,7 @@ These are implemented code paths, not reference-verified production claims.
 
 ## Milestone 2: reproducible reference path — blocked on controlled credentials
 
-- run Cloudflare → Perplexity → Gemini → one renderer under controlled credentials;
+- run crawl → research → Gemini → one renderer under controlled credentials;
 - capture redacted request and response metadata, artifact checksums, timing, retry behavior, and commit SHA;
 - complete repeated-run verification, including failure and resume paths;
 - move qualifying capability states to `Reference-verified` only after receipts are checked in.

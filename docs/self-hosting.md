@@ -11,19 +11,47 @@ This guide covers the current implemented code paths. It does not certify a prod
 - Docker Engine and Docker Compose when using the bundled Presenton helper or production topology
 - a writable local or mounted path for SQLite
 - a reviewed TLS reverse proxy for any network-accessible deployment
-- Cloudflare Browser Rendering credentials for the primary crawler
-- a Perplexity API key for enrichment
-- a Gemini API key for brief and slide planning
+- a Gemini API key (the free tier is enough to try it) for research summaries, briefs, and slide plans
 - a reachable Presenton service for the documented renderer path
+- optionally, Cloudflare Browser Rendering credentials (`CRAWL_PROVIDER=cloudflare`) and a
+  Perplexity API key (`RESEARCH_PROVIDER=perplexity`) if you prefer those adapters
+
+The default crawl provider is the built-in HTTPS crawler (no key, robots.txt respected, no
+JavaScript rendering) and the default research provider is first-party site research (the
+target's own pages and feed, summarized by Gemini). See [provider notes](./provider-notes.md) for
+the trade-offs.
 
 Deepcrawl, Alai, and Plus AI adapter code is outside the durable reference path. The active run API
-does not accept a Deepcrawl fallback or crawl-exception setting, and a failed Cloudflare crawl
-blocks that target. Alai and Plus AI remain experimental because no checked-in reference receipt
+does not accept a Deepcrawl fallback or crawl-exception setting, and a failed crawl blocks that
+target. Alai and Plus AI remain experimental because no checked-in reference receipt
 proves them.
+
+## Fastest path: Docker Compose
+
+```bash
+cp .env.example .env      # set GEMINI_API_KEY, ADMIN_EMAIL, ADMIN_PASSWORD
+docker compose up
+```
+
+The root `docker-compose.yml` starts:
+
+- `setup`: a one-shot first-run service. It generates `BETTER_AUTH_SECRET`, `APP_SECRETS_KEY`, and
+  the renderer password once into the private `bestdecks-generated` volume (values you set in `.env`
+  win), requires an admin login, and prints the `pnpm doctor` checklist.
+- `app`: the production Next.js server on `http://localhost:3000`, bound to 127.0.0.1 only
+  (`ALLOW_LOOPBACK_HTTP_ORIGIN=1` permits that plain-HTTP loopback origin). Production mode
+  disables self-service signup, so sign in with the admin account from `.env`.
+- `worker`: the durable run worker, the only service with outbound Internet access.
+- `presenton`: the digest-pinned renderer on an internal network, with the same isolation as
+  `scripts/start-presenton.sh`.
+
+SQLite lives in the `bestdecks-data` volume. The images record the checked-out commit, so receipts
+carry `BESTDECKS_COMMIT_SHA` without a manual step. Browsers that refuse `Secure` cookies on
+`http://localhost` (older Safari) need the TLS topology below instead.
 
 ## 1. Prepare configuration without overwriting state
 
-From a fresh clone, the quickest local path is:
+From a fresh clone, the quickest native path is:
 
 ```bash
 pnpm setup
@@ -31,7 +59,7 @@ pnpm setup
 
 This creates `.env.local` with independent auth, encryption, and renderer secrets; a local SQLite
 path; the exact supported Presenton digest; and the single-user local credential mode. Add your
-Cloudflare, Perplexity, and Gemini credentials, then run `pnpm install --frozen-lockfile`. It never
+Gemini API key (and any optional provider credentials), then run `pnpm install --frozen-lockfile`. It never
 overwrites an existing configuration; inspect and edit an existing `.env.local` in place.
 
 `pnpm setup` generates independent high-entropy values for:
@@ -60,10 +88,12 @@ Reference provider settings:
 
 | Variable | Purpose |
 | --- | --- |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account scope |
+| `GEMINI_API_KEY` | Research summaries, brief building, and slide planning |
+| `CRAWL_PROVIDER` | `builtin` (default for new installs) or `cloudflare`; unset selects `cloudflare` only when Cloudflare credentials are present |
+| `RESEARCH_PROVIDER` | `site` (default for new installs) or `perplexity`; unset selects `perplexity` only when a Perplexity key is present |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account scope (`CRAWL_PROVIDER=cloudflare`) |
 | `CLOUDFLARE_API_TOKEN` | Browser Rendering token with minimum required permissions |
-| `PERPLEXITY_API_KEY` | External company enrichment |
-| `GEMINI_API_KEY` | Brief building and slide planning |
+| `PERPLEXITY_API_KEY` | External company enrichment (`RESEARCH_PROVIDER=perplexity`) |
 | `PRESENTON_BASE_URL` | Reachable Presenton service |
 | `PRESENTON_AUTH_USERNAME` | Self-hosted Presenton HTTP Basic username |
 | `PRESENTON_AUTH_PASSWORD` | Self-hosted Presenton HTTP Basic password; at least 6 characters |

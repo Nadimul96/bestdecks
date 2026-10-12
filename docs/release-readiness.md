@@ -133,7 +133,7 @@ remain release blockers and must not be inferred from fixture success.
 
 ## Provider reference-path gate
 
-The reference sequence is Cloudflare → Perplexity → Gemini → one renderer.
+The reference sequence is crawl → research → Gemini → one renderer.
 
 - [ ] Credentials are scoped, isolated to the test environment, and excluded from receipts.
 - [ ] Preflight proves required provider permissions without printing secret material.

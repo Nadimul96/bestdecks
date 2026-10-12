@@ -139,8 +139,8 @@ jobs:
         shell: bash
         run: |
           mkdir -p "${RUNNER_TEMP}/compose-diagnostics"
-          docker compose exec -T worker sh -c 'cat > /tmp/debug-render.ts' < e2e/debug-render.tmp.ts
-          docker compose exec -T worker node --import tsx docker-entrypoint.mjs /tmp/debug-render.ts \
+          docker compose exec -T worker sh -c 'cat > /tmp/debug-render.mts' < e2e/debug-render.tmp.ts
+          docker compose exec -T worker node --import tsx docker-entrypoint.mjs /tmp/debug-render.mts \
             | base64 -d > "${RUNNER_TEMP}/compose-diagnostics/deck.pptx" || true
           ls -la "${RUNNER_TEMP}/compose-diagnostics"
 

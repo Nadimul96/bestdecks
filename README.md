@@ -20,10 +20,10 @@
 
 <p align="center">
   <a href="https://github.com/Nadimul96/bestdecks/actions/workflows/ci.yml"><img src="https://github.com/Nadimul96/bestdecks/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/Nadimul96/bestdecks/actions/workflows/e2e.yml"><img src="https://github.com/Nadimul96/bestdecks/actions/workflows/e2e.yml/badge.svg" alt="Compose E2E"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="Apache-2.0"></a>
   <img src="https://img.shields.io/badge/node-24.18-339933?logo=node.js&logoColor=white" alt="Node 24.18">
-  <img src="https://img.shields.io/badge/Next.js-16-black?logo=next.js" alt="Next.js 16">
-  <img src="https://img.shields.io/badge/tests-524_unit-brightgreen" alt="524 unit tests">
+  <img src="https://img.shields.io/badge/tests-535_unit-brightgreen" alt="535 unit tests">
 </p>
 
 ---
@@ -105,17 +105,20 @@ Decks that pass the gate download as native-vector PPTX. The checked-in example 
 
 ## Quickstart
 
-You need one key: a **Gemini API key** from [Google AI Studio](https://aistudio.google.com/apikey) (free tier available). Crawling, first-party research, and the renderer need no key.
+You need one key: a **Gemini API key**. Crawling, first-party research, and the renderer need no key.
 
-**Docker (one command):**
+1. Get a free key at [Google AI Studio](https://aistudio.google.com/apikey).
+2. Copy the config, paste the key after `GEMINI_API_KEY=`, and start the stack:
 
-```bash
-git clone https://github.com/Nadimul96/bestdecks.git && cd bestdecks
-cp .env.example .env      # set GEMINI_API_KEY, ADMIN_EMAIL, ADMIN_PASSWORD (12+ chars)
-docker compose up
-```
+   ```bash
+   git clone https://github.com/Nadimul96/bestdecks.git && cd bestdecks
+   cp .env.example .env      # paste your key after GEMINI_API_KEY=
+   docker compose up
+   ```
 
-Open http://localhost:3000 and sign in with the admin account. A first-run service generates the local secrets and prints a `pnpm doctor` checklist; the app port is bound to 127.0.0.1. The stack is the web app, the durable worker, and the digest-pinned Presenton renderer on an internal network ([details](./docs/self-hosting.md#fastest-path-docker-compose)).
+3. Open the URL it prints (http://localhost:3000) and sign in with the email and password it prints.
+
+That's the whole setup. A first-run service generates every secret and the admin password into a private volume and prints the `pnpm doctor` checklist; the stack is the web app (bound to 127.0.0.1), the durable worker, and the digest-pinned Presenton renderer on an internal network ([details](./docs/self-hosting.md#fastest-path-docker-compose)). The [Compose E2E workflow](./.github/workflows/e2e.yml) runs these exact steps on every push, with a placeholder key: it signs in with the printed account, crawls a local fixture site, checks that research stops with a "set GEMINI_API_KEY" message, and renders and verifies a PPTX through the pinned renderer.
 
 **Native (Node 24.18, pnpm 11.7):**
 
@@ -142,7 +145,7 @@ Every variable is documented in [`.env.example`](./.env.example). The ones that 
 | `RESEARCH_PROVIDER` | No | `site` | `site` (the target's own pages and feed, summarized by Gemini) or `perplexity` (external web research, paid). |
 | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` | With `cloudflare` | none | Cloudflare Browser Rendering crawl. |
 | `PERPLEXITY_API_KEY` | With `perplexity` | none | Perplexity Sonar enrichment. |
-| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Docker | none | First account, created on start (production mode disables signup). |
+| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | No | `admin@bestdecks.local`, generated | First account, created on first start (production mode disables signup). Compose prints a generated password once. |
 | `BETTER_AUTH_SECRET`, `APP_SECRETS_KEY` | Yes | generated | Auth signing and secret-encryption keys; `pnpm setup` and Compose generate them. |
 | `PRESENTON_BASE_URL`, `PRESENTON_AUTH_USERNAME`, `PRESENTON_AUTH_PASSWORD` | Yes | set by setup/Compose | The self-hosted renderer. |
 | `ALLOW_SHARED_PROVIDER_CREDENTIALS` | No | `1` in `.env.example` | Lets signed-in users run with the keys in your env file. Use `0` for multi-user hosting. |
@@ -160,7 +163,7 @@ pnpm lint && pnpm typecheck && pnpm test:unit && pnpm build
 pnpm check                        # typecheck + validate and plan the checked-in example
 ```
 
-CI runs lint, typecheck, 524 unit tests, a production build, the standalone boundary check, dependency review, and a full-history secret scan on every push. The unit tests run offline: provider adapters are exercised against recorded and documented-shape fixtures, and one test drives the free path through the real durable worker.
+CI runs lint, typecheck, 535 unit tests, a production build, the standalone boundary check, dependency review, and a full-history secret scan on every push, and the [Compose E2E job](./.github/workflows/e2e.yml) builds and runs the whole Docker stack. The unit tests run offline: provider adapters are exercised against recorded and documented-shape fixtures, and one test drives the free path through the real durable worker.
 
 ## Status
 
@@ -168,8 +171,8 @@ CI runs lint, typecheck, 524 unit tests, a production build, the standalone boun
 
 What has been verified, and how:
 
-- **Natively:** the production build served through the container entrypoint on `http://localhost`, admin sign-in, run creation through the API, and one `pnpm worker:once` pass that crawled a real public site with the built-in crawler (10 pages retained) before stopping at research for lack of a real Gemini key, with an honest failed receipt. The built-in crawler was also run live against several public sites.
-- **Statically only:** the Docker Compose stack (`docker compose config` passes; the images have not been built or run here) and every call to Gemini, Cloudflare, Perplexity, and Presenton, which are covered by fixtures but not by a live run.
+- **In CI, on every push (Compose E2E):** the images build, the stack starts healthy from `cp .env.example .env` plus a placeholder Gemini key, the printed admin account signs in through the API and a real browser, a run created through the API is crawled by the built-in crawler (against a local HTTPS fixture site, not the Internet) and then stops at research with "set GEMINI_API_KEY" guidance after Gemini rejects the key, `pnpm doctor` names only `GEMINI_API_KEY` as missing, and the pinned Presenton renders a fixed slide plan to a PPTX that passes the OOXML verifier.
+- **Not yet with a real key:** a successful Gemini research, brief, and planning call, and therefore a full run to a delivered deck. Cloudflare and Perplexity are covered by fixtures only. The built-in crawler was also run live against several public sites.
 - First-party research sees only what a company publishes about itself; the built-in crawler does not execute JavaScript.
 
 The machine-readable inventory is [`src/config/capabilities.ts`](./src/config/capabilities.ts), and a unit test fails if this table drifts from it. The full gate is in [docs/release-readiness.md](./docs/release-readiness.md).

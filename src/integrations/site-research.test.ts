@@ -164,9 +164,22 @@ test("site research retries only explicit rate limits and never leaks the key", 
     assert.equal(calls.length, 2);
   });
 
-  for (const [status, code] of [[401, "authentication"], [500, "provider_unavailable"]] as const) {
+  const invalidKey = {
+    error: {
+      message: API_KEY,
+      status: "INVALID_ARGUMENT",
+      details: [{ "@type": "type.googleapis.com/google.rpc.ErrorInfo", reason: "API_KEY_INVALID" }],
+    },
+  };
+  for (const [status, code, body] of [
+    [401, "authentication", { error: { message: API_KEY } }],
+    // Gemini reports an invalid key as HTTP 400, not 401.
+    [400, "authentication", invalidKey],
+    [400, "client_request", { error: { message: API_KEY, status: "INVALID_ARGUMENT" } }],
+    [500, "provider_unavailable", { error: { message: API_KEY } }],
+  ] as const) {
     const { research } = provider();
-    await withGemini([{ status, body: { error: { message: API_KEY } } }], async (calls) => {
+    await withGemini([{ status, body }], async (calls) => {
       await assert.rejects(research.enrichCompany(request), (error: unknown) => {
         assert.ok(error instanceof ProviderAdapterError);
         assert.equal(error.code, code);

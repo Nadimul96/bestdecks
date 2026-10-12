@@ -36,6 +36,7 @@ const {
   createRun,
   getRun,
   getRunExecutionContext,
+  getRunPipelineDetail,
 } = await import("./repository");
 const {
   claimRunJob,
@@ -729,6 +730,49 @@ test("the free path (built-in crawler and site research) delivers through the du
   const evidence = (enrichment?.metadata as { enrichment: { evidence: Array<{ url: string }> } })
     .enrichment.evidence;
   assert.deepEqual(evidence.map(({ url }) => url), [`${site}/`, `${site}/customers`, `${site}/about`]);
+});
+
+test("a rejected Gemini key stops the free path after the crawl with actionable guidance", async () => {
+  const owner = userId("worker-free-path-invalid-key");
+  const runId = await createRun(input(), owner);
+  const site = "https://target.example.com";
+  const { transport } = fixtureTransport({
+    [`${site}/robots.txt`]: { status: 404 },
+    [`${site}/`]: { file: "northwind-home.html" },
+  });
+  const web = { transport, resolver: fixtureResolver() };
+  const base = dependencies();
+  const originalFetch = globalThis.fetch;
+  // Gemini's real answer to an invalid key: HTTP 400 with an ErrorInfo reason.
+  globalThis.fetch = (async () => new Response(JSON.stringify({
+    error: {
+      code: 400,
+      status: "INVALID_ARGUMENT",
+      details: [{ "@type": "type.googleapis.com/google.rpc.ErrorInfo", reason: "API_KEY_INVALID" }],
+    },
+  }), { status: 400, headers: { "Content-Type": "application/json" } })) as typeof fetch;
+
+  try {
+    await runNextReferenceJob({
+      leaseOwner: "free-path-invalid-key-worker",
+      dependencyFactory: async () => ({
+        ...(await base()),
+        crawler: new BuiltinCrawler(web),
+        enrichmentProvider: new SiteResearchProvider("not-a-real-key", web),
+      }),
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  const detail = await getRunPipelineDetail(runId, owner);
+  assert.equal(detail?.status, "failed");
+  const messages = detail!.events.map(({ stage, message }) => `${stage}: ${message}`);
+  assert.ok(messages.includes("crawling: Crawl retained 1 page(s)."), messages.join("\n"));
+  assert.ok(messages.some((message) => message.startsWith(
+    "enriching: Gemini rejected the configured credentials. Set GEMINI_API_KEY in .env",
+  )), messages.join("\n"));
+  assert.match(detail!.lastError ?? "", /GEMINI_API_KEY/u);
 });
 
 test("worker refuses to persist an oversized artifact as delivered", async () => {

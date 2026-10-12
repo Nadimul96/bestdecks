@@ -1,0 +1,170 @@
+name: Compose E2E
+
+# Proves the README Quickstart on a clean runner: copy .env.example, add a
+# Gemini key, `docker compose up`, sign in with the printed account. CI has no
+# real key, so a placeholder stands in and the job asserts everything up to
+# that boundary: the stack starts healthy, the built-in crawler works against a
+# local fixture site (never the public Internet), research stops with
+# actionable key guidance, and the pinned renderer produces a verified PPTX
+# without any LLM.
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compose:
+    name: Docker Compose end to end
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      # Every `docker compose` call below sees the shipped stack plus the
+      # test-only fixture overlay.
+      COMPOSE_FILE: docker-compose.yml:e2e/compose.e2e.yml
+    steps:
+      # actions/checkout v6.0.2, pinned to the immutable release commit.
+      - name: Check out the repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          clean: false
+
+      # actions/setup-node v6.4.0, pinned to the immutable release commit.
+      - name: Use the repository's Node 24 release
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Create .env exactly as the README Quickstart does
+        shell: bash
+        run: |
+          cp .env.example .env
+          # The user's only edit: paste a Gemini key. CI has none, so a
+          # placeholder proves everything up to the key boundary.
+          sed -i 's/^GEMINI_API_KEY=$/GEMINI_API_KEY=ci-placeholder-not-a-real-key/' .env
+          test "$(grep -c '^GEMINI_API_KEY=ci-placeholder-not-a-real-key$' .env)" = 1
+          git diff --no-index --stat .env.example .env || true
+
+      - name: Issue a throwaway TLS certificate for the fixture site
+        shell: bash
+        run: |
+          dir="${RUNNER_TEMP}/fixture-tls"
+          mkdir -p "${dir}"
+          cd "${dir}"
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj "/CN=Bestdecks e2e fixture CA" \
+            -addext "basicConstraints=critical,CA:TRUE" -addext "keyUsage=critical,keyCertSign" \
+            -keyout ca-key.pem -out ca.pem 2>/dev/null
+          openssl req -newkey rsa:2048 -nodes -subj "/CN=northwind.example.com" \
+            -keyout server-key.pem -out server.csr 2>/dev/null
+          printf '%s\n' "subjectAltName=DNS:northwind.example.com" "extendedKeyUsage=serverAuth" > server.ext
+          openssl x509 -req -in server.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial -days 1 \
+            -extfile server.ext -out server.pem 2>/dev/null
+          rm ca-key.pem server.csr
+          # The fixture container drops every capability, so even its root
+          # user needs world-readable files. Nothing here outlives the job.
+          chmod 0644 ./*.pem
+          echo "E2E_TLS_DIR=${dir}" >> "${GITHUB_ENV}"
+
+      - name: Build the images
+        run: docker compose build
+
+      - name: Start the stack and wait until every service is healthy
+        run: docker compose up --detach --wait --wait-timeout 600
+
+      - name: Assert the setup service completed and printed the sign-in details
+        shell: bash
+        run: |
+          state="$(docker compose ps --all --format '{{.State}} {{.ExitCode}}' setup)"
+          echo "setup: ${state}"
+          test "${state}" = "exited 0"
+          node e2e/stack-checks.mjs credentials
+
+      - name: Assert the app and Presenton report healthy
+        shell: bash
+        run: |
+          for service in app presenton; do
+            health="$(docker inspect --format '{{.State.Health.Status}}' "$(docker compose ps --quiet "${service}")")"
+            echo "${service}: ${health}"
+            test "${health}" = healthy
+          done
+          test "$(docker compose ps --format '{{.State}}' worker)" = running
+
+      - name: Sign in with the printed account through the API
+        run: node e2e/stack-checks.mjs api-sign-in
+
+      - name: Install Playwright Chromium for the browser check
+        shell: bash
+        run: |
+          corepack enable pnpm
+          corepack install --global pnpm@11.7.0
+          pnpm install --frozen-lockfile
+          pnpm exec playwright install --with-deps chromium
+
+      - name: Sign in with the printed account in a real browser
+        run: node e2e/stack-checks.mjs browser-sign-in
+
+      - name: Create a run through the API
+        run: node e2e/stack-checks.mjs create-run
+
+      - name: Assert the worker crawls the fixture site and stops at the Gemini key
+        run: node e2e/stack-checks.mjs pipeline
+
+      - name: Assert pnpm doctor reports only the Gemini key as missing
+        shell: bash
+        run: |
+          doctor=(node --import tsx docker-entrypoint.mjs src/bin/doctor.ts --json)
+          docker compose exec -T worker "${doctor[@]}" > "${RUNNER_TEMP}/doctor-ready.json"
+          jq -e '.ready == true and .missingVariables == []' "${RUNNER_TEMP}/doctor-ready.json"
+          status=0
+          docker compose exec -T -e GEMINI_API_KEY= worker "${doctor[@]}" \
+            > "${RUNNER_TEMP}/doctor-no-key.json" || status=$?
+          test "${status}" = 1
+          jq '{ready, missingVariables, failed: [.checks[] | select(.ok | not) | .id]}' "${RUNNER_TEMP}/doctor-no-key.json"
+          jq -e '.ready == false and .missingVariables == ["GEMINI_API_KEY"]' "${RUNNER_TEMP}/doctor-no-key.json"
+
+      - name: Render a fixture deck through the pinned Presenton and verify the PPTX
+        shell: bash
+        run: |
+          docker compose exec -T worker node --import tsx docker-entrypoint.mjs src/bin/smoke-presenton.ts \
+            | tee "${RUNNER_TEMP}/render.json"
+          jq -e '.generated and .exportAvailable and .artifactVerified
+            and (.artifactSha256 | test("^[0-9a-f]{64}$"))
+            and .visualProfile == "rich_static_v1"' "${RUNNER_TEMP}/render.json"
+
+      - name: Collect Compose diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          out="${RUNNER_TEMP}/compose-diagnostics"
+          mkdir -p "${out}"
+          docker compose ps --all > "${out}/ps.txt" 2>&1 || true
+          # The generated admin password is masked in this log but not in the artifact.
+          docker compose logs --no-color --timestamps 2>&1 \
+            | sed -E 's/^(.*\|.* {2}password: )[^ ]+/\1<redacted>/' > "${out}/logs.txt" || true
+          echo "::group::docker compose ps"; cat "${out}/ps.txt"; echo "::endgroup::"
+          echo "::group::docker compose logs"; cat "${out}/logs.txt"; echo "::endgroup::"
+
+      # actions/upload-artifact v7.0.2, pinned to the immutable release commit.
+      - name: Upload Compose diagnostics
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: compose-diagnostics
+          path: ${{ runner.temp }}/compose-diagnostics
+          retention-days: 7
+
+      - name: Tear down the stack and its volumes
+        if: always()
+        run: docker compose down --volumes --remove-orphans

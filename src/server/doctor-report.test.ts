@@ -48,6 +48,18 @@ test("doctor names each missing item and how to fix it", () => {
   assert.match(text, /aistudio\.google\.com\/apikey/u);
 });
 
+test("with secrets generated, the only missing item on the free path is the Gemini key", () => {
+  const report = buildDoctorReport(envSchema.parse({ ...freePath, GEMINI_API_KEY: "" }));
+  assert.equal(report.ready, false);
+  assert.deepEqual(report.missingVariables, ["GEMINI_API_KEY"]);
+  assert.match(formatDoctorReport(report), /^ {2}Missing: GEMINI_API_KEY$/mu);
+  assert.match(
+    formatDoctorReport(report, "compose"),
+    /Set the missing values in \.env, then run `docker compose up` again\.$/u,
+  );
+  assert.deepEqual(buildDoctorReport(freePath).missingVariables, []);
+});
+
 test("doctor follows an explicit paid provider choice", () => {
   const report = buildDoctorReport(envSchema.parse({
     ...freePath,

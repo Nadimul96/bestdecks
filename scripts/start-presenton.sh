@@ -102,6 +102,7 @@ if docker container inspect "${CONTAINER_NAME}" >/dev/null 2>&1; then
   existing_env="$(docker container inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "${CONTAINER_NAME}")"
   existing_label="$(docker container inspect --format '{{index .Config.Labels "com.bestdecks.container-purpose"}}' "${CONTAINER_NAME}")"
   existing_cap_drop="$(docker container inspect --format '{{json .HostConfig.CapDrop}}' "${CONTAINER_NAME}")"
+  existing_cap_add="$(docker container inspect --format '{{json .HostConfig.CapAdd}}' "${CONTAINER_NAME}")"
   existing_security_opt="$(docker container inspect --format '{{json .HostConfig.SecurityOpt}}' "${CONTAINER_NAME}")"
   existing_pids_limit="$(docker container inspect --format '{{.HostConfig.PidsLimit}}' "${CONTAINER_NAME}")"
   existing_privileged="$(docker container inspect --format '{{.HostConfig.Privileged}}' "${CONTAINER_NAME}")"
@@ -137,6 +138,8 @@ if docker container inspect "${CONTAINER_NAME}" >/dev/null 2>&1; then
   [[ "${existing_mounts}" == "${APP_DATA_DIR}|/app_data|true" ]] || mismatch="true"
   [[ "${existing_label}" == "${CONTAINER_LABEL_VALUE}" ]] || mismatch="true"
   [[ "${existing_cap_drop}" == '["ALL"]' ]] || mismatch="true"
+  # Docker may report added capabilities with or without the CAP_ prefix.
+  [[ "${existing_cap_add//CAP_/}" == '["CHOWN","DAC_OVERRIDE","SETGID","SETUID"]' ]] || mismatch="true"
   [[ "${existing_security_opt}" == '["no-new-privileges:true"]' ]] || mismatch="true"
   [[ "${existing_pids_limit}" == "512" ]] || mismatch="true"
   [[ "${existing_privileged}" == "false" ]] || mismatch="true"
@@ -167,10 +170,14 @@ else
     --label "${CONTAINER_LABEL_KEY}=${CONTAINER_LABEL_VALUE}" \
     --security-opt no-new-privileges:true \
     --cap-drop ALL \
+    --cap-add CHOWN \
+    --cap-add DAC_OVERRIDE \
+    --cap-add SETGID \
+    --cap-add SETUID \
     --pids-limit 512 \
     -p "127.0.0.1:${PRESENTON_PORT}:80" \
     --mount "type=bind,source=${APP_DATA_DIR},target=/app_data" \
-    --tmpfs /tmp:rw,noexec,nosuid,nodev,size=134217728,mode=1770 \
+    --tmpfs /tmp:rw,exec,nosuid,nodev,size=536870912,mode=1770 \
     -e CAN_CHANGE_KEYS="true" \
     -e LLM="openai" \
     -e AUTH_USERNAME \

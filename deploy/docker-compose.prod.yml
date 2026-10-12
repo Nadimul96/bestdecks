@@ -103,6 +103,13 @@ services:
     init: true
     cap_drop:
       - ALL
+    cap_add:
+      # The image's nginx needs these to open its www-data-owned logs and
+      # temp directories and drop privileges; without them it exits at startup.
+      - CHOWN
+      - DAC_OVERRIDE
+      - SETGID
+      - SETUID
     security_opt:
       - no-new-privileges:true
     pids_limit: 512
@@ -118,7 +125,8 @@ services:
     volumes:
       - presenton-data:/app_data
     tmpfs:
-      - /tmp:rw,noexec,nosuid,nodev,size=128m,mode=1770
+      # PPTX export fails when /tmp is noexec (Docker's tmpfs default).
+      - /tmp:rw,exec,nosuid,nodev,size=512m,mode=1770
     expose:
       - "80"
     networks:

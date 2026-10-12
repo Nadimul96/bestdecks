@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -259,4 +260,37 @@ test("PPTX verifier bounds package entries and XML nesting", () => {
       PptxContentVerificationError,
     );
   }
+});
+
+// Recorded from the pinned Presenton image by the Compose E2E job, rendering
+// the slide plan in src/bin/smoke-presenton.ts.
+const RECORDED_PRESENTON_DECK = readFileSync(
+  new URL("./fixtures/presenton/smoke-deck.pptx", import.meta.url),
+);
+const RECORDED_PRESENTON_SLIDES = [
+  { headline: "Example Company", bulletPoints: [] },
+  { headline: "Manual work slows the team", bulletPoints: [] },
+  { headline: "A focused workflow", bulletPoints: ["Automate repeated work"] },
+  { headline: "A simple rollout", bulletPoints: ["Start with one process"] },
+  { headline: "Book a 20-minute call", bulletPoints: [] },
+];
+
+test("PPTX verifier accepts a deck exported by the pinned Presenton renderer", () => {
+  const result = verifyPptxVisibleText(RECORDED_PRESENTON_DECK, RECORDED_PRESENTON_SLIDES);
+  assert.equal(result.contentVerification.slideCount, 5);
+  assert.equal(result.visualProfile.id, "rich_static_v1");
+});
+
+test("PPTX verifier rejects the recorded Presenton deck against a different plan", () => {
+  const changedText = RECORDED_PRESENTON_SLIDES.map((slide, index) =>
+    index === 2 ? { ...slide, bulletPoints: ["Automate every repeated task"] } : slide);
+  assert.throws(
+    () => verifyPptxVisibleText(RECORDED_PRESENTON_DECK, changedText),
+    PptxContentVerificationError,
+  );
+  const changedLayout = [...selectRichStaticLayoutIds(5)].reverse();
+  assert.throws(
+    () => verifyRichStaticPptx(RECORDED_PRESENTON_DECK, RECORDED_PRESENTON_SLIDES, changedLayout),
+    PptxContentVerificationError,
+  );
 });

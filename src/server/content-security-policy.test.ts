@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import test from "node:test";
 import { NextRequest } from "next/server";
 
+import { SONNER_INLINE_STYLE_HASHES } from "../config/inline-style-hashes";
 import { buildContentSecurityPolicy, proxy } from "../../proxy";
 
 const nonce = Buffer.alloc(16, 7).toString("base64");
@@ -16,6 +20,23 @@ test("production CSP uses a strict request nonce without executable inline escap
   assert.match(policy, /style-src-attr 'unsafe-inline'/u);
   assert.match(policy, /frame-ancestors 'none'/u);
   assert.match(policy, /upgrade-insecure-requests/u);
+});
+
+test("Sonner's runtime stylesheet is allowed by the hash of its exact contents", () => {
+  const bundle = readFileSync(createRequire(import.meta.url).resolve("sonner"), "utf8");
+  const css = bundle.match(/__insertCSS\(("(?:[^"\\]|\\.)*")\)/u)?.[1];
+  assert.ok(css, "Sonner no longer injects its CSS through __insertCSS; revisit the CSP hashes");
+  const hashOf = (text: string) => `sha256-${createHash("sha256").update(text).digest("base64")}`;
+  assert.deepEqual([...SONNER_INLINE_STYLE_HASHES], [hashOf(""), hashOf(JSON.parse(css) as string)]);
+
+  const styleElements = buildContentSecurityPolicy(nonce)
+    .split("; ")
+    .find((directive) => directive.startsWith("style-src-elem "));
+  assert.equal(
+    styleElements,
+    `style-src-elem 'self' 'nonce-${nonce}' ${SONNER_INLINE_STYLE_HASHES.map((hash) => `'${hash}'`).join(" ")}`,
+  );
+  assert.doesNotMatch(styleElements ?? "", /'unsafe-inline'/u);
 });
 
 test("development CSP adds only the debugging and websocket allowances", () => {

@@ -12,6 +12,7 @@ import {
   type EvidenceSource,
 } from "@/src/domain/evidence";
 import { normalizePersistableSourceUrl } from "@/src/domain/source-url";
+import { isGeminiApiKeyRejection } from "@/src/integrations/gemini-key-rejection";
 import { HttpError, requestJson, sleep } from "@/src/integrations/http";
 import type {
   CompanyBrief,
@@ -939,7 +940,7 @@ function normalizeGeminiSlideError(error: unknown): GeminiSlidePlannerError {
     return new GeminiSlidePlannerError(error.code, false);
   }
   if (error instanceof HttpError) {
-    if (error.status === 401 || error.status === 403) {
+    if (error.status === 401 || error.status === 403 || isGeminiApiKeyRejection(error)) {
       return new GeminiSlidePlannerError("authentication", false, error.status);
     }
     if (error.status === 408 || error.status === 429 || error.status >= 500) {

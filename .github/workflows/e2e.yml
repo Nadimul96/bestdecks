@@ -138,7 +138,7 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          docker compose exec -T presenton sh -c 'env | grep -iE "puppeteer|chrom|temp|tmp" | sed "s/=.*PASS.*/=<redacted>/"; ls -la /app/presentation-export /app/presentation-export/py; find / -xdev -maxdepth 6 \( -name chrome -o -name "chrome-headless-shell" -o -name chromium \) -type f 2>/dev/null | head; mount | grep -E " /tmp | /app_data "; head -c 64 /app/presentation-export/py/convert-linux-x64 | od -c | head -3'
+          docker compose exec -T presenton sh -c 'mount | grep " /tmp "; df -h /tmp /dev/shm; cd /tmp && timeout 60 /app/presentation-export/py/convert-linux-x64 --help 2>&1 | tail -5; echo "converter exit $?"; df -h /tmp; timeout 30 /usr/bin/chromium --headless --no-sandbox --disable-gpu --dump-dom about:blank 2>&1 | tail -5; echo "chromium exit $?"' 
 
       - name: Render a fixture deck through the pinned Presenton and verify the PPTX
         shell: bash

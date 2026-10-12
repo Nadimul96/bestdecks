@@ -117,7 +117,7 @@ services:
       - bestdecks-generated:/run/bestdecks:ro
       - presenton-data:/app_data
     tmpfs:
-      - /tmp:rw,noexec,nosuid,nodev,size=128m,mode=1770
+      - /tmp:rw,nosuid,nodev,size=128m,mode=1770
     expose:
       - "80"
     healthcheck:

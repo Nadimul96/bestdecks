@@ -134,6 +134,12 @@ jobs:
           jq '{ready, missingVariables, failed: [.checks[] | select(.ok | not) | .id]}' "${RUNNER_TEMP}/doctor-no-key.json"
           jq -e '.ready == false and .missingVariables == ["GEMINI_API_KEY"]' "${RUNNER_TEMP}/doctor-no-key.json"
 
+      - name: TEMP probe the Presenton export runtime
+        continue-on-error: true
+        shell: bash
+        run: |
+          docker compose exec -T presenton sh -c 'env | grep -iE "puppeteer|chrom|temp|tmp" | sed "s/=.*PASS.*/=<redacted>/"; ls -la /app/presentation-export /app/presentation-export/py; find / -xdev -maxdepth 6 \( -name chrome -o -name "chrome-headless-shell" -o -name chromium \) -type f 2>/dev/null | head; mount | grep -E " /tmp | /app_data "; head -c 64 /app/presentation-export/py/convert-linux-x64 | od -c | head -3'
+
       - name: Render a fixture deck through the pinned Presenton and verify the PPTX
         shell: bash
         run: |

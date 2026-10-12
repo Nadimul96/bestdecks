@@ -10,7 +10,7 @@
 //    what is still missing. Provider keys and app secrets are never printed.
 import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 
 const SECRETS_DIR = "/run/bestdecks";
 const SECRETS_PATH = `${SECRETS_DIR}/secrets.json`;
@@ -25,9 +25,10 @@ const GENERATED_NAMES = [
 const DEFAULT_ADMIN_EMAIL = "admin@bestdecks.local";
 const APP_URL = process.env.BETTER_AUTH_URL ?? "http://localhost:3000";
 
-function writePrivate(path, contents) {
+function writeAtomically(path, contents, mode = 0o600) {
   const temporary = `${path}.tmp`;
-  writeFileSync(temporary, contents, { encoding: "utf8", mode: 0o600 });
+  writeFileSync(temporary, contents, { encoding: "utf8", mode });
+  chmodSync(temporary, mode);
   renameSync(temporary, path);
 }
 
@@ -58,9 +59,14 @@ for (const name of GENERATED_NAMES) {
 }
 secrets.ADMIN_EMAIL = process.env.ADMIN_EMAIL || stored.ADMIN_EMAIL || DEFAULT_ADMIN_EMAIL;
 
-writePrivate(SECRETS_PATH, `${JSON.stringify(secrets)}\n`);
-writePrivate(PRESENTON_PASSWORD_PATH, secrets.PRESENTON_AUTH_PASSWORD);
-writePrivate(ADMIN_PASSWORD_PATH, `${secrets.ADMIN_PASSWORD}\n`);
+writeAtomically(SECRETS_PATH, `${JSON.stringify(secrets)}\n`);
+writeAtomically(ADMIN_PASSWORD_PATH, `${secrets.ADMIN_PASSWORD}\n`);
+// The Presenton image runs as root with every capability dropped, so it can
+// read only world-readable files in directories it may traverse. The volume
+// is mounted solely into this stack's own services, and the app and worker
+// already hold this password. The directory stays unlistable.
+writeAtomically(PRESENTON_PASSWORD_PATH, secrets.PRESENTON_AUTH_PASSWORD, 0o644);
+chmodSync(SECRETS_DIR, 0o711);
 console.log(generated.size > 0
   ? `First run: generated ${generated.size} local secret(s) in the bestdecks-generated volume.`
   : "Local secrets are already in place.");

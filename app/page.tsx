@@ -18,14 +18,15 @@ import {
   Layers3,
   Menu,
   Presentation,
-  Search,
   ShieldCheck,
   Terminal,
   Upload,
   X,
 } from "lucide-react";
 
+import { EvidenceLedger } from "@/components/evidence-ledger";
 import { Logo } from "@/components/logo";
+import type { ClaimLedgerView } from "@/src/domain/claim-ledger-view";
 import {
   CAPABILITY_STATUSES,
   CURRENT_CAPABILITY_COUNTS,
@@ -184,20 +185,20 @@ function Hero() {
         <div className="mx-auto max-w-4xl text-center">
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/[0.06] px-4 py-1.5 text-sm font-medium text-primary">
             <Code2 className="size-3.5" />
-            Apache-2.0 · self-hosted · bring your own keys
+            Apache-2.0 · self-hosted · one free-tier key
           </div>
 
           <h1 className="text-4xl font-bold leading-[1.08] tracking-tight text-brand-navy sm:text-5xl lg:text-6xl xl:text-7xl">
-            Research-to-deck infrastructure
+            Proposal decks where
             <span className="block bg-gradient-to-r from-primary to-brand-navy-light bg-clip-text text-transparent">
-              designed for self-hosting.
+              every fact has a source.
             </span>
           </h1>
 
           <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-muted-foreground sm:text-xl">
-            Bestdecks is an open-source pipeline for target intake, provider-backed research,
-            structured slide planning, and presentation rendering. You operate the deployment and
-            choose the provider accounts; review each provider&apos;s data-handling terms before live use.
+            Bestdecks researches each target company, drafts a tailored deck, and refuses to deliver
+            it if any factual claim is missing from the pages it retained. Self-hosted and
+            open source; the default setup needs only a Gemini API key.
           </p>
 
           <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
@@ -218,12 +219,12 @@ function Hero() {
           </div>
 
           <p className="mt-7 text-sm text-muted-foreground">
-            Provider usage is billed by the providers you configure. Bestdecks does not include managed credits.
+            Gemini offers a free tier. Any paid providers you choose to enable bill you directly.
           </p>
         </div>
 
-        <ReferenceVerificationCallout />
         <ProductSurfacePreview />
+        <ReferenceVerificationCallout />
       </div>
     </section>
   );
@@ -246,15 +247,27 @@ function ReferenceVerificationCallout() {
   );
 }
 
-function ProductSurfacePreview() {
-  const stages = [
-    { label: "Target intake", status: "Input accepted", icon: Upload },
-    { label: "Provider research", status: "Adapter configured", icon: Search },
-    { label: "Deck artifact", status: "Human review required", icon: Presentation },
+const SAMPLE_LEDGER: ClaimLedgerView = (() => {
+  const home = { title: "Northwind Freight: cold-chain logistics", url: "https://northwind.example.com/" };
+  const customers = { title: "Customer stories", url: "https://northwind.example.com/customers" };
+  const claims: ClaimLedgerView["claims"] = [
+    { id: "c1", label: "unsupported", claimClass: "external_fact", citations: [], text: "[Unsupported] Northwind's on-time rate fell below 90% this year." },
+    { id: "c2", label: "source-backed", claimClass: "external_fact", citations: [home], text: "Northwind Freight operates 48 refrigerated cross-dock facilities across the Midwest." },
+    { id: "c3", label: "source-backed", claimClass: "external_fact", citations: [customers], text: "Prairie Fresh Markets cut produce shrink by 18% after moving its inbound freight to Northwind." },
+    { id: "c4", label: "seller-supplied", claimClass: "seller_claim", citations: [], text: "Routewise customers plan routes in half the time." },
+    { id: "c5", label: "model-inference", claimClass: "model_inference", citations: [], text: "[Inference] Each new facility adds routing complexity for dispatch." },
   ];
+  return {
+    claims,
+    counts: { unsupported: 1, "source-backed": 2, "seller-supplied": 1, "model-inference": 1 },
+    coverage: { supported: 2, factual: 3 },
+    canDeliver: false,
+  };
+})();
 
+function ProductSurfacePreview() {
   return (
-    <div className="relative mx-auto mt-12 max-w-5xl">
+    <div className="relative mx-auto mt-12 max-w-4xl">
       <div className="rounded-2xl border border-border/50 bg-white/85 p-2 shadow-2xl shadow-brand-navy/10 ring-1 ring-brand-navy/5 backdrop-blur">
         <div className="flex items-center justify-between rounded-t-xl border-b border-border/30 bg-accent/40 px-4 py-3">
           <div className="flex gap-1.5" aria-hidden="true">
@@ -262,38 +275,19 @@ function ProductSurfacePreview() {
             <div className="size-3 rounded-full bg-amber-400/60" />
             <div className="size-3 rounded-full bg-green-400/60" />
           </div>
+          <p className="hidden text-xs font-medium text-muted-foreground sm:block">
+            Run detail · Evidence
+          </p>
           <div className="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-amber-800">
             Sample data
           </div>
         </div>
 
-        <div className="rounded-b-xl bg-gradient-to-b from-background to-accent/20 p-6 lg:p-9">
-          <div className="grid gap-4 md:grid-cols-3">
-            {stages.map(({ label, status, icon: Icon }, index) => (
-              <div key={label} className="relative rounded-xl border border-border/40 bg-white p-5 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <div className="flex size-10 items-center justify-center rounded-lg bg-brand-navy/8 text-brand-navy">
-                    <Icon className="size-4.5" />
-                  </div>
-                  <span className="text-xs font-bold tabular-nums text-muted-foreground/50">
-                    0{index + 1}
-                  </span>
-                </div>
-                <p className="mt-5 text-sm font-semibold text-foreground">{label}</p>
-                <p className="mt-1 text-xs text-muted-foreground">{status}</p>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-4 flex flex-col gap-2 rounded-xl border border-border/40 bg-white px-4 py-3 text-left sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-semibold">Example Company · PPTX artifact</p>
-              <p className="text-xs text-muted-foreground">Illustrative interface only; no customer result is represented.</p>
-            </div>
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-              Evidence coverage unavailable
-            </span>
-          </div>
+        <div className="rounded-b-xl bg-gradient-to-b from-background to-accent/20 p-3 text-left sm:p-6">
+          <EvidenceLedger ledger={SAMPLE_LEDGER} className="shadow-sm" />
+          <p className="mt-3 text-center text-xs text-muted-foreground">
+            One unsupported claim, so this deck is not delivered. Fictional company; illustrative only.
+          </p>
         </div>
       </div>
     </div>
@@ -311,16 +305,16 @@ function HowItWorks() {
     },
     {
       number: "02",
-      title: "Run configured provider adapters",
+      title: "Research each target",
       description:
-        "The implemented path can call Cloudflare for crawling, Perplexity for enrichment, and Gemini for brief and slide planning when you supply credentials.",
+        "A durable worker crawls the target site (built in, robots.txt respected), reads its signal pages and feed, and plans the brief and slides with Gemini. Cloudflare and Perplexity adapters are available if you prefer them.",
       icon: Layers3,
     },
     {
       number: "03",
-      title: "Render, inspect, and retain the artifact",
+      title: "Gate the claims, then render",
       description:
-        "The runtime measures claim-level evidence coverage and blocks rendering when a factual claim lacks source support. A configured renderer returns a verified artifact; human review remains required until the full live path is reference-verified.",
+        "Every factual claim must appear verbatim in a retained source or delivery stops. Decks that pass render as native-vector PPTX through a self-hosted renderer. Review each deck before you send it.",
       icon: Presentation,
     },
   ];
@@ -480,10 +474,10 @@ function EvidenceBoundary() {
 
 function SelfHosting() {
   const requirements = [
-    { icon: Terminal, label: "Node.js 24.18.0 and pnpm 11.7.0" },
-    { icon: Database, label: "A writable local SQLite path" },
-    { icon: KeyRound, label: "Your own provider credentials" },
-    { icon: Box, label: "A reachable Presenton service for the documented renderer path" },
+    { icon: Box, label: "Docker, or Node.js 24.18 with pnpm 11.7" },
+    { icon: KeyRound, label: "One Gemini API key (free tier available)" },
+    { icon: Database, label: "SQLite on a local volume; nothing hosted" },
+    { icon: Terminal, label: "pnpm doctor tells you exactly what is missing" },
   ];
 
   return (
@@ -495,9 +489,8 @@ function SelfHosting() {
             Run the public core with accounts you control.
           </h2>
           <p className="mt-5 max-w-xl text-base leading-relaxed text-white/65">
-            Copy the environment template, provide independent secrets, configure the provider
-            adapters you intend to use, then start the local application. See docs/self-hosting.md
-            for the security and deployment checklist.
+            One command starts the web app, the durable worker, and the pinned renderer. Secrets are
+            generated on first run. See docs/self-hosting.md for the production topology.
           </p>
 
           <div className="mt-8 grid gap-3 sm:grid-cols-2">
@@ -514,18 +507,17 @@ function SelfHosting() {
           <div className="mb-5 flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm font-semibold text-white/80">
               <Terminal className="size-4" />
-              Local application
+              Quickstart
             </div>
             <span className="rounded-full bg-white/[0.07] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white/45">
               BYOK
             </span>
           </div>
           <pre className="overflow-x-auto rounded-xl border border-white/10 bg-black/30 p-5 text-[13px] leading-7 text-emerald-200">
-            <code>{`cp -n .env.example .env.local\n# Fill required secrets and provider keys\npnpm install --frozen-lockfile\npnpm doctor\npnpm dev\n# In a second terminal:\npnpm worker`}</code>
+            <code>{`# Docker: add GEMINI_API_KEY and an admin login to .env\ncp .env.example .env\ndocker compose up\n\n# Or natively\ncp -n .env.example .env.local\npnpm install --frozen-lockfile\npnpm doctor\npnpm dev        # and, in a second terminal:\npnpm worker`}</code>
           </pre>
           <p className="mt-4 text-xs leading-relaxed text-white/45">
-            The doctor command reports configuration presence only. It is not a live provider or
-            security verification receipt.
+            The doctor checks configuration offline. It does not contact providers or prove a live run.
           </p>
         </div>
       </div>

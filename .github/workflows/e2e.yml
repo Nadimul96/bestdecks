@@ -80,6 +80,18 @@ jobs:
       - name: Build the images
         run: docker compose build
 
+      - name: TEMP probe nginx capabilities in the Presenton image
+        continue-on-error: true
+        shell: bash
+        run: |
+          for caps in "CHOWN SETGID SETUID" "CHOWN SETGID SETUID DAC_OVERRIDE" "CHOWN SETGID SETUID NET_BIND_SERVICE" "CHOWN SETGID SETUID DAC_OVERRIDE NET_BIND_SERVICE"; do
+            args=(); for c in ${caps}; do args+=(--cap-add "${c}"); done
+            echo "::group::caps: ${caps}"
+            docker run --rm --platform linux/amd64 --cap-drop ALL "${args[@]}" --security-opt no-new-privileges:true \
+              --entrypoint sh bestdecks-presenton -c 'nginx -t 2>&1; nginx 2>&1; echo "nginx exit $?"; sleep 1; tail -n 20 /var/log/nginx/error.log 2>&1; ls -ld /var/lib/nginx /var/lib/nginx/* /var/log/nginx 2>&1' || true
+            echo "::endgroup::"
+          done
+
       - name: Start the stack and wait until every service is healthy
         run: docker compose up --detach --wait --wait-timeout 600
 

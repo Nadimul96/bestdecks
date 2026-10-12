@@ -29,18 +29,23 @@ proves them.
 ## Fastest path: Docker Compose
 
 ```bash
-cp .env.example .env      # set GEMINI_API_KEY, ADMIN_EMAIL, ADMIN_PASSWORD
+cp .env.example .env      # paste your key after GEMINI_API_KEY=
 docker compose up
 ```
 
+Open the URL it prints and sign in with the email and password it prints. The
+[Compose E2E workflow](../.github/workflows/e2e.yml) runs exactly these steps on every push.
+
 The root `docker-compose.yml` starts:
 
-- `setup`: a one-shot first-run service. It generates `BETTER_AUTH_SECRET`, `APP_SECRETS_KEY`, and
-  the renderer password once into the private `bestdecks-generated` volume (values you set in `.env`
-  win), requires an admin login, and prints the `pnpm doctor` checklist.
+- `setup`: a one-shot first-run service. It generates `BETTER_AUTH_SECRET`, `APP_SECRETS_KEY`, the
+  renderer password, and the admin password once into the private `bestdecks-generated` volume
+  (values you set in `.env` win), prints the `pnpm doctor` checklist, and prints how to sign in. The
+  admin account is `admin@bestdecks.local` unless `ADMIN_EMAIL` is set; a generated password is
+  shown once, and `docker compose exec app cat /run/bestdecks/admin-password` shows it again.
 - `app`: the production Next.js server on `http://localhost:3000`, bound to 127.0.0.1 only
   (`ALLOW_LOOPBACK_HTTP_ORIGIN=1` permits that plain-HTTP loopback origin). Production mode
-  disables self-service signup, so sign in with the admin account from `.env`.
+  disables self-service signup, so sign in with the admin account the setup service printed.
 - `worker`: the durable run worker, the only service with outbound Internet access.
 - `presenton`: the digest-pinned renderer on an internal network, with the same isolation as
   `scripts/start-presenton.sh`.

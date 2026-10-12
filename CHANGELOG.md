@@ -6,6 +6,32 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- A Compose E2E workflow that runs the README Quickstart on a clean runner: stack health, sign-in
+  with the printed account (API and browser), a built-in crawl of a local HTTPS fixture site,
+  research stopping at the Gemini key, `pnpm doctor`, and an LLM-free Presenton render verified
+  as OOXML.
+- `pnpm doctor` lists missing variables by name and has a `--compose` mode.
+
+### Changed
+
+- Docker Compose creates the admin account automatically (`admin@bestdecks.local`, generated
+  password printed once); `.env` needs only `GEMINI_API_KEY`.
+- A run stopped by a missing or rejected key now says which variable to set; crawl success is
+  logged as a run event.
+- Dependencies: zod 4.6, kysely 0.29, TypeScript 6.0.
+
+### Fixed
+
+- The app image never built: the final boundary check rejected the empty `.data` mount point.
+- `cp .env.example .env` disabled admin seeding in Compose, leaving no way to sign in.
+- Presenton never became healthy (nginx lacked the capabilities to start) and could not export a
+  PPTX (noexec `/tmp`), in Compose and in `pnpm presenton:start`.
+- The OOXML verifier rejected every deck the pinned Presenton actually exports.
+- Gemini's HTTP 400 `API_KEY_INVALID` was reported as a generic client error.
+- The production CSP blocked Sonner's toast styles.
+
 ## [0.2.0] - 2026-10-12
 
 ### Added

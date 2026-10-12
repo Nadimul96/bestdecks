@@ -34,6 +34,7 @@ import {
   viewMeta,
 } from "@/lib/workspace-types";
 import { cn } from "@/lib/utils";
+import { TargetEvidenceLedger } from "@/components/workspace/run-evidence-panel";
 
 const meta = viewMeta.delivery;
 
@@ -502,7 +503,12 @@ function DeckCardItem({
             ) : !isSelectable ? (
               <LoaderCircle className="size-6 animate-spin text-muted-foreground/40" />
             ) : (
-              <FileText className="size-8 text-muted-foreground/20" />
+              <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                <FileText className="size-7 opacity-40" aria-hidden />
+                <span className="text-[11px] font-medium uppercase tracking-wider opacity-70">
+                  {deck.format} · {deck.evidence ? `${deck.evidence.coverage.supportedFactualClaims}/${deck.evidence.coverage.factualClaims} source-backed` : "verified"}
+                </span>
+              </div>
             )}
           </div>
         )}
@@ -511,7 +517,7 @@ function DeckCardItem({
           <div className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-all group-hover:bg-black/40 group-hover:opacity-100">
             <span className="flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1.5 text-[12px] font-medium text-gray-900 shadow-lg backdrop-blur">
               <Eye className="size-3.5" />
-              Preview
+              {thumbnailUrl ? "Preview" : "View evidence"}
             </span>
           </div>
         )}
@@ -559,8 +565,8 @@ function DeckCardItem({
       </div>
 
       {/* Footer metadata */}
-      <div className="flex items-center justify-between border-t border-border/30 px-3.5 py-2">
-        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/30 px-3.5 py-2">
+        <div className="flex items-center gap-2 whitespace-nowrap text-[11px] text-muted-foreground">
           <span className="uppercase font-medium tracking-wide">{deck.format}</span>
           <span className="text-border">&middot;</span>
           <span>{new Date(deck.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
@@ -720,16 +726,6 @@ function DeckPreviewOverlay({
         </div>
 
         <div className="flex items-center gap-1">
-          {downloadUrl && (
-            <a
-              href={downloadUrl}
-              className="flex items-center gap-1.5 rounded-full bg-white/[0.07] px-3 py-1.5 text-[12px] font-medium text-white/60 backdrop-blur-md transition-all hover:bg-white/[0.12] hover:text-white"
-            >
-              <Download className="size-3" />
-              Download
-            </a>
-          )}
-
           <button
             type="button"
             onClick={() => setIsFullscreen((p) => !p)}
@@ -814,27 +810,25 @@ function DeckPreviewOverlay({
             </div>
           </>
         ) : (
-          /* Empty state */
-          <div className="flex flex-col items-center justify-center gap-4 text-center">
-            <div className="flex size-20 items-center justify-center rounded-3xl bg-white/[0.04] ring-1 ring-white/[0.06]">
-              <Eye className="size-8 text-white/20" />
+          /* PPTX decks have no in-browser preview: show what the gate checked. */
+          <div className="relative z-[1] flex max-h-[85vh] w-[92%] max-w-3xl flex-col gap-3 overflow-y-auto rounded-2xl bg-background p-4 shadow-2xl sm:p-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-base font-semibold text-foreground">{displayName}</p>
+                <p className="text-[12px] text-muted-foreground">
+                  Native PPTX. Download it to view the slides; the claims below are what the evidence gate checked.
+                </p>
+              </div>
+              {downloadUrl && (
+                <Button asChild size="sm" className="gap-1.5">
+                  <a href={downloadUrl} download>
+                    <Download className="size-3.5" />
+                    Download PPTX
+                  </a>
+                </Button>
+              )}
             </div>
-            <div>
-              <p className="text-[15px] font-medium text-white/50">No preview available</p>
-              <p className="mt-1 text-[12px] text-white/25 max-w-xs">
-                {downloadUrl ? "Download the verified PPTX; target-suite compatibility is still being validated." : "The presentation is still being generated."}
-              </p>
-            </div>
-            {downloadUrl && (
-              <a
-                href={downloadUrl}
-                download
-                className="mt-2 flex items-center gap-2 rounded-full bg-white/[0.08] px-4 py-2 text-[13px] font-medium text-white/70 transition-all hover:bg-white/[0.12] hover:text-white"
-              >
-                <Download className="size-3.5" />
-                Download deck
-              </a>
-            )}
+            <TargetEvidenceLedger runId={deck.runId} targetId={deck.targetId} />
           </div>
         )}
       </div>

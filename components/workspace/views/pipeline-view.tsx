@@ -10,6 +10,7 @@ import {
   Layers3,
   LoaderCircle,
   RefreshCcw,
+  ShieldX,
   Search,
   Wand2,
   XCircle,
@@ -28,6 +29,7 @@ import {
 import { ViewLayout, SectionCard, StatusPill } from "../view-layout";
 import { viewMeta, type RunSummary, type RunDetail } from "@/lib/workspace-types";
 import { cn } from "@/lib/utils";
+import { RunEvidencePanel } from "@/components/workspace/run-evidence-panel";
 
 const meta = viewMeta.pipeline;
 
@@ -134,7 +136,11 @@ function computeProgress(run: RunDetail): { percent: number; stage: string } {
 /* ─── Error message humanizer ─── */
 function humanizeError(raw: string): string {
   if (raw.includes("indeterminate_")) return "A provider accepted work without a durable response. Bestdecks did not replay the paid request; start a new run after checking the provider.";
-  if (raw.includes("unsupported_claim") || raw.includes("evidence_coverage_incomplete")) return "Delivery was blocked because at least one factual claim lacked retained source support.";
+  if (raw.includes("unsupported_claim") || raw.includes("unsupported_factual_claim") || raw.includes("evidence_coverage_incomplete")) return "Blocked by the evidence gate: at least one factual claim has no matching retained source. The claims are listed below.";
+  if (raw.includes("No target produced a verified deliverable")) return "No deck passed every check. Review each target's evidence below, then adjust the inputs and run again.";
+  if (raw.includes("upstream_crawl_failed")) return "The target website could not be crawled. It may block crawlers in robots.txt or be unreachable.";
+  if (raw.includes("upstream_enrichment_failed")) return "Research for this target did not complete, so no deck was planned.";
+  if (raw.includes("upstream_planning_failed")) return "Slide planning did not complete for this target.";
   if (raw.includes("delivery_readiness_failed")) return "The renderer result did not pass every delivery-readiness check.";
   if (raw.includes("Presenton") || raw.includes("presenton")) return "The configured Presenton renderer could not complete or verify this artifact.";
   if (raw.includes("Cloudflare") && raw.includes("429")) return "Website crawl was rate-limited. Wait a minute and retry.";
@@ -156,6 +162,8 @@ function targetStatusInfo(status: string): { icon: React.ReactNode; label: strin
       return { icon: <AlertCircle className="size-3.5 text-amber-500" />, label: "Legacy / unverified", color: "text-amber-600 font-medium" };
     case "failed":
       return { icon: <AlertCircle className="size-3.5 text-destructive" />, label: "Failed", color: "text-destructive font-medium" };
+    case "blocked":
+      return { icon: <ShieldX className="size-3.5 text-destructive" />, label: "Blocked by evidence gate", color: "text-destructive font-medium" };
     case "queued":
       return { icon: <Clock3 className="size-3.5 text-muted-foreground" />, label: "Queued", color: "text-muted-foreground" };
     case "processing":
@@ -476,7 +484,7 @@ export function PipelineView() {
               ))}
             </div>
           ) : (
-            <div className="space-y-4 max-h-[70vh] overflow-y-auto">
+            <div className="space-y-4">
               {/* Progress tracker for running runs */}
               {(selectedRun.status === "running" || selectedRun.status === "queued") && (() => {
                 const { percent, stage } = computeProgress(selectedRun);
@@ -711,7 +719,7 @@ export function PipelineView() {
                         key={target.id}
                         className={cn(
                           "card-elevated group rounded-xl border p-4 transition-all duration-200 hover:shadow-md",
-                          target.status === "failed"
+                          target.status === "failed" || target.status === "blocked"
                             ? "border-destructive/20 bg-destructive/[0.03]"
                             : target.status === "delivered"
                               ? "border-emerald-500/20 bg-emerald-500/[0.03]"
@@ -722,7 +730,7 @@ export function PipelineView() {
                         <div className="flex items-start justify-between gap-2">
                           <div className={cn(
                             "flex size-8 shrink-0 items-center justify-center rounded-lg",
-                            target.status === "failed"
+                            target.status === "failed" || target.status === "blocked"
                               ? "bg-destructive/10"
                               : target.status === "delivered"
                                 ? "bg-emerald-500/10"
@@ -734,7 +742,7 @@ export function PipelineView() {
                           </div>
                           <span className={cn(
                             "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium",
-                            target.status === "failed"
+                            target.status === "failed" || target.status === "blocked"
                               ? "bg-destructive/10 text-destructive"
                               : target.status === "delivered"
                                 ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
@@ -766,7 +774,7 @@ export function PipelineView() {
                         </div>
 
                         {/* Error message */}
-                        {target.status === "failed" && target.last_error && (
+                        {(target.status === "failed" || target.status === "blocked") && target.last_error && (
                           <div className="mt-2 rounded-lg bg-destructive/5 px-3 py-2">
                             <p className="text-[11px] text-destructive/80 leading-relaxed">
                               {humanizeError(target.last_error)}
@@ -778,6 +786,11 @@ export function PipelineView() {
                   })}
                 </div>
               </div>
+
+              <RunEvidencePanel
+                runId={selectedRun.id}
+                refreshKey={`${selectedRun.status}:${selectedRun.events.length}`}
+              />
 
               {/* Events log */}
               {selectedRun.events.length > 0 && (

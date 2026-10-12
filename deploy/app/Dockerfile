@@ -31,7 +31,8 @@ RUN BETTER_AUTH_URL=https://build.invalid \
   LOCAL_DB_PATH=/tmp/bestdecks-build.sqlite \
   SEED_ADMIN_ON_STARTUP=0 \
   pnpm build \
-  && pnpm verify:standalone
+  && pnpm verify:standalone \
+  && node deploy/app/resolve-commit.mjs > /app/.bestdecks-commit
 
 FROM ${NODE_IMAGE} AS runtime
 WORKDIR /app
@@ -42,15 +43,19 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # A numeric identity keeps both runtime targets independent of user-management
 # tools in the digest-pinned base image. Compose mounts only the home, temporary,
 # runtime cache, and database paths as writable; application code remains root-owned.
-RUN mkdir -p /home/bestdecks /app/.data /app/.next/cache \
-  && chmod 0700 /home/bestdecks /app/.data /app/.next/cache \
-  && chown 10001:10001 /home/bestdecks /app/.data /app/.next/cache \
+# /run/bestdecks holds first-run secrets for the root docker-compose.yml. A new
+# named volume mounted there inherits this ownership.
+RUN mkdir -p /home/bestdecks /app/.data /app/.next/cache /run/bestdecks \
+  && chmod 0700 /home/bestdecks /app/.data /app/.next/cache /run/bestdecks \
+  && chown 10001:10001 /home/bestdecks /app/.data /app/.next/cache /run/bestdecks \
   && node -e 'if (process.version !== "v24.18.0") process.exit(1)'
 
 FROM runtime AS worker
 COPY --from=deps /app/node_modules ./node_modules
 COPY package.json tsconfig.json ./
 COPY src ./src
+COPY --from=builder /app/.bestdecks-commit ./.bestdecks-commit
+COPY deploy/app/docker-entrypoint.mjs deploy/app/first-run.mjs ./
 
 USER 10001:10001
 
@@ -62,6 +67,8 @@ ENV HOSTNAME=0.0.0.0
 
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/.bestdecks-commit ./.bestdecks-commit
+COPY deploy/app/docker-entrypoint.mjs ./
 
 USER 10001:10001
 

@@ -1,0 +1,197 @@
+# One-command local self-host: web app, durable worker, and the pinned
+# Presenton renderer, with SQLite on a named volume.
+#
+#   cp .env.example .env     # add GEMINI_API_KEY, ADMIN_EMAIL, ADMIN_PASSWORD
+#   docker compose up
+#
+# Then open http://localhost:3000. A first-run service generates the local
+# secrets once and prints the `pnpm doctor` checklist. The app port is bound to
+# 127.0.0.1 only. For a public deployment with TLS, use
+# deploy/docker-compose.prod.yml instead (see docs/self-hosting.md).
+
+name: bestdecks
+
+x-node-image: &node-image
+  # node:24.18.0-bookworm-slim, pinned by digest. The Dockerfile refuses any
+  # image that is not digest-pinned or not Node 24.18.0.
+  NODE_IMAGE: ${NODE_IMAGE:-node:24.18.0-bookworm-slim@sha256:6f7b03f7c2c8e2e784dcf9295400527b9b1270fd37b7e9a7285cf83b6951452d}
+
+x-hardening: &hardening
+  init: true
+  read_only: true
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  pids_limit: 256
+
+x-runtime-environment: &runtime-environment
+  NODE_ENV: production
+  NEXT_TELEMETRY_DISABLED: "1"
+  LOCAL_DB_PATH: /app/.data/bestdecks.sqlite
+  BETTER_AUTH_URL: http://localhost:${BESTDECKS_PORT:-3000}
+  # The app is published on loopback only, so plain HTTP is acceptable here.
+  ALLOW_LOOPBACK_HTTP_ORIGIN: "1"
+  BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
+  APP_SECRETS_KEY: ${APP_SECRETS_KEY:-}
+  APP_SECRETS_KEY_PREVIOUS: ${APP_SECRETS_KEY_PREVIOUS:-}
+  BESTDECKS_COMMIT_SHA: ${BESTDECKS_COMMIT_SHA:-}
+  SEED_ADMIN_ON_STARTUP: ${SEED_ADMIN_ON_STARTUP:-1}
+  ADMIN_NAME: ${ADMIN_NAME:-Admin}
+  ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+  ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+  CRAWL_PROVIDER: ${CRAWL_PROVIDER:-}
+  RESEARCH_PROVIDER: ${RESEARCH_PROVIDER:-}
+  GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+  CLOUDFLARE_ACCOUNT_ID: ${CLOUDFLARE_ACCOUNT_ID:-}
+  CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
+  PERPLEXITY_API_KEY: ${PERPLEXITY_API_KEY:-}
+  PRESENTON_BASE_URL: http://presenton
+  PRESENTON_AUTH_USERNAME: ${PRESENTON_AUTH_USERNAME:-bestdecks}
+  PRESENTON_AUTH_PASSWORD: ${PRESENTON_AUTH_PASSWORD:-}
+  PRESENTON_TEMPLATE: ${PRESENTON_TEMPLATE:-bestdecks_inline_vector_v1}
+  # Presenton is reachable only on the internal backend network.
+  ALLOW_PRIVATE_PROVIDER_URLS: "1"
+  ALLOW_USER_PROVIDER_ENDPOINTS: "0"
+  # Single-user install: signed-in users run with the keys in .env.
+  ALLOW_SHARED_PROVIDER_CREDENTIALS: ${ALLOW_SHARED_PROVIDER_CREDENTIALS:-1}
+
+services:
+  setup:
+    build:
+      context: .
+      dockerfile: deploy/app/Dockerfile
+      target: worker
+      args: *node-image
+    image: bestdecks-worker:local
+    command: ["node", "first-run.mjs"]
+    <<: *hardening
+    environment: *runtime-environment
+    volumes:
+      - bestdecks-generated:/run/bestdecks
+    tmpfs:
+      - /home/bestdecks:rw,noexec,nosuid,nodev,size=16m,uid=10001,gid=10001,mode=0700
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001,mode=1770
+    network_mode: none
+    restart: "no"
+
+  presenton:
+    build:
+      context: .
+      dockerfile: deploy/presenton/Dockerfile
+      args:
+        PRESENTON_IMAGE: ${PRESENTON_IMAGE:-ghcr.io/presenton/presenton@sha256:8757c5d0b842e4572aeaa6bbc79817ee201a05c73909fb46bb2972165eac0a88}
+    # Same platform, isolation, and settings as scripts/start-presenton.sh.
+    platform: linux/amd64
+    init: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 512
+    # The upstream image starts with `node /app/start.js`; this only reads the
+    # generated Basic-auth password from the secrets volume first.
+    command:
+      - sh
+      - -c
+      - AUTH_PASSWORD="$$(cat /run/bestdecks/presenton-password)" exec node /app/start.js
+    environment:
+      # Bestdecks uses only the deterministic create/update/export path. The
+      # renderer has no route to the Internet, so it cannot call an LLM.
+      CAN_CHANGE_KEYS: "true"
+      LLM: openai
+      AUTH_USERNAME: ${PRESENTON_AUTH_USERNAME:-bestdecks}
+      DISABLE_IMAGE_GENERATION: "true"
+    volumes:
+      - bestdecks-generated:/run/bestdecks:ro
+      - presenton-data:/app_data
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=128m,mode=1770
+    expose:
+      - "80"
+    healthcheck:
+      # 401 means the server is up and enforcing Basic auth.
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1/').then((r) => process.exit(r.status < 500 ? 0 : 1), () => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 120s
+    depends_on:
+      setup:
+        condition: service_completed_successfully
+    networks:
+      - backend
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      dockerfile: deploy/app/Dockerfile
+      target: runner
+      args: *node-image
+    image: bestdecks-app:local
+    command: ["node", "docker-entrypoint.mjs", "server.js"]
+    <<: *hardening
+    environment: *runtime-environment
+    ports:
+      - "127.0.0.1:${BESTDECKS_PORT:-3000}:3000"
+    volumes:
+      - bestdecks-data:/app/.data
+      - bestdecks-generated:/run/bestdecks:ro
+    tmpfs:
+      - /app/.next/cache:rw,noexec,nosuid,nodev,size=128m,uid=10001,gid=10001,mode=0700
+      - /home/bestdecks:rw,noexec,nosuid,nodev,size=16m,uid=10001,gid=10001,mode=0700
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001,mode=1770
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    depends_on:
+      setup:
+        condition: service_completed_successfully
+    networks:
+      - frontend
+      - backend
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: deploy/app/Dockerfile
+      target: worker
+      args: *node-image
+    image: bestdecks-worker:local
+    command: ["node", "--import", "tsx", "docker-entrypoint.mjs", "src/bin/run-worker.ts"]
+    <<: *hardening
+    environment: *runtime-environment
+    volumes:
+      - bestdecks-data:/app/.data
+      - bestdecks-generated:/run/bestdecks:ro
+    tmpfs:
+      - /home/bestdecks:rw,noexec,nosuid,nodev,size=16m,uid=10001,gid=10001,mode=0700
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001,mode=1770
+    depends_on:
+      setup:
+        condition: service_completed_successfully
+      app:
+        condition: service_healthy
+      presenton:
+        condition: service_healthy
+    networks:
+      - backend
+      # Crawling targets and calling Gemini need outbound Internet access.
+      - provider-egress
+    restart: unless-stopped
+
+networks:
+  frontend:
+  backend:
+    internal: true
+  provider-egress:
+
+volumes:
+  bestdecks-data:
+  bestdecks-generated:
+  presenton-data:

@@ -1,4 +1,9 @@
-.git
+# Only the files that identify the checked-out commit; the build records it
+# so run receipts carry BESTDECKS_COMMIT_SHA without a manual step.
+.git/*
+!.git/HEAD
+!.git/packed-refs
+!.git/refs
 .github
 .next
 .data

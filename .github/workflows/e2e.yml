@@ -152,7 +152,7 @@ jobs:
           docker compose ps --all > "${out}/ps.txt" 2>&1 || true
           # The generated admin password is masked in this log but not in the artifact.
           docker compose logs --no-color --timestamps 2>&1 \
-            | sed -E 's/(password: )[^ ]+/\1<redacted>/' > "${out}/logs.txt" || true
+            | sed -E 's/^(.*\|.* {2}password: )[^ ]+/\1<redacted>/' > "${out}/logs.txt" || true
           echo "::group::docker compose ps"; cat "${out}/ps.txt"; echo "::endgroup::"
           echo "::group::docker compose logs"; cat "${out}/logs.txt"; echo "::endgroup::"
 

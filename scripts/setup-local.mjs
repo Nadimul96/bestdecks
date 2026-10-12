@@ -72,7 +72,7 @@ function main() {
 
   writeFileSync(outputPath, contents, { encoding: "utf8", mode: 0o600, flag: "wx" });
   console.log("Created .env.local with independent local secrets and the pinned Presenton image.");
-  console.log("Next: add your Cloudflare, Perplexity, and Gemini credentials, then run pnpm install.");
+  console.log("Next: add GEMINI_API_KEY (free tier: https://aistudio.google.com/apikey), then run pnpm install and pnpm doctor.");
   console.log("This setup enables process-level provider credentials for a single-user local instance. Set ALLOW_SHARED_PROVIDER_CREDENTIALS=0 before multi-user hosting.");
 }
 

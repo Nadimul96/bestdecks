@@ -1,36 +1,26 @@
 import { loadEnv } from "../config/env";
-import { buildAllProviderStatuses } from "../server/reference-provider-health";
+import { buildDoctorReport, formatDoctorReport } from "../server/doctor-report";
 
-async function main() {
-  const env = loadEnv();
+function main() {
+  let env: ReturnType<typeof loadEnv>;
+  try {
+    env = loadEnv();
+  } catch (error) {
+    // Report which variables are invalid, never their values.
+    const issues = (error as { issues?: Array<{ path: PropertyKey[] }> }).issues ?? [];
+    console.error("Environment validation failed. Check these variables against .env.example:");
+    for (const name of new Set(issues.map((issue) => issue.path.map(String).join(".")))) {
+      console.error(`  ${name || "environment"}`);
+    }
+    process.exitCode = 1;
+    return;
+  }
 
-  console.log(
-    JSON.stringify(
-      {
-        providers: buildAllProviderStatuses({
-          cloudflareAccountId: env.CLOUDFLARE_ACCOUNT_ID,
-          cloudflareApiToken: env.CLOUDFLARE_API_TOKEN,
-          perplexityApiKey: env.PERPLEXITY_API_KEY,
-          geminiApiKey: env.GEMINI_API_KEY,
-          deepcrawlApiKey: env.DEEPCRAWL_API_KEY,
-          alaiApiKey: env.ALAI_API_KEY,
-          plusAiApiKey: env.PLUSAI_API_KEY,
-          presentonBaseUrl: env.PRESENTON_BASE_URL,
-          presentonApiKey: env.PRESENTON_API_KEY,
-          presentonAuthUsername: env.PRESENTON_AUTH_USERNAME,
-          presentonAuthPassword: env.PRESENTON_AUTH_PASSWORD,
-          presentonTemplate: env.PRESENTON_TEMPLATE,
-          allowPrivateProviderUrls:
-            env.NODE_ENV !== "production" || env.ALLOW_PRIVATE_PROVIDER_URLS === "1",
-        }),
-      },
-      null,
-      2,
-    ),
-  );
+  const report = buildDoctorReport(env);
+  console.log(process.argv.includes("--json")
+    ? JSON.stringify(report, null, 2)
+    : formatDoctorReport(report));
+  if (!report.ready) process.exitCode = 1;
 }
 
-main().catch(() => {
-  console.error("Environment diagnostics failed.");
-  process.exitCode = 1;
-});
+main();

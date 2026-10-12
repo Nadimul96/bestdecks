@@ -19,6 +19,7 @@ export function resolvePublicShareOrigin(request: Request) {
         configuredOrigin,
         env.NODE_ENV,
         "Public share origin",
+        { allowLoopbackHttp: env.ALLOW_LOOPBACK_HTTP_ORIGIN === "1" },
       );
     }
   }

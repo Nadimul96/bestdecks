@@ -51,6 +51,7 @@ const authBaseUrl = resolveAuthBaseUrl({
   renderExternalUrl: env.RENDER_EXTERNAL_URL,
   vercelUrl: process.env.VERCEL_URL,
   port: process.env.PORT,
+  allowLoopbackHttp: env.ALLOW_LOOPBACK_HTTP_ORIGIN === "1",
 });
 
 const googleClientId = process.env.GOOGLE_CLIENT_ID;

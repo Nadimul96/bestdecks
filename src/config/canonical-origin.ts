@@ -4,7 +4,8 @@ export class CanonicalOriginError extends Error {
   public constructor(label = "Application origin") {
     super(
       `${label} must be an absolute HTTPS origin with no credentials, query, fragment, or non-root path. `
-      + "Plain HTTP is allowed only for localhost or loopback addresses outside production.",
+      + "Plain HTTP is allowed only for localhost or loopback addresses, and in production only "
+      + "with ALLOW_LOOPBACK_HTTP_ORIGIN=1.",
     );
     this.name = "CanonicalOriginError";
   }
@@ -30,10 +31,20 @@ export function isLoopbackOrLocalhost(hostname: string): boolean {
  * Parse a browser-visible application origin. Returning `URL#origin` gives
  * every caller one normalized representation and avoids path-join surprises.
  */
+export interface CanonicalOriginOptions {
+  /**
+   * Accept http://localhost (or a loopback IP) in production. Only for a
+   * single-machine install whose port is published on loopback, such as the
+   * root docker-compose.yml; a public deployment must terminate TLS.
+   */
+  allowLoopbackHttp?: boolean;
+}
+
 export function parseCanonicalOrigin(
   value: string,
   environment: RuntimeEnvironment,
   label = "Application origin",
+  options: CanonicalOriginOptions = {},
 ): string {
   const fail = (): never => {
     throw new CanonicalOriginError(label);
@@ -73,7 +84,7 @@ export function parseCanonicalOrigin(
   if (url.protocol === "https:") return url.origin;
   if (
     url.protocol === "http:"
-    && environment !== "production"
+    && (environment !== "production" || options.allowLoopbackHttp === true)
     && isLoopbackOrLocalhost(url.hostname)
   ) {
     return url.origin;

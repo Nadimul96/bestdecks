@@ -37,9 +37,19 @@ test("browser auth rejects unsafe configured and production HTTP origins", () =>
   assert.throws(
     () => resolveBrowserAuthOrigin({
       environment: "production",
-      currentOrigin: "http://localhost:3000",
+      currentOrigin: "http://app.example.com",
     }),
     /Browser origin/u,
+  );
+});
+
+test("a loopback-only production install uses same-origin auth routing", () => {
+  assert.equal(
+    resolveBrowserAuthOrigin({
+      environment: "production",
+      currentOrigin: "http://localhost:3000",
+    }),
+    undefined,
   );
 });
 

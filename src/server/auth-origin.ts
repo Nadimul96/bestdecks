@@ -9,6 +9,7 @@ interface AuthOriginInput {
   renderExternalUrl?: string;
   vercelUrl?: string;
   port?: string;
+  allowLoopbackHttp?: boolean;
 }
 
 function localAuthOrigin(portValue?: string): string {
@@ -34,6 +35,7 @@ export function resolveAuthBaseUrl(input: AuthOriginInput): string {
       input.betterAuthUrl,
       input.environment,
       "BETTER_AUTH_URL",
+      { allowLoopbackHttp: input.allowLoopbackHttp },
     );
   }
   if (input.renderExternalUrl) {

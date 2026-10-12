@@ -24,6 +24,7 @@ function resolveTrustedMutationOrigin(request: NextRequest): string | null {
       renderExternalUrl: process.env.RENDER_EXTERNAL_URL,
       vercelUrl: process.env.VERCEL_URL,
       port: process.env.PORT,
+      allowLoopbackHttp: process.env.ALLOW_LOOPBACK_HTTP_ORIGIN === "1",
     });
   } catch {
     // A missing or malformed production origin must disable application

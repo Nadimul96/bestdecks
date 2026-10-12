@@ -61,3 +61,19 @@ test("plain HTTP is limited to local loopback origins outside production", () =>
     CanonicalOriginError,
   );
 });
+
+test("production accepts loopback HTTP only with the explicit opt-in", () => {
+  const options = { allowLoopbackHttp: true };
+  assert.equal(
+    parseCanonicalOrigin("http://localhost:3000", "production", "BETTER_AUTH_URL", options),
+    "http://localhost:3000",
+  );
+  assert.equal(
+    parseCanonicalOrigin("http://127.0.0.1:3000", "production", "BETTER_AUTH_URL", options),
+    "http://127.0.0.1:3000",
+  );
+  assert.throws(
+    () => parseCanonicalOrigin("http://app.example.com", "production", "BETTER_AUTH_URL", options),
+    CanonicalOriginError,
+  );
+});

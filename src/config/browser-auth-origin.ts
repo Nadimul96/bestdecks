@@ -10,6 +10,16 @@ interface BrowserAuthOriginInput {
   currentOrigin?: string;
 }
 
+function isPlainHttpLoopback(origin: string | undefined) {
+  if (!origin) return false;
+  try {
+    const url = new URL(origin);
+    return url.protocol === "http:" && isLoopbackOrLocalhost(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Resolve the browser-visible auth origin. An undefined production SSR result
  * deliberately selects Better Auth's same-origin `/api/auth` fallback.
@@ -24,6 +34,11 @@ export function resolveBrowserAuthOrigin(
         "NEXT_PUBLIC_BETTER_AUTH_URL",
       )
     : undefined;
+  if (input.environment === "production" && isPlainHttpLoopback(input.currentOrigin)) {
+    // A loopback-only production install (docker compose) talks to its own
+    // origin; the relative /api/auth fallback is same-origin by construction.
+    return configuredOrigin;
+  }
   const currentOrigin = input.currentOrigin
     ? parseCanonicalOrigin(input.currentOrigin, input.environment, "Browser origin")
     : undefined;

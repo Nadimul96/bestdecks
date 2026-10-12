@@ -51,6 +51,7 @@ export const envSchema = z.object({
   ALLOW_PRIVATE_PROVIDER_URLS: optionalEnvironmentValue(z.enum(["0", "1"])),
   ALLOW_USER_PROVIDER_ENDPOINTS: optionalEnvironmentValue(z.enum(["0", "1"])),
   ALLOW_SHARED_PROVIDER_CREDENTIALS: optionalEnvironmentValue(z.enum(["0", "1"])),
+  ALLOW_LOOPBACK_HTTP_ORIGIN: optionalEnvironmentValue(z.enum(["0", "1"])),
   PLUSAI_API_KEY: optionalEnvironmentValue(z.string().min(1)),
   ALAI_API_KEY: optionalEnvironmentValue(z.string().min(1)),
   BETTER_AUTH_URL: optionalCanonicalOrigin,
@@ -76,7 +77,9 @@ export const envSchema = z.object({
     if (!origin) continue;
 
     try {
-      parseCanonicalOrigin(origin, value.NODE_ENV, field);
+      parseCanonicalOrigin(origin, value.NODE_ENV, field, {
+        allowLoopbackHttp: value.ALLOW_LOOPBACK_HTTP_ORIGIN === "1",
+      });
     } catch (error) {
       context.addIssue({
         code: z.ZodIssueCode.custom,

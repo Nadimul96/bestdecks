@@ -11,6 +11,8 @@ import {
 } from "@/src/domain/visual-profile";
 import {
   PRESENTON_RICH_STATIC_LAYOUT_ATTESTATIONS,
+  PRESENTON_RICH_STATIC_SLIDE_HEIGHT,
+  PRESENTON_RICH_STATIC_SLIDE_WIDTH,
 } from "@/src/integrations/presenton-rich-static-ui";
 
 const END_OF_CENTRAL_DIRECTORY_SIGNATURE = 0x06054b50;
@@ -448,7 +450,8 @@ function walkStrictXml(
     const declarationEnd = source.indexOf("?>");
     if (declarationEnd < 0 || declarationEnd > 256) fail();
     const declaration = source.slice(0, declarationEnd + 2);
-    if (!/^<\?xml\s+version=(?:"1\.0"|'1\.0')(?:\s+encoding=(?:"UTF-8"|'UTF-8'))?\s*\?>$/u.test(declaration)) {
+    // python-pptx (Presenton's exporter) writes standalone='yes'.
+    if (!/^<\?xml\s+version=(?:"1\.0"|'1\.0')(?:\s+encoding=(?:"UTF-8"|'UTF-8'))?(?:\s+standalone=(?:"yes"|'yes'|"no"|'no'))?\s*\?>$/u.test(declaration)) {
       fail();
     }
     source = source.slice(declarationEnd + 2);
@@ -1333,6 +1336,24 @@ function rectanglesOverlap(
 }
 
 const PRESENTON_EMU_PER_PIXEL = 9_525;
+// Observed in the pinned exporter's output (python-pptx via Presenton's
+// export runtime), recorded in fixtures/presenton/smoke-deck.pptx:
+// - a shape covering the whole slide becomes the slide background, so it is
+//   not a shape in the XML (the background color is checked separately);
+// - text boxes are widened by 2px so the measured line never wraps;
+// - CSS pixel font sizes become points (1px = 0.75pt, stored as pt * 100).
+const PRESENTON_TEXT_WIDTH_PADDING_PX = 2;
+
+function presentonFontSize(pixels: number) {
+  return Math.round(pixels * 75);
+}
+
+function isFullSlideFrame(frame: { x: number; y: number; width: number; height: number }) {
+  return frame.x === 0
+    && frame.y === 0
+    && frame.width === PRESENTON_RICH_STATIC_SLIDE_WIDTH
+    && frame.height === PRESENTON_RICH_STATIC_SLIDE_HEIGHT;
+}
 
 function expectedPresentonLayoutSignature(
   layoutId: RichStaticLayoutId,
@@ -1340,14 +1361,14 @@ function expectedPresentonLayoutSignature(
 ) {
   if (!Number.isInteger(bulletCount) || bulletCount < 0 || bulletCount > 3) fail();
   const blueprint = PRESENTON_RICH_STATIC_LAYOUT_ATTESTATIONS[layoutId];
-  const frame = (value: { x: number; y: number; width: number; height: number }) => ({
+  const frame = (value: { x: number; y: number; width: number; height: number }, widthPadding = 0) => ({
     x: value.x * PRESENTON_EMU_PER_PIXEL,
     y: value.y * PRESENTON_EMU_PER_PIXEL,
-    width: value.width * PRESENTON_EMU_PER_PIXEL,
+    width: (value.width + widthPadding) * PRESENTON_EMU_PER_PIXEL,
     height: value.height * PRESENTON_EMU_PER_PIXEL,
   });
   return sha256Hex(JSON.stringify([
-    ...blueprint.shapes.map((shape) => ({
+    ...blueprint.shapes.filter((shape) => !isFullSlideFrame(shape.frame)).map((shape) => ({
       kind: "vector",
       geometry: shape.type === "rectangle" ? "rect" : "ellipse",
       ...frame(shape.frame),
@@ -1358,18 +1379,18 @@ function expectedPresentonLayoutSignature(
     {
       kind: "text",
       geometry: "rect",
-      ...frame(blueprint.headlineFrame),
+      ...frame(blueprint.headlineFrame, PRESENTON_TEXT_WIDTH_PADDING_PX),
       fillColor: null,
       runColors: ["111827"],
-      runFontSizes: [4_800],
+      runFontSizes: [presentonFontSize(48)],
     },
     ...blueprint.bulletFrames.slice(0, bulletCount).map((bulletFrame) => ({
       kind: "text",
       geometry: "rect",
-      ...frame(bulletFrame),
+      ...frame(bulletFrame, PRESENTON_TEXT_WIDTH_PADDING_PX),
       fillColor: null,
       runColors: ["111827"],
-      runFontSizes: [2_400],
+      runFontSizes: [presentonFontSize(24)],
     })),
   ]));
 }
@@ -1633,14 +1654,16 @@ function extractPresentonSlideMetrics(
         case "a:srgbClr": {
           assertOnlyAttributes(element, new Set(["val"]));
           const color = element.attributes.get("val")?.toUpperCase();
-          if (!color || !RICH_STATIC_PALETTE.has(color)) fail();
           const parent = element.ancestors.at(-1);
           const grandparent = element.ancestors.at(-2);
+          // The exporter's (fully transparent) shadow is black, which is not
+          // a palette color, so check it before the palette allowlist.
           if (parent === "a:outerShdw") {
             if (!shape || color !== "000000" || element.selfClosing) fail();
             shape.shadowColorCount += 1;
             return;
           }
+          if (!color || !RICH_STATIC_PALETTE.has(color)) fail();
           if (parent !== "a:solidFill") fail();
           paletteColors.add(color);
           if (grandparent === "p:bgPr") {
@@ -1740,13 +1763,16 @@ function extractPresentonSlideMetrics(
         case "a:bodyPr": {
           if (!shape) fail();
           assertDirectParent(element, "p:txBody");
-          const common = new Set(["wrap", "lIns", "rIns", "tIns", "bIns"]);
-          const vector = new Set([...common, "rtlCol", "anchor"]);
+          // The exporter also writes anchor="ctr" on text boxes.
+          const common = new Set(["wrap", "lIns", "rIns", "tIns", "bIns", "anchor"]);
+          const vector = new Set([...common, "rtlCol"]);
           assertOnlyAttributes(element, shape.textBox ? common : vector);
           for (const name of ["lIns", "rIns", "tIns", "bIns"]) {
             if (element.attributes.get(name) !== "0") fail();
           }
           if (element.attributes.get("wrap") !== "square") fail();
+          const anchor = element.attributes.get("anchor");
+          if (shape.textBox && anchor !== undefined && anchor !== "ctr") fail();
           if (shape.textBox) {
             if (element.selfClosing) fail();
           } else if (

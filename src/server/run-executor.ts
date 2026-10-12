@@ -87,6 +87,7 @@ import {
   type RunLease,
   type TerminalRunState,
 } from "@/src/server/run-queue";
+import { describeRunFailure } from "@/src/server/run-failure-guidance";
 import { resolveIntegrationConfig } from "@/src/server/settings";
 import {
   validatePublicTargetUrl,
@@ -566,11 +567,14 @@ export async function runNextReferenceJob(options: {
     }
 
     const code = safeErrorCode(error);
+    const guidance = describeRunFailure(error);
+    // Record the stage the attempt actually reached, not the one it was claimed in.
+    const failedStage = (await getRunJob(claimed.job.runId))?.state ?? claimed.job.state;
     await addRunEvent(claimed.job.runId, {
       idempotencyKey: `attempt:${claimed.attempt.id}:error`,
-      stage: claimed.job.state,
+      stage: failedStage,
       level: "error",
-      message: `Run attempt stopped (${code}).`,
+      message: guidance ? `${guidance} (${code})` : `Run attempt stopped (${code}).`,
     });
 
     if (isRetryableError(error)) {
@@ -581,7 +585,7 @@ export async function runNextReferenceJob(options: {
       if (released) return released.exhausted ? "completed" : "released";
     } else {
       const completed = await completeRunJob(claimed.lease, "failed", {
-        error: `Non-retryable worker failure (${code}).`,
+        error: guidance ? `${guidance} (${code})` : `Non-retryable worker failure (${code}).`,
       });
       if (completed) return "completed";
     }
@@ -937,6 +941,13 @@ async function runCrawlingStage(
         checkpoints,
         clock,
       );
+      await addRunEvent(context.runId, {
+        targetId: target.id,
+        idempotencyKey: `${key}:succeeded`,
+        stage: "crawling",
+        level: "info",
+        message: `Crawl retained ${crawlResult.pages.length} page(s).`,
+      });
     } catch (error) {
       await recordTargetFailure(
         error,

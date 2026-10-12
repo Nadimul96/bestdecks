@@ -18,13 +18,44 @@ export interface JsonRequestOptions {
 export class HttpError extends Error {
   public readonly status: number;
   public readonly bodyText: string;
+  /**
+   * Machine-readable `google.rpc.ErrorInfo` reason codes (for example
+   * `API_KEY_INVALID`) from a JSON error body. Only short upper-case codes are
+   * kept, so no provider message or echoed input can cross this boundary.
+   */
+  public readonly errorReasons: readonly string[];
 
-  public constructor(message: string, status: number, bodyText: string) {
+  public constructor(
+    message: string,
+    status: number,
+    bodyText: string,
+    errorReasons: readonly string[] = [],
+  ) {
     super(message);
     this.name = "HttpError";
     this.status = status;
     this.bodyText = bodyText;
+    this.errorReasons = errorReasons;
   }
+}
+
+const ERROR_REASON_PATTERN = /^[A-Z][A-Z0-9_]{0,63}$/u;
+
+export function extractErrorInfoReasons(text: string): string[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return [];
+  }
+  const details = (parsed as { error?: { details?: unknown } } | null)?.error?.details;
+  if (!Array.isArray(details)) return [];
+  return details
+    .slice(0, 8)
+    .map((detail) => (detail as { reason?: unknown } | null)?.reason)
+    .filter((reason): reason is string =>
+      typeof reason === "string" && ERROR_REASON_PATTERN.test(reason)
+    );
 }
 
 const DEFAULT_TIMEOUT_MS = 120_000; // 2 minutes
@@ -445,6 +476,7 @@ export async function requestJsonWithMetadata<T>(
       `HTTP ${status} from ${options.method ?? "GET"} ${safeUrlForError(url)}`,
       status,
       "",
+      extractErrorInfoReasons(text),
     );
   }
 

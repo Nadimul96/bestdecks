@@ -7,6 +7,7 @@ import {
   extractReadableDocument,
   type ReadableDocument,
 } from "./html-text";
+import { isGeminiApiKeyRejection } from "./gemini-key-rejection";
 import { HttpError, requestJson, sleep } from "./http";
 import { ProviderAdapterError } from "./provider-contract";
 import type {
@@ -354,7 +355,9 @@ export class SiteResearchProvider implements EnrichmentProvider {
     if (error instanceof ProviderAdapterError) return error;
     if (signal?.aborted) return this.error("aborted", false);
     if (error instanceof HttpError) {
-      if (error.status === 401 || error.status === 403) return this.error("authentication", false, error.status);
+      if (error.status === 401 || error.status === 403 || isGeminiApiKeyRejection(error)) {
+        return this.error("authentication", false, error.status);
+      }
       if (error.status === 429) return this.error("rate_limited", true, 429);
       if (error.status >= 500) return this.error("provider_unavailable", true, error.status);
       return this.error("client_request", false, error.status);

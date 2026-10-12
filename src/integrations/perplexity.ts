@@ -6,6 +6,11 @@ import {
 } from "@/src/domain/source-url";
 
 import { HttpError, requestJson, sleep } from "./http";
+import {
+  hasUnsupportedNumericToken,
+  normalizeClaimLabels,
+  RESEARCH_CLAIM_LABELS,
+} from "./research-claims";
 import type {
   EnrichmentEvidence,
   EnrichmentProvider,
@@ -29,7 +34,7 @@ export const PERPLEXITY_ENRICHMENT_METADATA = {
     webSearch: true,
     structuredJson: true,
     citations: true,
-    claimLabels: ["Sourced", "Inference", "Unknown"],
+    claimLabels: RESEARCH_CLAIM_LABELS,
   },
 } as const;
 
@@ -353,30 +358,6 @@ function sourceTitle(url: string) {
   } catch {
     return "Perplexity citation";
   }
-}
-
-function normalizeClaimLabels(summary: string) {
-  return summary
-    .trim()
-    .split(/(?<=[.!?])\s+|\r?\n+/)
-    .map((claim) => claim.trim())
-    .filter(Boolean)
-    .map((claim) =>
-      /^\[(?:Sourced|Inference|Unknown)\]/.test(claim)
-        ? claim
-        : `[Inference] ${claim}`,
-    )
-    .join(" ");
-}
-
-function hasUnsupportedNumericToken(text: string, corpus: string) {
-  const corpusTokens = new Set(numericTokens(corpus));
-  return numericTokens(text).some((token) => !corpusTokens.has(token));
-}
-
-function numericTokens(value: string) {
-  return (value.match(/(?:[$€£]\s*)?\d[\d,]*(?:\.\d+)?%?/g) ?? [])
-    .map((token) => token.toLowerCase().replace(/[\s,]/g, ""));
 }
 
 function normalizePerplexityError(error: unknown): PerplexityProviderError {

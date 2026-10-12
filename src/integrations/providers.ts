@@ -124,8 +124,10 @@ export interface EnrichmentResult {
   confidence: "low" | "medium" | "high";
 }
 
+export type EnrichmentProviderName = "perplexity" | "site";
+
 export interface EnrichmentProvider {
-  name: "perplexity";
+  name: EnrichmentProviderName;
   enrichCompany(
     request: EnrichmentRequest,
     options?: ProviderCallOptions,

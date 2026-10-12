@@ -1,0 +1,23 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "[Sourced] Northwind Freight operates 48 refrigerated cross-dock facilities across the Midwest.\n[Sourced] Prairie Fresh Markets cut produce shrink by 18% after moving its inbound freight to Northwind.\n[Sourced] The Omaha site adds 120,000 square feet of temperature-controlled capacity.\n[Inference] Northwind is expanding capacity for regional grocers.\n[Sourced] Northwind serves 3,400 stores nationwide.\nThe company emphasizes temperature telemetry.\n[Unknown] The passages do not describe current hiring."
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "index": 0
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 1180,
+    "candidatesTokenCount": 96,
+    "totalTokenCount": 1276
+  },
+  "modelVersion": "gemini-2.5-flash",
+  "responseId": "fixture-site-research-1"
+}

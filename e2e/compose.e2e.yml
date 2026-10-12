@@ -1,0 +1,60 @@
+# Test-only overlay for .github/workflows/e2e.yml. It changes nothing about the
+# shipped services except giving the app and worker a route to one fixture
+# origin, so the production SSRF policy runs unmodified:
+#
+# - `fixture-public` is an internal network (no route anywhere) whose subnet is
+#   deliberately outside every private and reserved range the URL policy
+#   blocks. The policy therefore treats the fixture exactly like a public site.
+# - The fixture answers as northwind.example.com over HTTPS with a certificate
+#   from a CA generated per CI run (E2E_TLS_DIR). Only the worker trusts it.
+#
+# Usage: docker compose -f docker-compose.yml -f e2e/compose.e2e.yml up
+
+services:
+  fixture-site:
+    image: ${NODE_IMAGE:-node:24.18.0-bookworm-slim@sha256:6f7b03f7c2c8e2e784dcf9295400527b9b1270fd37b7e9a7285cf83b6951452d}
+    command: ["node", "/e2e/fixture-site.mjs"]
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      # Port 443 lets target URLs stay plain https://northwind.example.com/.
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ./e2e/fixture-site.mjs:/e2e/fixture-site.mjs:ro
+      - ./src/integrations/fixtures/web:/fixtures:ro
+      - ${E2E_TLS_DIR:?Set E2E_TLS_DIR to the generated fixture TLS directory}:/e2e-tls:ro
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('node:net').connect(443, '127.0.0.1').on('connect', () => process.exit(0)).on('error', () => process.exit(1))"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+    networks:
+      fixture-public:
+        aliases:
+          - northwind.example.com
+
+  app:
+    networks:
+      fixture-public: {}
+
+  worker:
+    environment:
+      NODE_EXTRA_CA_CERTS: /e2e-tls/ca.pem
+    volumes:
+      - ${E2E_TLS_DIR:?Set E2E_TLS_DIR to the generated fixture TLS directory}:/e2e-tls:ro
+    depends_on:
+      fixture-site:
+        condition: service_healthy
+    networks:
+      fixture-public: {}
+
+networks:
+  fixture-public:
+    internal: true
+    ipam:
+      config:
+        - subnet: 198.20.0.0/24

@@ -14,6 +14,9 @@ const authOrigin = resolveBrowserAuthOrigin({
   currentOrigin: typeof window === "undefined" ? undefined : window.location.origin,
 });
 
-export const authClient = createAuthClient({
-  baseURL: authOrigin ? `${authOrigin}/api/auth` : "/api/auth",
-});
+// With no explicit origin, Better Auth resolves the same origin itself
+// (window.location in the browser, BETTER_AUTH_URL during SSR). It rejects a
+// relative "/api/auth" base URL, which made production SSR fail.
+export const authClient = createAuthClient(
+  authOrigin ? { baseURL: `${authOrigin}/api/auth` } : {},
+);

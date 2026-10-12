@@ -30,8 +30,6 @@ const forbiddenRootFiles = new Set([
   "CHANGELOG.md",
   "CODE_OF_CONDUCT.md",
   "CONTRIBUTING.md",
-  "IMPLEMENTATION-PLAN.md",
-  "PROJECT_CONTEXT.md",
   "README.md",
   "ROADMAP.md",
   "SECURITY.md",

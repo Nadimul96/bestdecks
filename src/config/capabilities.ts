@@ -81,12 +81,20 @@ export const PUBLIC_CAPABILITIES: readonly PublicCapability[] = [
     evidence: ["src/domain/schemas.ts", "src/domain/pipeline.ts"],
   },
   {
-    id: "cloudflare-crawl",
-    name: "Cloudflare Browser Rendering crawl adapter",
-    summary: "Fetch target-site content through a bring-your-own-key provider adapter.",
+    id: "builtin-crawl",
+    name: "Built-in robots-aware HTTPS crawl adapter",
+    summary: "Fetch target-site text with no provider key: robots.txt respected, every hop SSRF-checked and DNS-pinned, no JavaScript rendering.",
     status: "implemented",
     boundary: "provider-adapter",
-    evidence: ["src/integrations/cloudflare.ts", "src/server/run-executor.ts"],
+    evidence: ["src/integrations/builtin-crawler.ts", "src/integrations/web-fetcher.ts"],
+  },
+  {
+    id: "cloudflare-crawl",
+    name: "Cloudflare Browser Rendering crawl adapter",
+    summary: "Fetch rendered target-site content through a bring-your-own-key provider adapter.",
+    status: "implemented",
+    boundary: "provider-adapter",
+    evidence: ["src/integrations/cloudflare.ts", "src/server/reference-providers.ts"],
   },
   {
     id: "deepcrawl-crawl",
@@ -97,12 +105,20 @@ export const PUBLIC_CAPABILITIES: readonly PublicCapability[] = [
     evidence: ["src/integrations/deepcrawl.ts"],
   },
   {
+    id: "site-research",
+    name: "First-party site research adapter",
+    summary: "Retain verbatim passages from the target's own signal pages and feed, then summarize them with Gemini without search grounding.",
+    status: "implemented",
+    boundary: "provider-adapter",
+    evidence: ["src/integrations/site-research.ts", "src/server/reference-providers.ts"],
+  },
+  {
     id: "perplexity-research",
     name: "Perplexity enrichment adapter",
     summary: "Request external company research through a bring-your-own-key adapter.",
     status: "implemented",
     boundary: "provider-adapter",
-    evidence: ["src/integrations/perplexity.ts", "src/server/run-executor.ts"],
+    evidence: ["src/integrations/perplexity.ts", "src/server/reference-providers.ts"],
   },
   {
     id: "gemini-planning",
@@ -170,7 +186,7 @@ export const LIVE_REFERENCE_VERIFICATION = {
   state: "blocked",
   label: "Live-reference verification blocked",
   reason:
-    "No reproducible Cloudflare → Perplexity → Gemini → renderer run receipt is checked into this repository.",
+    "No reproducible crawl → research → Gemini → renderer run receipt is checked into this repository.",
 } as const;
 
 export const OSS_DISTRIBUTION = {

@@ -60,7 +60,7 @@ export function RunEvidencePanel({ runId, refreshKey }: { runId: string; refresh
         <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           Evidence
         </h3>
-        <p className="text-[11px] text-muted-foreground">
+        <p className="hidden text-[11px] text-muted-foreground sm:block">
           Every factual claim must match a retained source, verbatim.
         </p>
       </div>

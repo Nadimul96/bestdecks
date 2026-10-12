@@ -632,7 +632,7 @@ export function PipelineView() {
               {/* Failed banner */}
               {selectedRun.status === "failed" && (
                 <div className="space-y-2 rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3">
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-3">
                     <AlertCircle className="size-4 shrink-0 text-destructive" />
                     <p className="min-w-0 flex-1 text-[13px] font-medium text-destructive">
                       {humanizeError(
@@ -661,7 +661,7 @@ export function PipelineView() {
               {/* Partially completed banner */}
               {selectedRun.status === "partially_completed" && (
                 <div className="space-y-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3">
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-3">
                     <AlertCircle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
                     <p className="min-w-0 flex-1 text-[13px] font-medium text-amber-600 dark:text-amber-400">
                       {humanizeError(selectedRun.lastError ?? "Some targets failed.")}

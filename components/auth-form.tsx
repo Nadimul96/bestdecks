@@ -174,7 +174,7 @@ export function AuthForm({ mode, capabilities }: AuthFormProps) {
               Full name
             </label>
             <div className="relative">
-              <User className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/60" />
+              <User className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-muted-foreground/60" />
               <Input
                 id={nameFieldId}
                 name="name"
@@ -194,7 +194,7 @@ export function AuthForm({ mode, capabilities }: AuthFormProps) {
             Email
           </label>
           <div className="relative">
-            <Mail className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/60" />
+            <Mail className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-muted-foreground/60" />
             <Input
               id={emailFieldId}
               name="email"
@@ -214,7 +214,7 @@ export function AuthForm({ mode, capabilities }: AuthFormProps) {
             Password
           </label>
           <div className="relative">
-            <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/60" />
+            <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-muted-foreground/60" />
             <Input
               id={passwordFieldId}
               name="password"

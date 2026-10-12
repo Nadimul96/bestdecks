@@ -247,6 +247,8 @@ export async function resolveIntegrationConfig(userId?: string) {
     : allowOperatorCredentials ? env.PRESENTON_AUTH_PASSWORD : undefined;
 
   return {
+    crawlProvider: env.CRAWL_PROVIDER,
+    researchProvider: env.RESEARCH_PROVIDER,
     // A stored record is an all-or-nothing override. Never combine a user-controlled
     // endpoint/account with a process-global credential.
     cloudflareAccountId: cloudflare

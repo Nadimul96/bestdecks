@@ -112,3 +112,26 @@ test("reference provider status fails closed on partial or invalid configuration
   });
   assert.equal(invalidSelfHosted[4]?.health.configured, false);
 });
+
+test("the free path reports the built-in crawler and site research as configured from one key", () => {
+  const statuses = buildReferenceProviderStatuses({
+    geminiApiKey: "<gemini-api-key>",
+    presentonBaseUrl: "http://127.0.0.1:5050",
+    presentonAuthUsername: "renderer-admin",
+    presentonAuthPassword: "<presenton-auth-password>",
+    allowPrivateProviderUrls: true,
+  });
+  assert.deepEqual(statuses.map(({ providerId }) => providerId).slice(0, 2), [
+    "bestdecks.builtin.crawl",
+    "bestdecks.site-research",
+  ]);
+  assert.ok(statuses.every(({ health }) => health.configured));
+
+  const explicitPaid = buildReferenceProviderStatuses({
+    crawlProvider: "cloudflare",
+    researchProvider: "perplexity",
+    geminiApiKey: "<gemini-api-key>",
+  });
+  assert.equal(explicitPaid[0]?.health.configured, false);
+  assert.equal(explicitPaid[1]?.health.configured, false);
+});

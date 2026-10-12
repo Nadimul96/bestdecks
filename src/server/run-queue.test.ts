@@ -694,7 +694,7 @@ test("target checkpoint commit atomically binds checkpoint, artifact, and projec
 
   const metadata = {
     outcome: "succeeded",
-    crawlResult: { pages: [] },
+    crawlResult: { provider: "cloudflare", pages: [] },
     timing: { startedAt: at(1_000).toISOString(), completedAt: at(2_000).toISOString() },
   };
   const committed = await commitRunTargetCheckpoint(claim.lease, {
@@ -804,7 +804,7 @@ test("target checkpoint replay repairs projections from first-writer metadata", 
   await transitionRunJob(first.lease, "crawling", { now: at(1_000) });
   const originalMetadata = {
     outcome: "succeeded",
-    crawlResult: { pages: [{ url: "https://example.com" }] },
+    crawlResult: { provider: "cloudflare", pages: [{ url: "https://example.com" }] },
     timing: { startedAt: at(1_000).toISOString(), completedAt: at(2_000).toISOString() },
   };
   await commitRunTargetCheckpoint(first.lease, {

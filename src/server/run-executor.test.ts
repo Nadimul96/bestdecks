@@ -7,6 +7,7 @@ import {
   RICH_STATIC_VISUAL_PROFILE,
   RICH_STATIC_VISUAL_PROFILE_SHA256,
 } from "@/src/domain/visual-profile";
+import { BUILTIN_CRAWLER_METADATA, BuiltinCrawler } from "@/src/integrations/builtin-crawler";
 import { CLOUDFLARE_CRAWLER_METADATA } from "@/src/integrations/cloudflare";
 import { PERPLEXITY_ENRICHMENT_METADATA } from "@/src/integrations/perplexity";
 import { presentonProviderMetadata } from "@/src/integrations/presenton";
@@ -17,6 +18,8 @@ import type {
   PresentonResult,
   ProviderCallOptions,
 } from "@/src/integrations/providers";
+import { SITE_RESEARCH_METADATA, SiteResearchProvider } from "@/src/integrations/site-research";
+import { fixtureResolver, fixtureTransport } from "@/src/integrations/web-fixture.test-helper";
 import { GEMINI_BRIEF_BUILDER_METADATA } from "@/src/server/ai-brief-builder";
 import {
   GEMINI_SLIDE_PLANNER_METADATA,
@@ -191,6 +194,7 @@ function dependencies(options: {
   return async () => ({
     crawler: {
       name: "cloudflare" as const,
+      providerId: CLOUDFLARE_CRAWLER_METADATA.providerId,
       async startCrawl(_request: unknown, callOptions?: ProviderCallOptions) {
         if (options.crawlCalls) options.crawlCalls.count += 1;
         if (options.crawlFailures && options.crawlFailures.remaining > 0) {
@@ -253,6 +257,8 @@ function dependencies(options: {
     },
     enrichmentProvider: {
       name: "perplexity" as const,
+      providerId: PERPLEXITY_ENRICHMENT_METADATA.providerId,
+      modelId: PERPLEXITY_ENRICHMENT_METADATA.defaultModelId,
       async enrichCompany(
         request: { websiteUrl: string },
         callOptions?: ProviderCallOptions,
@@ -647,6 +653,82 @@ test("reference worker delivers once and persists a verified receipt atomically"
     "idle",
   );
   assert.equal(renderCalls.count, 1);
+});
+
+test("the free path (built-in crawler and site research) delivers through the durable worker", async () => {
+  const owner = userId("worker-free-path");
+  const runId = await createRun(input(), owner);
+  const site = "https://target.example.com";
+  const { transport, requests } = fixtureTransport({
+    [`${site}/robots.txt`]: { status: 404 },
+    [`${site}/`]: { file: "northwind-home.html" },
+    [`${site}/about`]: { file: "northwind-about.html" },
+    [`${site}/customers`]: { file: "northwind-customers.html" },
+  });
+  const web = { transport, resolver: fixtureResolver() };
+  const base = dependencies();
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(JSON.stringify({
+    candidates: [{ content: { parts: [{ text: "[Sourced] Northwind Freight operates 48 refrigerated cross-dock facilities across the Midwest." }] } }],
+    usageMetadata: { promptTokenCount: 40, candidatesTokenCount: 12, totalTokenCount: 52 },
+  }), { status: 200, headers: { "Content-Type": "application/json" } })) as typeof fetch;
+
+  try {
+    assert.equal(
+      await runNextReferenceJob({
+        leaseOwner: "free-path-worker",
+        dependencyFactory: async () => {
+          const resolved = await base();
+          return {
+            ...resolved,
+            crawler: new BuiltinCrawler(web),
+            enrichmentProvider: new SiteResearchProvider("gemini-fixture-key", web),
+            configurationNames: ["crawl.builtin", "research.site", "gemini.api_key", "presenton.base_url"],
+            providerProvenance: [
+              {
+                stage: "crawling",
+                providerId: BUILTIN_CRAWLER_METADATA.providerId,
+                modelId: null,
+                contractVersion: BUILTIN_CRAWLER_METADATA.contractVersion,
+              },
+              {
+                stage: "enriching",
+                providerId: SITE_RESEARCH_METADATA.providerId,
+                modelId: SITE_RESEARCH_METADATA.defaultModelId,
+                contractVersion: SITE_RESEARCH_METADATA.contractVersion,
+              },
+              ...resolved.providerProvenance.slice(2),
+            ],
+          };
+        },
+      }),
+      "completed",
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  const run = await getRun(runId, owner);
+  assert.equal(run?.status, "delivered");
+  const receipt = receiptFromRun(run!);
+  const providers = new Map(receipt.providers.map((provider) => [provider.providerId, provider]));
+  assert.equal(providers.get(BUILTIN_CRAWLER_METADATA.providerId)?.health?.reachable, true);
+  assert.equal(providers.get(SITE_RESEARCH_METADATA.providerId)?.health?.reachable, true);
+  assert.ok(providers.get(BUILTIN_CRAWLER_METADATA.providerId)?.usage?.some(
+    ({ metric, amount }) => metric === "http_requests" && amount > 0,
+  ));
+  assert.equal(providers.has(CLOUDFLARE_CRAWLER_METADATA.providerId), false);
+  assert.ok(requests.every((request) => request.url.startsWith(site)));
+
+  const checkpoints = await listRunCheckpoints(runId);
+  const crawl = checkpoints.find(({ checkpointKey }) => checkpointKey.endsWith(":crawl:v1"));
+  const crawlMetadata = crawl?.metadata as { crawlResult: { provider: string; pages: Array<{ markdown?: string }> } };
+  assert.equal(crawlMetadata.crawlResult.provider, "builtin");
+  assert.ok(crawlMetadata.crawlResult.pages[0]?.markdown?.includes("48 refrigerated cross-dock facilities"));
+  const enrichment = checkpoints.find(({ checkpointKey }) => checkpointKey.endsWith(":enrichment:v1"));
+  const evidence = (enrichment?.metadata as { enrichment: { evidence: Array<{ url: string }> } })
+    .enrichment.evidence;
+  assert.deepEqual(evidence.map(({ url }) => url), [`${site}/`, `${site}/customers`, `${site}/about`]);
 });
 
 test("worker refuses to persist an oversized artifact as delivered", async () => {

@@ -31,14 +31,7 @@ import {
   isPersistableSourceUrl,
   normalizePersistableSourceUrl,
 } from "@/src/domain/source-url";
-import {
-  CLOUDFLARE_CRAWLER_METADATA,
-  CloudflareCrawler,
-} from "@/src/integrations/cloudflare";
-import {
-  PERPLEXITY_ENRICHMENT_METADATA,
-  PerplexityEnrichmentProvider,
-} from "@/src/integrations/perplexity";
+import { selectionFromConfiguration } from "@/src/config/provider-selection";
 import {
   PresentonDeckProvider,
   presentonProviderMetadata,
@@ -106,6 +99,10 @@ import {
   type SlidePlan,
   type SlidePlannerInput,
 } from "@/src/server/slide-planner";
+import {
+  createCrawlAndResearchProviders,
+  CRAWL_PROVIDER_IDS,
+} from "@/src/server/reference-providers";
 
 const WORKER_LEASE_MS = MAX_LEASE_DURATION_MS;
 const DEFAULT_LEASE_HEARTBEAT_INTERVAL_MS = 30_000;
@@ -128,7 +125,7 @@ const TimingSchema = z.object({
 }).strict();
 
 const CrawlResultSchema = z.object({
-  provider: z.literal("cloudflare"),
+  provider: z.enum(["builtin", "cloudflare"]),
   pages: z.array(z.object({
     url: SourceUrlSchema,
     title: z.string().optional(),
@@ -281,7 +278,7 @@ const CrawlResponseCheckpointSchema = z.object({
 
 const CrawlJobCheckpointSchema = z.object({
   contractVersion: z.literal(1),
-  providerId: z.literal(CLOUDFLARE_CRAWLER_METADATA.providerId),
+  providerId: z.enum(CRAWL_PROVIDER_IDS),
   jobId: z.string().trim().min(1).max(256),
   observability: providerCallObservabilitySchema.optional(),
   receivedAt: z.string().datetime({ offset: true }),
@@ -473,18 +470,15 @@ export async function createReferenceDependencies(
   if (!commitSha) throw new WorkerConfigurationError("commit_sha");
 
   const config = await resolveIntegrationConfig(context.userId);
-  if (!config.cloudflareAccountId || !config.cloudflareApiToken) {
-    throw new WorkerConfigurationError("cloudflare");
-  }
-  if (!config.perplexityApiKey) throw new WorkerConfigurationError("perplexity");
+  const crawlAndResearch = createCrawlAndResearchProviders(
+    selectionFromConfiguration(config),
+    config,
+  );
+  if (!crawlAndResearch.ok) throw new WorkerConfigurationError(crawlAndResearch.missing);
   if (!config.geminiApiKey) throw new WorkerConfigurationError("gemini");
   if (!config.presentonBaseUrl) throw new WorkerConfigurationError("presenton");
 
-  const crawler = new CloudflareCrawler({
-    accountId: config.cloudflareAccountId,
-    apiToken: config.cloudflareApiToken,
-  });
-  const enrichmentProvider = new PerplexityEnrichmentProvider(config.perplexityApiKey);
+  const { crawler, enrichmentProvider } = crawlAndResearch;
   const companyBriefBuilder = new AiBriefBuilder(config.geminiApiKey);
   const slidePlanner = new SlidePlanner(config.geminiApiKey);
   const deckProvider = new PresentonDeckProvider({
@@ -505,9 +499,7 @@ export async function createReferenceDependencies(
     targetUrlValidator: validatePublicTargetUrl,
     deckProvider,
     configurationNames: [
-      "cloudflare.account_id",
-      "cloudflare.api_token",
-      "perplexity.api_key",
+      ...crawlAndResearch.configurationNames,
       "gemini.api_key",
       "presenton.base_url",
       ...(config.presentonApiKey ? ["presenton.api_key"] : []),
@@ -516,18 +508,7 @@ export async function createReferenceDependencies(
       ...(config.presentonTemplate ? ["presenton.template"] : []),
     ],
     providerProvenance: [
-      {
-        stage: "crawling",
-        providerId: CLOUDFLARE_CRAWLER_METADATA.providerId,
-        modelId: CLOUDFLARE_CRAWLER_METADATA.modelId,
-        contractVersion: CLOUDFLARE_CRAWLER_METADATA.contractVersion,
-      },
-      {
-        stage: "enriching",
-        providerId: PERPLEXITY_ENRICHMENT_METADATA.providerId,
-        modelId: enrichmentProvider.modelId,
-        contractVersion: PERPLEXITY_ENRICHMENT_METADATA.contractVersion,
-      },
+      ...crawlAndResearch.provenance,
       {
         stage: "enriching",
         providerId: GEMINI_BRIEF_BUILDER_METADATA.providerId,
@@ -828,7 +809,7 @@ async function runCrawlingStage(
       checkpoints,
       dispatchKey,
       responseKey,
-      CLOUDFLARE_CRAWLER_METADATA.providerId,
+      dependencies.crawler.providerId,
       CrawlResponseCheckpointSchema,
     );
     const jobCheckpoint = checkpoints.get(jobKey);
@@ -836,6 +817,9 @@ async function runCrawlingStage(
       ? parseCheckpoint(jobCheckpoint, CrawlJobCheckpointSchema)
       : undefined;
     if (crawlJob && !boundary.dispatch) throw new CheckpointContractError();
+    if (crawlJob && crawlJob.providerId !== dependencies.crawler.providerId) {
+      throw new CheckpointContractError();
+    }
     if (boundary.dispatch && !boundary.response && !crawlJob) {
       await recordIndeterminateProviderOutcome(
         lease,
@@ -876,7 +860,7 @@ async function runCrawlingStage(
             "crawling",
             {
               contractVersion: 1,
-              providerId: CLOUDFLARE_CRAWLER_METADATA.providerId,
+              providerId: dependencies.crawler.providerId,
               reservedAt: startedAt.toISOString(),
             } satisfies z.infer<typeof ProviderDispatchCheckpointSchema>,
             checkpoints,
@@ -898,7 +882,9 @@ async function runCrawlingStage(
             "crawling",
             {
               contractVersion: 1,
-              providerId: CLOUDFLARE_CRAWLER_METADATA.providerId,
+              providerId: CrawlJobCheckpointSchema.shape.providerId.parse(
+                dependencies.crawler.providerId,
+              ),
               jobId,
               ...(retainedStartObservability
                 ? { observability: retainedStartObservability }
@@ -919,7 +905,7 @@ async function runCrawlingStage(
             onObservability: crawlObservability.observe,
           }),
         );
-        crawlResult = CrawlResultSchema.parse(normalizeCrawlResult(raw));
+        crawlResult = CrawlResultSchema.parse(normalizeCrawlResult(raw, dependencies.crawler.name));
         const retainedCrawlObservability = crawlObservability.value();
         await recordCheckpoint(
           lease,
@@ -1038,7 +1024,7 @@ async function runEnrichingStage(
       checkpoints,
       enrichmentDispatchKey,
       enrichmentResponseKey,
-      PERPLEXITY_ENRICHMENT_METADATA.providerId,
+      dependencies.enrichmentProvider.providerId,
       EnrichmentResponseCheckpointSchema,
     );
     const companyBriefBoundary = readProviderBoundary(
@@ -1113,7 +1099,7 @@ async function runEnrichingStage(
           "enriching",
           {
             contractVersion: 1,
-            providerId: PERPLEXITY_ENRICHMENT_METADATA.providerId,
+            providerId: dependencies.enrichmentProvider.providerId,
             reservedAt: startedAt.toISOString(),
           } satisfies z.infer<typeof ProviderDispatchCheckpointSchema>,
           checkpoints,
@@ -1374,7 +1360,11 @@ async function runPlanningStage(
           sellerBrief,
           deckInput,
           sellerContactInfo: context.sellerContactInfo,
-          sourceMetadata: sourceMetadataForTarget(target, checkpoints),
+          sourceMetadata: sourceMetadataForTarget(
+            target,
+            checkpoints,
+            dependencies.enrichmentProvider.name,
+          ),
           slideStructure: context.input.questionnaire.extraInstructions,
         };
         await recordCheckpoint(
@@ -1772,12 +1762,15 @@ function buildProviderReceipts(
     const crawlJobCheckpoint = checkpoints.get(targetKey(target, "crawl-job"));
     if (crawlJobCheckpoint) {
       const value = parseCheckpoint(crawlJobCheckpoint, CrawlJobCheckpointSchema);
-      markReachable(CLOUDFLARE_CRAWLER_METADATA.providerId, value.observability);
+      markReachable(value.providerId, value.observability);
     }
     const crawlResponseCheckpoint = checkpoints.get(targetKey(target, "crawl-response"));
     if (crawlResponseCheckpoint) {
       const value = parseCheckpoint(crawlResponseCheckpoint, CrawlResponseCheckpointSchema);
-      markReachable(CLOUDFLARE_CRAWLER_METADATA.providerId, value.observability);
+      markReachable(
+        dispatchProviderId(checkpoints, targetKey(target, "crawl-dispatch")),
+        value.observability,
+      );
     }
     const enrichmentResponseCheckpoint = checkpoints.get(
       targetKey(target, "enrichment-response"),
@@ -1787,7 +1780,10 @@ function buildProviderReceipts(
         enrichmentResponseCheckpoint,
         EnrichmentResponseCheckpointSchema,
       );
-      markReachable(PERPLEXITY_ENRICHMENT_METADATA.providerId, value.observability);
+      markReachable(
+        dispatchProviderId(checkpoints, targetKey(target, "enrichment-dispatch")),
+        value.observability,
+      );
     }
     const companyBriefResponseCheckpoint = checkpoints.get(
       targetKey(target, "company-brief-response"),
@@ -2411,6 +2407,11 @@ function parseCheckpoint<T extends z.ZodTypeAny>(checkpoint: RunCheckpoint, sche
   return parsed.data;
 }
 
+function dispatchProviderId(checkpoints: Map<string, RunCheckpoint>, key: string) {
+  return parseCheckpoint(requiredCheckpoint(checkpoints, key), ProviderDispatchCheckpointSchema)
+    .providerId;
+}
+
 function readProviderBoundary<T extends z.ZodTypeAny>(
   checkpoints: Map<string, RunCheckpoint>,
   dispatchKey: string,
@@ -2473,8 +2474,8 @@ function buildCrawlRequest(websiteUrl: string) {
   };
 }
 
-function normalizeCrawlResult(result: CrawlResult) {
-  if (result.provider !== "cloudflare") {
+function normalizeCrawlResult(result: CrawlResult, expectedProvider: CrawlResult["provider"]) {
+  if (result.provider !== expectedProvider || result.provider === "deepcrawl") {
     throw new TargetContractError("unexpected_crawl_provider");
   }
   return {
@@ -2525,6 +2526,7 @@ function buildDeckInput(
 function sourceMetadataForTarget(
   target: RunExecutionTarget,
   checkpoints: Map<string, RunCheckpoint>,
+  researchProvider: string,
 ): SlidePlannerInput["sourceMetadata"] {
   const crawl = readTargetCheckpoint(checkpoints, target, "crawl", CrawlCheckpointSchema);
   const enrichment = readTargetCheckpoint(
@@ -2539,13 +2541,13 @@ function sourceMetadataForTarget(
       url: page.url,
       title: page.title ?? new URL(page.url).hostname,
       retrievedAt: crawl.timing.completedAt,
-      provider: "cloudflare",
+      provider: crawl.crawlResult.provider,
     })),
     ...enrichment.enrichment.evidence.map((item) => ({
       url: item.url,
       title: item.title,
       retrievedAt: enrichment.timing.completedAt,
-      provider: "perplexity",
+      provider: researchProvider,
     })),
   ];
   return [...new Map(records.map((record) => [record.url, record])).values()];

@@ -557,6 +557,15 @@ function requiredMetadataRecord(metadata: unknown): Record<string, unknown> {
   return metadata as Record<string, unknown>;
 }
 
+function crawlProviderName(metadata: Record<string, unknown>) {
+  const crawlResult = metadata.crawlResult as { provider?: unknown } | undefined;
+  const provider = crawlResult?.provider;
+  if (provider !== "builtin" && provider !== "cloudflare") {
+    throw new Error("Succeeded crawl checkpoint metadata requires a known crawl provider.");
+  }
+  return provider;
+}
+
 function requiredErrorCode(metadata: Record<string, unknown>) {
   if (typeof metadata.errorCode !== "string" || metadata.errorCode.trim().length === 0) {
     throw new Error("Failed target checkpoint metadata requires an errorCode.");
@@ -583,7 +592,7 @@ function targetStageProjection(
           status: "crawled",
           lastError: null,
           setCrawlProvider: true,
-          crawlProvider: "cloudflare",
+          crawlProvider: crawlProviderName(record),
         };
       }
       if (outcome === "failed") {

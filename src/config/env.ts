@@ -6,6 +6,7 @@ import {
   CanonicalOriginError,
   parseCanonicalOrigin,
 } from "@/src/config/canonical-origin";
+import { CRAWL_PROVIDERS, RESEARCH_PROVIDERS } from "@/src/config/provider-selection";
 
 function optionalEnvironmentValue<T extends z.ZodTypeAny>(schema: T) {
   return z.preprocess(
@@ -31,6 +32,8 @@ export const envSchema = z.object({
   BESTDECKS_COMMIT_SHA: optionalEnvironmentValue(
     z.string().regex(/^[a-fA-F0-9]{7,64}$/),
   ),
+  CRAWL_PROVIDER: optionalEnvironmentValue(z.enum(CRAWL_PROVIDERS)),
+  RESEARCH_PROVIDER: optionalEnvironmentValue(z.enum(RESEARCH_PROVIDERS)),
   CLOUDFLARE_ACCOUNT_ID: optionalEnvironmentValue(z.string().min(1)),
   CLOUDFLARE_API_TOKEN: optionalEnvironmentValue(z.string().min(1)),
   DEEPCRAWL_API_KEY: optionalEnvironmentValue(z.string().min(1)),

@@ -77,6 +77,8 @@ export interface CrawlProvider {
 }
 
 export interface ResumableCrawlProvider extends CrawlProvider {
+  /** Stable adapter identity persisted in dispatch checkpoints and receipts. */
+  readonly providerId: string;
   startCrawl(request: CrawlRequest, options?: ProviderCallOptions): Promise<string>;
   resumeCrawl(
     jobId: string,
@@ -128,6 +130,9 @@ export type EnrichmentProviderName = "perplexity" | "site";
 
 export interface EnrichmentProvider {
   name: EnrichmentProviderName;
+  /** Stable adapter identity persisted in dispatch checkpoints and receipts. */
+  readonly providerId: string;
+  readonly modelId: string;
   enrichCompany(
     request: EnrichmentRequest,
     options?: ProviderCallOptions,

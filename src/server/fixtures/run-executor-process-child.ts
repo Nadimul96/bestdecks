@@ -50,6 +50,7 @@ function recordCall(event: string, details: Record<string, unknown> = {}) {
 
 const crawler: ResumableCrawlProvider = {
   name: "cloudflare",
+  providerId: CLOUDFLARE_CRAWLER_METADATA.providerId,
   async startCrawl(_request: CrawlRequest, options?: ProviderCallOptions) {
     recordCall("crawl_start", { jobId: crawlJobId });
     if (phase === "phase2") {
@@ -159,6 +160,8 @@ async function createDependencies(): Promise<RunExecutorDependencies> {
     crawler,
     enrichmentProvider: {
       name: "perplexity",
+      providerId: PERPLEXITY_ENRICHMENT_METADATA.providerId,
+      modelId: PERPLEXITY_ENRICHMENT_METADATA.defaultModelId,
       async enrichCompany(request: EnrichmentRequest, options?: ProviderCallOptions) {
         recordCall("enrich");
         options?.onObservability?.({

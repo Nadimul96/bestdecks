@@ -1,7 +1,16 @@
 import {
+  selectionFromConfiguration,
+  type CrawlProviderChoice,
+  type ProviderSelection,
+  type ResearchProviderChoice,
+} from "@/src/config/provider-selection";
+import {
   uncheckedProviderHealth,
   type ProviderHealth,
 } from "@/src/domain/provider-observability";
+import {
+  BUILTIN_CRAWLER_METADATA,
+} from "@/src/integrations/builtin-crawler";
 import {
   CLOUDFLARE_CRAWLER_METADATA,
   CloudflareCrawler,
@@ -23,6 +32,10 @@ import {
   PerplexityEnrichmentProvider,
 } from "@/src/integrations/perplexity";
 import {
+  SITE_RESEARCH_METADATA,
+  SiteResearchProvider,
+} from "@/src/integrations/site-research";
+import {
   PresentonDeckProvider,
   presentonProviderMetadata,
 } from "@/src/integrations/presenton";
@@ -40,6 +53,8 @@ import {
 } from "@/src/server/slide-planner";
 
 export interface ReferenceProviderConfiguration {
+  crawlProvider?: CrawlProviderChoice;
+  researchProvider?: ResearchProviderChoice;
   cloudflareAccountId?: string;
   cloudflareApiToken?: string;
   perplexityApiKey?: string;
@@ -82,14 +97,8 @@ function configurationPasses(construct: () => unknown) {
  */
 export function buildReferenceProviderStatuses(
   configuration: ReferenceProviderConfiguration,
+  selection: ProviderSelection = selectionFromConfiguration(configuration),
 ): ReferenceProviderStatus[] {
-  const cloudflareConfigured = configurationPasses(() => new CloudflareCrawler({
-    accountId: configuration.cloudflareAccountId ?? "",
-    apiToken: configuration.cloudflareApiToken ?? "",
-  }));
-  const perplexityConfigured = configurationPasses(() =>
-    new PerplexityEnrichmentProvider(configuration.perplexityApiKey ?? "")
-  );
   const briefConfigured = configurationPasses(() =>
     new AiBriefBuilder(configuration.geminiApiKey ?? "")
   );
@@ -105,21 +114,48 @@ export function buildReferenceProviderStatuses(
     allowPrivateNetwork: configuration.allowPrivateProviderUrls,
   }));
 
+  const crawl: ReferenceProviderStatus = selection.crawl.provider === "cloudflare"
+    ? {
+        stage: "crawling",
+        providerId: CLOUDFLARE_CRAWLER_METADATA.providerId,
+        modelId: CLOUDFLARE_CRAWLER_METADATA.modelId,
+        contractVersion: CLOUDFLARE_CRAWLER_METADATA.contractVersion,
+        health: uncheckedProviderHealth(configurationPasses(() => new CloudflareCrawler({
+          accountId: configuration.cloudflareAccountId ?? "",
+          apiToken: configuration.cloudflareApiToken ?? "",
+        }))),
+      }
+    : {
+        stage: "crawling",
+        providerId: BUILTIN_CRAWLER_METADATA.providerId,
+        modelId: BUILTIN_CRAWLER_METADATA.modelId,
+        contractVersion: BUILTIN_CRAWLER_METADATA.contractVersion,
+        // Needs no credentials; reachability depends on each target site.
+        health: uncheckedProviderHealth(true),
+      };
+  const research: ReferenceProviderStatus = selection.research.provider === "perplexity"
+    ? {
+        stage: "enriching",
+        providerId: PERPLEXITY_ENRICHMENT_METADATA.providerId,
+        modelId: PERPLEXITY_ENRICHMENT_METADATA.defaultModelId,
+        contractVersion: PERPLEXITY_ENRICHMENT_METADATA.contractVersion,
+        health: uncheckedProviderHealth(configurationPasses(() =>
+          new PerplexityEnrichmentProvider(configuration.perplexityApiKey ?? "")
+        )),
+      }
+    : {
+        stage: "enriching",
+        providerId: SITE_RESEARCH_METADATA.providerId,
+        modelId: SITE_RESEARCH_METADATA.defaultModelId,
+        contractVersion: SITE_RESEARCH_METADATA.contractVersion,
+        health: uncheckedProviderHealth(configurationPasses(() =>
+          new SiteResearchProvider(configuration.geminiApiKey ?? "")
+        )),
+      };
+
   return [
-    {
-      stage: "crawling",
-      providerId: CLOUDFLARE_CRAWLER_METADATA.providerId,
-      modelId: CLOUDFLARE_CRAWLER_METADATA.modelId,
-      contractVersion: CLOUDFLARE_CRAWLER_METADATA.contractVersion,
-      health: uncheckedProviderHealth(cloudflareConfigured),
-    },
-    {
-      stage: "enriching",
-      providerId: PERPLEXITY_ENRICHMENT_METADATA.providerId,
-      modelId: PERPLEXITY_ENRICHMENT_METADATA.defaultModelId,
-      contractVersion: PERPLEXITY_ENRICHMENT_METADATA.contractVersion,
-      health: uncheckedProviderHealth(perplexityConfigured),
-    },
+    crawl,
+    research,
     {
       stage: "enriching",
       providerId: GEMINI_BRIEF_BUILDER_METADATA.providerId,

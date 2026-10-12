@@ -88,6 +88,12 @@ services:
     init: true
     cap_drop:
       - ALL
+    cap_add:
+      # The image's nginx starts as root, then chowns its temp directories
+      # and drops to www-data. Without these three it exits at startup.
+      - CHOWN
+      - SETGID
+      - SETUID
     security_opt:
       - no-new-privileges:true
     pids_limit: 512

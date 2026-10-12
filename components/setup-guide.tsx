@@ -159,7 +159,7 @@ export function SetupGuide() {
   /* Minimized pill */
   if (!expanded) {
     return (
-      <div className="fixed bottom-6 left-6 z-50 hidden animate-scale-in md:block">
+      <div className="fixed bottom-6 right-6 z-50 hidden animate-scale-in md:block">
         <button
           type="button"
           onClick={() => setExpanded(true)}
@@ -194,7 +194,7 @@ export function SetupGuide() {
 
   /* Expanded card */
   return (
-    <div className="fixed bottom-6 left-6 z-50 hidden w-80 animate-scale-in md:block">
+    <div className="fixed bottom-6 right-6 z-50 hidden w-80 animate-scale-in md:block">
       <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-xl">
         {/* Header */}
         <div className="flex items-center justify-between bg-gradient-to-r from-primary/[0.06] to-transparent px-4 py-3">

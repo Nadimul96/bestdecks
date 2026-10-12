@@ -49,6 +49,8 @@ export interface BinaryResponse {
   status: number;
   body: Buffer;
   contentType?: string;
+  /** Redirect target, exposed so callers can re-validate every hop. */
+  location?: string;
   metadata?: ProviderResponseMetadata;
 }
 
@@ -272,6 +274,9 @@ function requestBytesAtPinnedAddress(
           contentType: Array.isArray(response.headers["content-type"])
             ? response.headers["content-type"][0]
             : response.headers["content-type"],
+          ...(typeof response.headers.location === "string"
+            ? { location: response.headers.location }
+            : {}),
           metadata: responseMetadata((name) => response.headers[name]),
         };
         if (contentLength === undefined) {

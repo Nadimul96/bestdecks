@@ -13,7 +13,7 @@ import type {
   VisualProfileVerification,
 } from "../domain/visual-profile";
 
-export type CrawlProviderName = "cloudflare" | "deepcrawl";
+export type CrawlProviderName = "builtin" | "cloudflare" | "deepcrawl";
 
 export interface ProviderCallOptions {
   signal?: AbortSignal;

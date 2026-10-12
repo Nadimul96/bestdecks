@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Northwind Freight Newsroom</title>
+    <link>https://northwind.example.com/news/</link>
+    <item>
+      <title>Northwind opens its 48th cross-dock facility in Omaha</title>
+      <link>https://northwind.example.com/news/2026/new-omaha-facility</link>
+      <pubDate>Tue, 15 Sep 2026 14:00:00 GMT</pubDate>
+      <description><![CDATA[<p>The Omaha site adds 120,000 square feet of temperature-controlled capacity.</p>]]></description>
+    </item>
+    <item>
+      <title>Northwind publishes its 2026 food-safety report</title>
+      <link>https://northwind.example.com/news/2026/food-safety-report</link>
+      <pubDate>Mon, 03 Aug 2026 09:00:00 GMT</pubDate>
+      <description>Every load in the first half of 2026 shipped with continuous temperature telemetry.</description>
+    </item>
+  </channel>
+</rss>

@@ -1,0 +1,10 @@
+# Fixture: a typical marketing-site robots.txt
+User-agent: *
+Disallow: /internal/
+Allow: /internal/press-kit$
+
+User-agent: BestdecksBot
+Disallow: /admin
+Disallow: /internal/
+
+Sitemap: https://northwind.example.com/sitemap.xml

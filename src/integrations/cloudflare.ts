@@ -5,6 +5,7 @@ import {
   normalizePersistableSourceUrl,
 } from "@/src/domain/source-url";
 
+import { truncateUtf8 } from "./html-text";
 import { HttpError, requestJsonWithMetadata, sleep } from "./http";
 import type {
   CrawlPage,
@@ -42,17 +43,6 @@ const MAX_RETAINED_RECORDS = 100;
 // enough source context for selection while bounding duplicated DB artifacts.
 const MAX_RETAINED_TEXT_BYTES_PER_FIELD = 64 * 1024;
 const MAX_RETAINED_CRAWL_TEXT_BYTES = 256 * 1024;
-
-function truncateUtf8(value: string, maxBytes: number) {
-  const encoded = Buffer.from(value, "utf8");
-  if (encoded.length <= maxBytes) return value;
-
-  // If the first excluded byte is a UTF-8 continuation byte, exclude the
-  // incomplete code point as well. This keeps both the byte cap and text valid.
-  let end = maxBytes;
-  while (end > 0 && (encoded[end]! & 0xc0) === 0x80) end -= 1;
-  return encoded.subarray(0, end).toString("utf8");
-}
 
 const WebUrlSchema = z.string().max(2_048).url()
   .refine(isPersistableSourceUrl, "Expected a safe HTTP(S) source URL.")

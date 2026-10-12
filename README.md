@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/media/bestdecks-cover.gif" alt="Bestdecks: target URLs go in, every factual claim is checked against retained source evidence, unsupported claims are blocked, and a PPTX deck comes out" width="100%">
+</p>
+
 <h1 align="center">Bestdecks</h1>
 
 <p align="center">

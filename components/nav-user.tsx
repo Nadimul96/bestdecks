@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import {
   CircleUser,
   EllipsisVertical,
@@ -37,12 +38,15 @@ export function NavUser({
   };
 }) {
   const { isMobile } = useSidebar();
+  const router = useRouter();
   const [isPending, startTransition] = React.useTransition();
 
   function handleSignOut() {
     startTransition(async () => {
       await authClient.signOut();
-      window.location.href = "/login";
+      // replace + refresh drops the signed-in server render from the router cache.
+      router.replace("/login");
+      router.refresh();
     });
   }
 

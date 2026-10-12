@@ -19,7 +19,7 @@ function main() {
   const report = buildDoctorReport(env);
   console.log(process.argv.includes("--json")
     ? JSON.stringify(report, null, 2)
-    : formatDoctorReport(report));
+    : formatDoctorReport(report, process.argv.includes("--compose") ? "compose" : "native"));
   if (!report.ready) process.exitCode = 1;
 }
 

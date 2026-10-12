@@ -117,6 +117,8 @@ services:
       - bestdecks-generated:/run/bestdecks:ro
       - presenton-data:/app_data
     tmpfs:
+      # PPTX export fails when /tmp is noexec (Docker's tmpfs default), so
+      # exec is set explicitly; verified by the Compose E2E render step.
       - /tmp:rw,exec,nosuid,nodev,size=512m,mode=1770
     expose:
       - "80"

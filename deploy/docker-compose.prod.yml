@@ -125,7 +125,8 @@ services:
     volumes:
       - presenton-data:/app_data
     tmpfs:
-      - /tmp:rw,noexec,nosuid,nodev,size=128m,mode=1770
+      # PPTX export fails when /tmp is noexec (Docker's tmpfs default).
+      - /tmp:rw,exec,nosuid,nodev,size=512m,mode=1770
     expose:
       - "80"
     networks:

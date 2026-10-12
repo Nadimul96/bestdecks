@@ -177,7 +177,7 @@ else
     --pids-limit 512 \
     -p "127.0.0.1:${PRESENTON_PORT}:80" \
     --mount "type=bind,source=${APP_DATA_DIR},target=/app_data" \
-    --tmpfs /tmp:rw,noexec,nosuid,nodev,size=134217728,mode=1770 \
+    --tmpfs /tmp:rw,exec,nosuid,nodev,size=536870912,mode=1770 \
     -e CAN_CHANGE_KEYS="true" \
     -e LLM="openai" \
     -e AUTH_USERNAME \

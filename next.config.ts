@@ -25,9 +25,7 @@ const standaloneTraceExcludes = [
   "./CHANGELOG.md",
   "./next.config.ts",
   "./proxy.ts",
-  "./render.yaml",
   "./tsconfig*.json",
-  "./vercel.json",
 ] as string[];
 
 const nextConfig: NextConfig = {

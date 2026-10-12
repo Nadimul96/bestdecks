@@ -35,8 +35,6 @@ const forbiddenRootFiles = new Set([
   "SECURITY.md",
   "next.config.ts",
   "proxy.ts",
-  "render.yaml",
-  "vercel.json",
 ]);
 
 function isForbidden(relativePath) {

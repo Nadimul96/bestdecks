@@ -61,6 +61,14 @@ test("sitemaps and feeds are parsed without interpreting markup", () => {
   assert.deepEqual(atom, [{ title: "Atom post", url: `${base}posts/1`, published: "2026-09-01" }]);
 });
 
+test("list markers split from their content by nested blocks are rejoined", () => {
+  const document = extractReadableDocument(
+    "<main><ul><li><div>Unlimited members</div></li><li><p>Two teams</p></li></ul></main>",
+    "https://site.example.com/",
+  );
+  assert.equal(document.text, "- Unlimited members\n\n- Two teams");
+});
+
 test("UTF-8 truncation never splits a code point", () => {
   assert.equal(truncateUtf8("café", 4), "caf");
   assert.equal(truncateUtf8("abc", 10), "abc");

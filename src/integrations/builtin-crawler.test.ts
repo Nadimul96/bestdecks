@@ -83,6 +83,17 @@ test("built-in crawler retains in-scope readable text and respects robots.txt", 
   ]);
 });
 
+test("built-in crawler keeps identical page text only once", async () => {
+  const { transport } = fixtureTransport({
+    ...northwindRoutes(),
+    [`${SITE}/about`]: { file: "northwind-home.html" },
+  });
+  const result = await new BuiltinCrawler({ transport, resolver: fixtureResolver() })
+    .crawlSite(crawlRequest({ source: "links", maxDepth: 1 }));
+  assert.equal(result.pages.some((page) => page.url === `${SITE}/about`), false);
+  assert.ok(result.pages.some((page) => page.url === `${SITE}/customers`));
+});
+
 test("built-in crawler honors page and depth limits and link-only mode", async () => {
   const { transport, requests } = fixtureTransport(northwindRoutes());
   const crawler = new BuiltinCrawler({ transport, resolver: fixtureResolver() });

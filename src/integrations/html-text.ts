@@ -129,6 +129,9 @@ function collapseText(text: string) {
     .split("\n")
     .map((line) => line.replace(/[ \t\f\v ]+/gu, " ").trim())
     .join("\n")
+    // A list marker or heading marker whose content starts on a later line
+    // (nested block markup) is rejoined with that content.
+    .replace(/^(-|#{1,6})\n+(?=[^\n])/gmu, "$1 ")
     .replace(/\n{3,}/gu, "\n\n")
     // Permalink pilcrows are decoration, not content.
     .replace(/^(#+ .*?)\s*\u00b6$/gmu, "$1")

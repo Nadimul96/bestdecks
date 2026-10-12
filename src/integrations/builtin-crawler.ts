@@ -125,6 +125,7 @@ export class BuiltinCrawler implements ResumableCrawlProvider {
     const queue: Array<{ url: string; depth: number }> = [{ url: startUrl, depth: 0 }];
     let sitemapsLoaded = request.source === "links";
     let retainedBytes = 0;
+    const retainedTextHashes = new Set<string>();
     let startFailure: ProviderAdapterError | undefined;
 
     while (pages.length < maxPages) {
@@ -155,7 +156,14 @@ export class BuiltinCrawler implements ResumableCrawlProvider {
       if (pages.some((page) => page.url === finalUrl)) continue;
 
       const document = extractReadableDocument(outcome.body, finalUrl);
-      if (!document.noindex && document.text && retainedBytes < MAX_RETAINED_CRAWL_TEXT_BYTES) {
+      // Aliases (/, /home, /en) often serve identical text; keep it once.
+      const textHash = createHash("sha256").update(document.text).digest("hex");
+      const duplicate = retainedTextHashes.has(textHash);
+      retainedTextHashes.add(textHash);
+      if (
+        !duplicate && !document.noindex && document.text
+        && retainedBytes < MAX_RETAINED_CRAWL_TEXT_BYTES
+      ) {
         const markdown = truncateUtf8(
           document.text,
           Math.min(MAX_RETAINED_TEXT_BYTES_PER_PAGE, MAX_RETAINED_CRAWL_TEXT_BYTES - retainedBytes),

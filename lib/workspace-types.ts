@@ -1,3 +1,20 @@
+import {
+  Banknote,
+  ClipboardList,
+  Crosshair,
+  Handshake,
+  Landmark,
+  Lightbulb,
+  MonitorPlay,
+  PenLine,
+  PhoneCall,
+  Rocket,
+  Swords,
+  Ticket,
+  TrendingUp,
+  type LucideIcon,
+} from "lucide-react";
+
 import type {
   DeckArchetype,
   DeliveryFormat,
@@ -200,7 +217,7 @@ export const intentOptions: Array<{
   label: string;
   description: string;
   detail: string;
-  emoji: string;
+  icon: LucideIcon;
 }> = [
   {
     value: "cold_pitch",
@@ -208,7 +225,7 @@ export const intentOptions: Array<{
     description: "Pitch companies that don't know you yet",
     detail:
       "Generates a research-backed deck that opens with a company-specific hook, frames your value against their pain points, and closes with a single low-friction CTA.",
-    emoji: "🎯",
+    icon: Crosshair,
   },
   {
     value: "post_call",
@@ -216,7 +233,7 @@ export const intentOptions: Array<{
     description: "Follow up after a discovery call",
     detail:
       "Recaps the conversation, maps their stated needs to your solution, and includes a clear next-step slide. Best sent within 24 hours of the call.",
-    emoji: "📞",
+    icon: PhoneCall,
   },
   {
     value: "agency_rfp",
@@ -224,7 +241,7 @@ export const intentOptions: Array<{
     description: "Respond to an RFP or pitch a retainer",
     detail:
       "Structures your proposal around the prospect's brief: scope, timeline, deliverables, pricing context, and team fit. Works for retainers and one-off projects.",
-    emoji: "📋",
+    icon: ClipboardList,
   },
   {
     value: "investor",
@@ -232,7 +249,7 @@ export const intentOptions: Array<{
     description: "Pitch investors with tailored context",
     detail:
       "Builds a narrative around market opportunity, traction, team, and ask. Adapts framing based on the investor's portfolio focus and stage preference.",
-    emoji: "💰",
+    icon: Banknote,
   },
   {
     value: "partnership",
@@ -240,7 +257,7 @@ export const intentOptions: Array<{
     description: "Propose a co-sell, integration, or alliance",
     detail:
       "Frames the mutual upside of partnering: overlapping audiences, complementary products, and a concrete pilot proposal. Great for channel and tech partnerships.",
-    emoji: "🤝",
+    icon: Handshake,
   },
   {
     value: "event_sponsor",
@@ -248,7 +265,7 @@ export const intentOptions: Array<{
     description: "Pitch sponsorship or speaking opportunities",
     detail:
       "Positions your brand as the ideal sponsor by mapping your audience overlap, reach metrics, and activation ideas to the event organizer's goals.",
-    emoji: "🎪",
+    icon: Ticket,
   },
   {
     value: "product_demo",
@@ -256,7 +273,7 @@ export const intentOptions: Array<{
     description: "Summarize a demo with tailored highlights",
     detail:
       "Turns a live demo into a leave-behind deck: key features shown, how they solve the prospect's workflow gaps, and a comparison slide if competitors came up.",
-    emoji: "🖥️",
+    icon: MonitorPlay,
   },
   {
     value: "upsell",
@@ -264,7 +281,7 @@ export const intentOptions: Array<{
     description: "Expand an existing account",
     detail:
       "Uses their current usage data and success metrics to make the case for upgrading, adding seats, or adopting a new module. Focuses on ROI of expansion.",
-    emoji: "📈",
+    icon: TrendingUp,
   },
   {
     value: "board_update",
@@ -272,7 +289,7 @@ export const intentOptions: Array<{
     description: "Share progress with stakeholders",
     detail:
       "Structured around KPIs, milestones hit, blockers, and asks. Keeps the deck concise and data-forward so board members can skim in under 5 minutes.",
-    emoji: "🏛️",
+    icon: Landmark,
   },
 ];
 
@@ -281,7 +298,7 @@ export const archetypeOptions: Array<{
   label: string;
   description: string;
   detail: string;
-  emoji: string;
+  icon: LucideIcon;
 }> = [
   {
     value: "cold_outreach",
@@ -290,7 +307,7 @@ export const archetypeOptions: Array<{
       "Lead with company-specific evidence and a narrow, credible call to action.",
     detail:
       "Best for first-touch outreach to prospects who don't know you. Opens with a researched hook about their business, frames your value against their specific pain points, and closes with a single low-friction CTA.",
-    emoji: "\uD83C\uDFAF",
+    icon: Crosshair,
   },
   {
     value: "warm_intro",
@@ -299,7 +316,7 @@ export const archetypeOptions: Array<{
       "Frame shared context, likely upside, and why the conversation should happen now.",
     detail:
       "Ideal when you have a mutual connection, met at an event, or the prospect engaged with your content. Emphasizes common ground and makes the case for a timely conversation.",
-    emoji: "\uD83E\uDD1D",
+    icon: Handshake,
   },
   {
     value: "agency_proposal",
@@ -308,7 +325,7 @@ export const archetypeOptions: Array<{
       "Translate research into a tailored recommendation, scope direction, and next step.",
     detail:
       "Structures a formal proposal around the prospect's stated needs: scope, timeline, deliverables, pricing context, and team fit. Works for both retainers and project-based engagements.",
-    emoji: "\uD83D\uDCCB",
+    icon: ClipboardList,
   },
   {
     value: "investor_pitch",
@@ -317,7 +334,7 @@ export const archetypeOptions: Array<{
       "Build a narrative around opportunity, traction, and your ask.",
     detail:
       "Follows the classic pitch flow: problem, solution, market size, traction, team, and ask. Adapts framing based on the investor's portfolio focus and stage preference.",
-    emoji: "\uD83D\uDCB0",
+    icon: Banknote,
   },
   {
     value: "case_study",
@@ -326,7 +343,7 @@ export const archetypeOptions: Array<{
       "Let results tell the story with data-driven proof points.",
     detail:
       "Leads with measurable outcomes, walks through the challenge-solution-result arc, and ends with a 'you could see similar results' bridge. Great for mid-funnel nurture.",
-    emoji: "\uD83D\uDCC8",
+    icon: TrendingUp,
   },
   {
     value: "competitive_displacement",
@@ -335,7 +352,7 @@ export const archetypeOptions: Array<{
       "Show why switching from their current solution makes sense now.",
     detail:
       "Tactfully positions your solution against their incumbent. Highlights switching triggers, migration ease, and ROI of change without being overtly negative about competitors.",
-    emoji: "\u2694\uFE0F",
+    icon: Swords,
   },
   {
     value: "thought_leadership",
@@ -344,7 +361,7 @@ export const archetypeOptions: Array<{
       "Educate first, then naturally position your solution.",
     detail:
       "Opens with industry insights or a provocative trend, builds credibility through data and perspective, then pivots to how your approach addresses the shift. Ideal for top-of-funnel education.",
-    emoji: "\uD83D\uDCA1",
+    icon: Lightbulb,
   },
   {
     value: "product_launch",
@@ -353,7 +370,7 @@ export const archetypeOptions: Array<{
       "Announce new capabilities with clarity and excitement.",
     detail:
       "Structured around what's new, why it matters, who it's for, and how to get started. Works for feature launches, new product lines, or major platform updates.",
-    emoji: "\uD83D\uDE80",
+    icon: Rocket,
   },
   {
     value: "custom",
@@ -362,7 +379,7 @@ export const archetypeOptions: Array<{
       "Define your own deck framing",
     detail:
       "Write a custom prompt describing exactly how you want your deck structured, framed, and delivered. Full creative control.",
-    emoji: "\u270F\uFE0F",
+    icon: PenLine,
   },
 ];
 

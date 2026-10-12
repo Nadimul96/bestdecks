@@ -185,7 +185,7 @@ export function SetupWizard({ currentUser, onComplete }: SetupWizardProps) {
   /* ── Render ── */
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-background">
+    <div className="fixed inset-0 z-[60] flex flex-col bg-background">
       {/* ── Progress bar ── */}
       <div className="h-1 w-full bg-muted">
         <div
@@ -235,12 +235,13 @@ export function SetupWizard({ currentUser, onComplete }: SetupWizardProps) {
                 <Logo size="lg" className="mb-8" />
 
                 <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-                  Welcome{firstName ? `, ${firstName}` : ""} to BestDecks
+                  Welcome to Bestdecks{firstName ? `, ${firstName}` : ""}
                 </h1>
 
                 <p className="mt-4 max-w-md text-base text-muted-foreground leading-relaxed">
-                  AI-powered personalized pitch decks for every prospect.
-                  Let&apos;s configure the essentials for your first run.
+                  Tell us what you sell, pick a deck style, and add a few target
+                  companies. Every factual claim in the result is checked against
+                  its source before you can download it.
                 </p>
 
                 <Button
@@ -427,8 +428,8 @@ export function SetupWizard({ currentUser, onComplete }: SetupWizardProps) {
                             : "border-border/60 bg-card hover:border-border hover:shadow-sm",
                         )}
                       >
-                        <span className="mt-0.5 text-lg shrink-0">
-                          {opt.emoji}
+                        <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                          <opt.icon className="size-4" aria-hidden />
                         </span>
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-medium text-foreground">
@@ -654,10 +655,12 @@ export function SetupWizard({ currentUser, onComplete }: SetupWizardProps) {
                       </p>
                     </div>
                     <div className="flex items-center gap-2 text-sm">
-                      <span className="text-lg">
-                        {intentOptions.find((o) => o.value === state.intent)
-                          ?.emoji ?? ""}
-                      </span>
+                      {(() => {
+                        const SelectedIcon = intentOptions.find((o) => o.value === state.intent)?.icon;
+                        return SelectedIcon
+                          ? <SelectedIcon className="size-4 text-muted-foreground" aria-hidden />
+                          : null;
+                      })()}
                       <span className="text-foreground">
                         {intentOptions.find((o) => o.value === state.intent)
                           ?.label ?? state.intent}

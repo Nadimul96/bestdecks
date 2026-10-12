@@ -196,7 +196,7 @@ export function ShareableDeckViewer({
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div className="space-y-2">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                BestDecks Shareable Deck
+                Bestdecks shared deck
               </p>
               <h1 className="max-w-4xl text-2xl font-semibold tracking-tight sm:text-3xl">
                 {title}
@@ -306,7 +306,7 @@ export function ShareableDeckViewer({
                 href="https://bestdecks.co"
                 className="font-semibold text-primary hover:underline"
               >
-                BestDecks
+                Bestdecks
               </a>
               {" "}— open-source proposal deck tooling
             </p>

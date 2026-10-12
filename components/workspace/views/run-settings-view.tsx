@@ -597,8 +597,8 @@ export function RunSettingsView() {
 
                       {/* Content */}
                       <div className="relative z-10 flex items-start gap-3">
-                        <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted/60 text-base transition-transform duration-300 group-hover:scale-110">
-                          {opt.emoji}
+                        <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted/60 text-foreground/70 transition-transform duration-300 group-hover:scale-110">
+                          <opt.icon className="size-4" aria-hidden />
                         </span>
                         <div className="min-w-0 flex-1">
                           <p className="text-[13px] font-semibold text-foreground pr-6">

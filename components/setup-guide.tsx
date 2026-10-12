@@ -62,7 +62,7 @@ const steps: SetupStep[] = [
 
 export function SetupGuide() {
   const { currentBusiness, loading: bizLoading } = useBusinessContext();
-  const [expanded, setExpanded] = React.useState(true);
+  const [expanded, setExpanded] = React.useState(false);
   const [dismissed, setDismissed] = React.useState(false);
   const [completed, setCompleted] = React.useState<Set<string>>(new Set());
   const [loading, setLoading] = React.useState(true);

@@ -22,38 +22,42 @@ import { DeliveryView } from "./views/delivery-view";
 import { PricingView } from "./views/pricing-view";
 
 const TOUR_COMPLETE_KEY = "bestdecks_tour_complete";
-const TOUR_COMPLETE_EVENT = "bestdecks:tour-complete";
+const WIZARD_DISMISSED_KEY = "bestdecks_setup_wizard_dismissed";
+const LOCAL_FLAG_EVENT = "bestdecks:local-flag";
 
-function getTourCompleteSnapshot() {
+/**
+ * A per-browser boolean flag in localStorage, read through
+ * useSyncExternalStore so server and client renders agree. If storage is
+ * unavailable the flag reads as set, so one-time UI never traps the user.
+ */
+function useLocalFlag(key: string) {
+  const subscribe = React.useCallback((onStoreChange: () => void) => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === key) onStoreChange();
+    };
+    window.addEventListener("storage", onStorage);
+    window.addEventListener(LOCAL_FLAG_EVENT, onStoreChange);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener(LOCAL_FLAG_EVENT, onStoreChange);
+    };
+  }, [key]);
+  const getSnapshot = React.useCallback(() => {
+    try {
+      return localStorage.getItem(key) === "true";
+    } catch {
+      return true;
+    }
+  }, [key]);
+  return React.useSyncExternalStore(subscribe, getSnapshot, () => true);
+}
+
+function setLocalFlag(key: string) {
   try {
-    return localStorage.getItem(TOUR_COMPLETE_KEY) === "true";
+    localStorage.setItem(key, "true");
+    window.dispatchEvent(new Event(LOCAL_FLAG_EVENT));
   } catch {
-    return true;
-  }
-}
-
-function getServerTourCompleteSnapshot() {
-  return true;
-}
-
-function subscribeToTourCompletion(onStoreChange: () => void) {
-  const onStorage = (event: StorageEvent) => {
-    if (event.key === TOUR_COMPLETE_KEY) onStoreChange();
-  };
-  window.addEventListener("storage", onStorage);
-  window.addEventListener(TOUR_COMPLETE_EVENT, onStoreChange);
-  return () => {
-    window.removeEventListener("storage", onStorage);
-    window.removeEventListener(TOUR_COMPLETE_EVENT, onStoreChange);
-  };
-}
-
-function markTourComplete() {
-  try {
-    localStorage.setItem(TOUR_COMPLETE_KEY, "true");
-    window.dispatchEvent(new Event(TOUR_COMPLETE_EVENT));
-  } catch {
-    // Completion still applies to this session through showTour state.
+    // The in-memory state still applies for this session.
   }
 }
 
@@ -96,23 +100,18 @@ export function WorkspaceShell({ currentUser }: WorkspaceShellProps) {
   const activeView = useActiveWorkspaceView();
   const { currentBusiness, loading } = useBusinessContext();
 
-  // Show setup wizard for first-time users
+  // Show the setup wizard until setup is complete or the user dismisses it.
   const setupComplete = currentBusiness?.setupComplete ?? false;
-  const [wizardDismissed, setWizardDismissed] = React.useState(false);
+  const wizardDismissed = useLocalFlag(WIZARD_DISMISSED_KEY);
 
   // Show product tour after wizard completion (one-time)
   const [showTour, setShowTour] = React.useState(false);
-
-  const tourAlreadyDone = React.useSyncExternalStore(
-    subscribeToTourCompletion,
-    getTourCompleteSnapshot,
-    getServerTourCompleteSnapshot,
-  );
+  const tourAlreadyDone = useLocalFlag(TOUR_COMPLETE_KEY);
 
   const shouldShowWizard = !loading && !setupComplete && !wizardDismissed;
 
   function handleWizardComplete() {
-    setWizardDismissed(true);
+    setLocalFlag(WIZARD_DISMISSED_KEY);
     // Show product tour after a brief delay for the wizard to animate out
     if (!tourAlreadyDone) {
       setTimeout(() => setShowTour(true), 600);
@@ -121,7 +120,7 @@ export function WorkspaceShell({ currentUser }: WorkspaceShellProps) {
 
   function handleTourComplete() {
     setShowTour(false);
-    markTourComplete();
+    setLocalFlag(TOUR_COMPLETE_KEY);
   }
 
   // Full-screen setup wizard for first-time users

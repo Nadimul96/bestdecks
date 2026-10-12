@@ -251,7 +251,7 @@ export function OnboardingView() {
           {/* Seller-entered fields */}
           <SectionCard
             title="Confirm your details"
-            description="Edit anything that doesn\u2019t look right."
+            description="Edit anything that doesn’t look right."
           >
             <div className="grid gap-5 sm:grid-cols-2">
               <FieldGroup label="Company name">
@@ -328,7 +328,7 @@ export function OnboardingView() {
                         : "border-border/60 bg-card hover:border-border hover:shadow-sm",
                     )}
                   >
-                    <span className="mt-0.5 text-lg shrink-0">{opt.emoji}</span>
+                    <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"><opt.icon className="size-4" aria-hidden /></span>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-foreground">
                         {opt.label}

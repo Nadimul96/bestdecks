@@ -89,9 +89,12 @@ services:
     cap_drop:
       - ALL
     cap_add:
-      # The image's nginx starts as root, then chowns its temp directories
-      # and drops to www-data. Without these three it exits at startup.
+      # The image's nginx starts as root, opens logs and temp directories
+      # owned by www-data, and then drops to www-data. Without exactly these
+      # four (probed in CI) it exits at startup and the renderer never
+      # becomes healthy. It also lets root read the 0600 generated password.
       - CHOWN
+      - DAC_OVERRIDE
       - SETGID
       - SETUID
     security_opt:

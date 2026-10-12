@@ -103,6 +103,13 @@ services:
     init: true
     cap_drop:
       - ALL
+    cap_add:
+      # The image's nginx needs these to open its www-data-owned logs and
+      # temp directories and drop privileges; without them it exits at startup.
+      - CHOWN
+      - DAC_OVERRIDE
+      - SETGID
+      - SETUID
     security_opt:
       - no-new-privileges:true
     pids_limit: 512

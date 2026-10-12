@@ -1,17 +1,23 @@
 // Container entrypoint for the root docker-compose.yml.
 //
-// Fills secrets that the operator did not set in .env from the values the
-// first-run service generated, fills BESTDECKS_COMMIT_SHA from the build, and
-// then imports the real entry module in-process (so signals and exit codes
-// behave exactly as if it were started directly). Values set in the
-// environment always win; nothing is printed.
+// Fills secrets and the admin account that the operator did not set in .env
+// from the values the first-run service generated, fills BESTDECKS_COMMIT_SHA
+// from the build, and then imports the real entry module in-process (so
+// signals and exit codes behave exactly as if it were started directly).
+// Values set in the environment always win; nothing is printed.
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const SECRETS_PATH = "/run/bestdecks/secrets.json";
 const COMMIT_PATH = "/app/.bestdecks-commit";
-const GENERATED_NAMES = ["BETTER_AUTH_SECRET", "APP_SECRETS_KEY", "PRESENTON_AUTH_PASSWORD"];
+const GENERATED_NAMES = [
+  "BETTER_AUTH_SECRET",
+  "APP_SECRETS_KEY",
+  "PRESENTON_AUTH_PASSWORD",
+  "ADMIN_EMAIL",
+  "ADMIN_PASSWORD",
+];
 
 const [target, ...rest] = process.argv.slice(2);
 if (!target) {

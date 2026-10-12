@@ -1,285 +1,155 @@
-# Bestdecks
+<h1 align="center">Bestdecks</h1>
 
-**Turn your point of view and a target-company list into research-grounded, shareable PPTX proposals.**
+<p align="center">
+  <strong>Evidence-gated proposal decks.</strong><br>
+  Give it your pitch and a list of target companies. It researches each one, drafts a tailored deck, and refuses to ship any factual claim it can't tie to a retained source.
+</p>
 
-Bestdecks is an Apache-2.0, self-hosted, bring-your-own-key proposal engine for agencies,
-consultants, and sales teams who want stronger first meetings without hand-building every deck.
-It researches each target, turns your seller context into a tailored narrative, and only delivers
-factual slide copy when that copy is tied to retained source evidence.
+<p align="center">
+  <a href="https://bestdecks.co">Live demo</a> ·
+  <a href="#quickstart">Quickstart</a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="./docs/architecture.md">Architecture</a> ·
+  <a href="./docs/self-hosting.md">Self-hosting</a>
+</p>
 
-## Why Bestdecks
+<p align="center">
+  <a href="https://github.com/Nadimul96/bestdecks/actions/workflows/ci.yml"><img src="https://github.com/Nadimul96/bestdecks/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="Apache-2.0"></a>
+  <img src="https://img.shields.io/badge/node-24.18-339933?logo=node.js&logoColor=white" alt="Node 24.18">
+  <img src="https://img.shields.io/badge/Next.js-16-black?logo=next.js" alt="Next.js 16">
+  <img src="https://img.shields.io/badge/tests-484_unit-brightgreen" alt="484 unit tests">
+</p>
 
-- **Personalized at scale:** submit pasted URLs, CSV, or TSV; use your offer, differentiators,
-  ICP, and desired outcome as the proposal brief.
-- **Evidence before polish:** every source-backed factual claim must exactly match retained
-  evidence from its canonical source; unsupported factual claims block delivery.
-- **You own the stack:** run it with your own SQLite database, provider accounts, and a
-  self-hosted renderer. There is no Bestdecks-hosted account, credit balance, billing, or email
-  sending surface.
-- **Designed for a practical handoff:** download verified PPTX artifacts or create scoped,
-  read-only share links after delivery.
+---
 
-Bestdecks is intentionally opinionated: the v0.1 renderer makes rich native-vector PPTX decks and
-does not use generated or remote media. That keeps the output predictable, portable, and easier
-to verify.
+## Why this exists
 
-## Release status
+Most AI deck generators are fluent and confidently wrong. Bestdecks treats that as a bug to engineer out, not a disclaimer to add.
 
-**Public source release; pre-production.** The durable worker, deterministic claim-level evidence
-evaluation, and unsupported-factual-claim delivery gate are implemented and covered by automated
-tests. The canonical Cloudflare → Perplexity → Gemini → Presenton path does not yet have a
-checked-in live receipt, so it is not Reference-verified and no production reliability claim is
-made. Treat generated artifacts as drafts and review them before sending or presenting.
+- **Every factual claim is traceable.** A slide can only be labeled `source_backed` when its text matches, verbatim, a snippet retained from the canonical source URL. Paraphrases fail closed.
+- **Unsupported claims block delivery.** The run doesn't finish with a warning. It stops, shows you which claims have no evidence, and waits.
+- **Deterministic, not vibes.** Evidence coverage is computed from a typed claim ledger, not a model-generated "quality score." The same inputs produce the same verdict.
+- **You own the whole stack.** Self-hosted, Apache-2.0, bring your own API keys. SQLite locally, libSQL/Turso if you want. No hosted account, no billing surface, no telemetry.
 
-See [release readiness](./docs/release-readiness.md) for the complete gate.
+## How it works
 
-## Start here
+```
+  CSV / TSV / pasted URLs          seller context
+          │                     (offer, ICP, outcome)
+          ▼                              │
+   ┌──────────────┐                      │
+   │   intake     │◀─────────────────────┘
+   └──────┬───────┘
+          ▼
+   ┌──────────────┐   Cloudflare Browser Rendering
+   │    crawl     │──▶ retained page evidence, keyed by canonical URL
+   └──────┬───────┘
+          ▼
+   ┌──────────────┐   Perplexity
+   │   research   │──▶ enrichment, every snippet tied to a source
+   └──────┬───────┘
+          ▼
+   ┌──────────────┐   Gemini
+   │ brief + plan │──▶ narrative + slide plan, one of 8 deck archetypes
+   └──────┬───────┘
+          ▼
+   ┌──────────────┐   src/domain/evidence.ts
+   │ evidence gate│──▶ claim ledger: source_backed │ seller_supplied │ model_inference │ unsupported
+   └──────┬───────┘        └── any `unsupported` claim ⇒ delivery blocked
+          ▼
+   ┌──────────────┐   self-hosted Presenton, render-only
+   │   render     │──▶ native-vector PPTX, OOXML allowlist verified, SHA-256 checked
+   └──────┬───────┘
+          ▼
+   download or scoped read-only share link
+```
 
-You will need Node.js 24.18.0, pnpm 11.7.0, a writable SQLite path, your own Cloudflare,
-Perplexity, and Gemini credentials, plus a self-hosted Presenton instance. The app deliberately
-does not silently substitute demo data or shared provider keys.
+The web app only accepts and queues runs. A separate **durable worker** claims each run under a lease, checkpoints every stage to SQLite, retries with bounds, and survives restarts. Kill it mid-run and it resumes where it left off.
+
+### What a run produces
+
+Every run ends in a viewer page with PDF and PPTX downloads, a deck summary, and the rendered slides. Below is the checked-in sample run ([live](https://bestdecks.co/examples/cold-outreach)).
+
+<p align="center">
+  <img src="docs/media/screenshot-example-deck.png" alt="Bestdecks run viewer: deck summary, PDF and PPTX downloads" width="100%">
+</p>
+<p align="center">
+  <img src="docs/media/screenshot-slides.png" alt="Two rendered slides from the sample deck: a cover slide and a tension slide with a key metric and talking points" width="100%">
+</p>
+
+### What's technically interesting here
+
+| Piece | Where | Why it matters |
+| --- | --- | --- |
+| Claim-level evidence gate | [`src/domain/evidence.ts`](./src/domain/evidence.ts), [`src/domain/run-receipt.ts`](./src/domain/run-receipt.ts) | Provenance is a containment check against retained text, so it's auditable and reproducible. No LLM-as-judge. |
+| Leased SQLite job queue | [`src/server/run-queue.ts`](./src/server/run-queue.ts), [`src/bin/run-worker.ts`](./src/bin/run-worker.ts) | Leases, heartbeats, checkpoints, bounded retries, idempotent dispatch, cancellation. Resumable Cloudflare crawl jobs. |
+| Render-only PPTX contract | [`src/integrations/presenton.ts`](./src/integrations/presenton.ts), [`deploy/presenton/`](./deploy/presenton/) | Bestdecks builds every slide's vector UI itself and asks the renderer only to export. Output is verified against an OOXML allowlist (no pictures, media, OLE, external rels). |
+| Encrypted per-tenant provider secrets | [`src/server/`](./src/server/) | Integration keys are wrapped with `APP_SECRETS_KEY`, with a transactional re-wrap command for key rotation. |
+| Capability inventory as code | [`src/config/capabilities.ts`](./src/config/capabilities.ts) | Every feature's status (`implemented` / `experimental` / `planned`) is a typed constant the UI and docs read from, so the README can't drift from the code. |
+
+## Quickstart
+
+You'll need Node 24.18, pnpm 11.7, Docker (for the renderer), and your own keys for Cloudflare, Perplexity, and Gemini.
 
 ```bash
 git clone https://github.com/Nadimul96/bestdecks.git
 cd bestdecks
-pnpm setup
+pnpm setup                        # writes .env.local with fresh secrets; never overwrites
 pnpm install --frozen-lockfile
 ```
 
-`pnpm setup` creates `.env.local` once, generates separate auth, encryption, and renderer secrets,
-sets the local SQLite path, pins the supported Presenton image, and never overwrites an existing
-configuration. Add your `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `PERPLEXITY_API_KEY`, and
-`GEMINI_API_KEY`; then create a local account on first visit or temporarily enable the documented
-bootstrap account. The generated configuration is for a single-user local instance—set
-`ALLOW_SHARED_PROVIDER_CREDENTIALS=0` before multi-user hosting.
-
-Start the renderer, app, and worker in three terminals:
+Add `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `PERPLEXITY_API_KEY`, and `GEMINI_API_KEY` to `.env.local`, then run the three processes:
 
 ```bash
-pnpm presenton:start
-```
-
-The renderer helper safely parses `.env.local` as configuration data; it never shell-sources that
-file. The checked-in digest is the supported v0.1 renderer identity. Inspect the script before use
-and see the [self-hosting guide](./docs/self-hosting.md) for production pinning and isolation.
-
-```bash
-pnpm dev
-```
-
-```bash
+pnpm presenton:start              # digest-pinned renderer, loopback only
+pnpm dev                          # web app on http://localhost:3000
 BESTDECKS_COMMIT_SHA="$(git rev-parse --short=12 HEAD)" pnpm worker
 ```
 
-Open `http://localhost:3000`, sign in with the bootstrap account, complete the seller-context
-setup, add target websites, and launch a run. See [self-hosting](./docs/self-hosting.md) for the
-production topology, renderer image pinning, secret rotation, and deployment checks.
+Sign in, fill in your seller context, paste a few target URLs, launch a run. `pnpm doctor` validates your configuration offline before anything is charged.
 
-## Capability status contract
+Full production topology, secret rotation, and the renderer hardening policy are in [docs/self-hosting.md](./docs/self-hosting.md).
 
-- **Implemented:** a code path exists and is statically inspectable in this repository.
-- **Reference-verified:** a controlled live run passed and has a reproducible receipt. There are currently no capabilities in this state.
-- **Experimental:** code exists, but the surface is disabled, incomplete, or lacks the proof required for the implemented reference path.
-- **Planned:** the capability is not available.
+## Verify it yourself
 
-The canonical machine-readable inventory is [`src/config/capabilities.ts`](./src/config/capabilities.ts).
+```bash
+pnpm lint && pnpm typecheck && pnpm test:unit && pnpm build
+pnpm check                        # typecheck + validate and plan the checked-in example
+```
+
+CI runs lint, typecheck, 484 unit tests, a production build, dependency review, and a full-history secret scan on every push.
+
+## Status
+
+**Public source, pre-production.** The intake, research, planning, evidence gate, durable worker, and render path are implemented and unit-tested. What's not yet checked in is a *reference receipt*: a controlled live run through Cloudflare → Perplexity → Gemini → Presenton with redacted request metadata and artifact checksums. Until that exists, treat generated decks as drafts and review them before sending.
+
+The machine-readable inventory is [`src/config/capabilities.ts`](./src/config/capabilities.ts), and a unit test fails if this table drifts from it. The full gate is in [docs/release-readiness.md](./docs/release-readiness.md).
 
 | Capability | Status | Boundary | Source evidence |
 | --- | --- | --- | --- |
 | CSV, TSV, and pasted-URL intake | Implemented | OSS core | `src/domain/intake.ts`, `src/domain/schemas.ts` |
 | Seller context and eight named deck archetypes | Implemented | OSS core | `src/domain/schemas.ts`, `src/domain/pipeline.ts` |
 | Cloudflare Browser Rendering crawl adapter | Implemented | Provider adapter | `src/integrations/cloudflare.ts`, `src/server/run-executor.ts` |
-| Deepcrawl crawl adapter | Experimental | Provider adapter | `src/integrations/deepcrawl.ts` |
 | Perplexity enrichment adapter | Implemented | Provider adapter | `src/integrations/perplexity.ts`, `src/server/run-executor.ts` |
 | Gemini brief and slide planning | Implemented | Provider adapter | `src/server/ai-brief-builder.ts`, `src/server/slide-planner.ts` |
-| Gemini image-generation adapter | Experimental | Provider adapter | `src/integrations/gemini.ts` |
+| Claim-level evidence coverage and delivery gate | Implemented | OSS core | `src/domain/evidence.ts`, `src/domain/run-receipt.ts`, `src/server/run-executor.ts` |
 | Presenton deterministic rich-static PPTX rendering | Implemented | Provider adapter | `src/integrations/presenton.ts`, `src/server/run-executor.ts` |
+| Deepcrawl crawl adapter | Experimental | Provider adapter | `src/integrations/deepcrawl.ts` |
+| Gemini image-generation adapter | Experimental | Provider adapter | `src/integrations/gemini.ts` |
 | Alai renderer adapter | Experimental | Provider adapter | `src/integrations/alai.ts` |
 | Plus AI / Google Slides renderer adapter | Experimental | Provider adapter | `src/integrations/plusai.ts` |
-| Claim-level evidence coverage and delivery gate | Implemented | OSS core | `src/domain/evidence.ts`, `src/domain/run-receipt.ts`, `src/server/run-executor.ts` |
 | Outbound email delivery | Planned | OSS core | `ROADMAP.md` |
 
-### Evidence meaning
+## Design boundaries
 
-The brief builder accepts a target fact as source-derived only when its normalized text occurs
-verbatim in retained evidence for the same canonical source URL. The slide planner may then label
-text `source_backed` only when it exactly matches one of those retained claims and cites only the
-source IDs derived from that claim's URL or URLs. Merely naming any allowed URL is insufficient.
-
-This is a deterministic provenance and containment rule, not independent fact-checking or semantic
-entailment. Legitimate paraphrases fail closed and require a new reviewed contract rather than a
-weaker citation label.
-
-## Architecture boundary
-
-The public core owns target intake, seller context, research orchestration, brief and slide planning, renderer adapters, and artifact persistence. It is intended to remain complete and usable without a Bestdecks-hosted account.
-
-A future private `bestdecks-cloud` service may consume the public core and operate managed hosting, queues, monitoring, storage, teams, scheduling, analytics, billing, and managed provider credits. Hosted pricing and allowances are intentionally unpublished until measured completed-run costs exist.
-
-Fresh OSS databases create no hosted-credit table or Stripe/referral schema, and the corresponding
-credit, checkout, webhook, and referral routes are absent. Nondestructive upgrades may retain
-legacy cloud-only tables or columns for operator review; retained data is inert and does not create
-a hosted entitlement, billing surface, or support promise.
-
-Outbound email drafting and sending are also absent from the current run contract: the worker does
-not create email copy, recipient jobs, or sends. A future email surface is planned only after an
-approval, suppression, audit, tenancy, and idempotency contract exists.
-
-## Configuration reference
-
-Prerequisites:
-
-- Node.js 24.18.0
-- pnpm 11.7.0
-- a writable local path for SQLite
-- provider accounts and keys for the adapters you choose to run
-- a reachable Presenton service for the documented renderer path
-
-Create a local environment file without overwriting an existing one:
-
-```bash
-cp -n .env.example .env.local
-```
-
-Fill `.env.local` with independent secrets and your own provider credentials. Never commit that file. At minimum, review:
-
-- `BETTER_AUTH_URL`
-- `BETTER_AUTH_SECRET`
-- `APP_SECRETS_KEY`
-- `LOCAL_DB_PATH`
-- `CLOUDFLARE_ACCOUNT_ID`
-- `CLOUDFLARE_API_TOKEN`
-- `PERPLEXITY_API_KEY`
-- `GEMINI_API_KEY`
-- `PRESENTON_BASE_URL`
-- `PRESENTON_AUTH_USERNAME` and `PRESENTON_AUTH_PASSWORD` for self-hosted Presenton
-- `ALLOW_SHARED_PROVIDER_CREDENTIALS=1` only when this is an intentional single-tenant self-host using the process-level provider keys above
-
-Install and inspect configuration:
-
-```bash
-pnpm install --frozen-lockfile
-pnpm doctor
-```
-
-For controlled `APP_SECRETS_KEY` rotation, including the required previous-key overlap and
-transactional rewrap command, follow [the self-hosting rotation runbook](docs/self-hosting.md#rotate-stored-integration-secret-encryption-safely).
-
-`pnpm doctor` performs constructor-only configuration validation for the reference and retained
-experimental adapters. It does not contact providers, validate permissions, or prove security;
-offline `reachable` and `liveSmokePassed` values remain `null`.
-
-Start the application and durable worker in separate terminals:
-
-```bash
-pnpm dev
-```
-
-```bash
-pnpm worker
-```
-
-Then open `http://localhost:3000`.
-
-The application process accepts and queues runs; it does not execute provider work inline. Without
-the worker, runs remain queued. `pnpm worker:once` claims at most one available job and is useful for
-controlled validation. Set `BESTDECKS_COMMIT_SHA` to the exact 7–64 character hexadecimal source
-commit before starting the worker; a missing value fails before any paid provider request.
-
-The Presenton helper requires a digest-pinned image, binds only to loopback on a dedicated internal
-Docker network, and refuses to replace an existing container or network whose isolation,
-authentication, image, mount, port, or hardening policy differs. See
-[self-hosting](./docs/self-hosting.md) for local and production deployment instructions.
-
-Tenant-saved Presenton overrides require a complete credential set and a credential-free, public
-HTTPS endpoint. Configure local or private Presenton services through the operator-managed
-environment boundary; runtime DNS validation remains the final outbound-network check.
-
-Authenticated artifact downloads re-fetch only the export URL in the owner-bound, strictly parsed
-`presentation_delivery` record, enforce tenant ownership and outbound URL policy, and compare the
-response length, signature, and SHA-256 before serving it. The upstream fetch is capped at 32 MiB
-and 60 seconds.
-
-Per-process fetch reservations remain held while the verified in-memory artifact drains to the
-client. They are released on completion, cancellation, stream error, or the two-minute egress
-deadline, so a stalled client remains bounded and cannot release scarce capacity prematurely.
-
-The current limiter and rate window are process-local, not deployment-wide, and each accepted
-artifact is fully buffered in memory before delivery. Multi-instance operators still need an
-external aggregate concurrency/egress control and memory sizing appropriate for the configured
-process count.
-
-The mandatory v0.1 PPTX profile is `rich_static_v1`. Run admission requires
-`imagePolicy=never`, `visualDensity=rich`, and `visualContentTypes=[]`, so the renderer requests no
-generated or remote media. Bestdecks deterministically builds each slide's complete native-vector
-`SlideModel.ui`, creates a blank presentation shell, replaces it with those exact slides, and asks
-Presenton only to export PPTX. The adapter does not call Presenton's content-generation or layout-
-selection endpoint.
-
-The supported renderer boundary is self-hosted HTTP Basic authentication. Bestdecks rejects
-Presenton Cloud and bearer/API-key configuration, supplies no model credential to Presenton, and
-places the production renderer only on the internal backend network with no provider-egress
-network. The pinned upstream image still requires an `LLM` selector at startup; that compatibility
-value is not a model credential, and the render-only request path never invokes it.
-
-Delivery then applies the `pptx_ooxml_rich_static_v2` allowlist: exact approved DrawingML text,
-closed-set native-vector geometry, an allowlisted background and vector accent on every slide,
-explicit high-contrast typography, and only the pinned font and color palette. The readiness
-receipt must set `visualProfileVerified=true`; pictures, media, charts, OLE objects, animation,
-external relationships, and unknown package parts fail closed.
-
-[`deploy/presenton/rich-static-v1.manifest.json`](./deploy/presenton/rich-static-v1.manifest.json)
-is the canonical renderer manifest. It binds Presenton source commit
-`882a826f274ddbd4650cdb21b3a9ff4d16276fe9`, image
-`ghcr.io/presenton/presenton@sha256:8757c5d0b842e4572aeaa6bbc79817ee201a05c73909fb46bb2972165eac0a88`,
-and the exact Bestdecks-owned inline UI schema, layout IDs, palette, font, and no-media policy.
-The profile uses template `bestdecks_inline_vector_v1`, theme `bestdecks_green_v1`, four
-Bestdecks-owned layout IDs, and Arial. Its content-free UI schema SHA-256 is
-`3e229b0b08e9e89b834d0fa54fa54a8df76200795b0a7acd15ce98bb47a12d2f`; the closed
-visual-attestation identity is
-`b823d08063d0b57924b27a953d2fb4cf6585edf5297cd4b5560cf335db864cd4`.
-
-Focused fixtures can prove the local request and verifier contracts; they do not prove that a
-live export from that exact pinned Presenton image and inline UI profile conforms. A controlled live export
-must pass the same verifier and be retained in a reference-run receipt before renderer
-compatibility or visual fidelity is called Reference-verified.
-
-## Verification
-
-Static checks:
-
-```bash
-pnpm lint
-pnpm typecheck
-pnpm test:unit
-pnpm build
-```
-
-Provider smoke commands exist for the reference adapters and the experimental Plus AI adapter.
-`pnpm smoke:providers:reference` checks Cloudflare, Perplexity, Gemini brief/planning, and Presenton
-independently. These commands make external requests, may incur provider charges, and are not a
-substitute for the versioned, durable-worker reference-run receipt required by
-[release readiness](./docs/release-readiness.md). Alai has no checked-in smoke command or live
-receipt.
-
-An earlier 2026-07-13 local reconciliation passed lint, non-incremental typecheck, 478/478 unit
-tests, example validation/planning, production build, standalone-boundary and runtime-security
-checks, dependency audits, the then-current worktree secret scan, and documentation/link
-validation. Those results predate the deterministic render-only path and are historical evidence,
-not the final verification tally. Hosted CI, a fresh clone, a clean host, remediated history, and
-live-provider receipts remain open. See [release readiness](./docs/release-readiness.md); local
-results are not a release receipt.
+- The renderer is deliberately **vector-only, no generated or remote images**. Predictable, portable, verifiable.
+- The public core must stay complete without any hosted service. A future private `bestdecks-cloud` may consume it; it may never be required by it ([ADR 0001](./docs/adr/0001-oss-core-cloud-boundary.md)).
+- No email sending until there's an approval, suppression, audit, and idempotency contract ([ROADMAP](./ROADMAP.md)).
 
 ## Documentation
 
-- [Self-hosting](./docs/self-hosting.md)
-- [Release readiness](./docs/release-readiness.md)
-- [Architecture](./docs/architecture.md)
-- [Architecture decisions](./docs/adr/README.md)
-- [Security policy](./SECURITY.md)
-- [Contributing](./CONTRIBUTING.md)
-- [Roadmap](./ROADMAP.md)
-- [Changelog](./CHANGELOG.md)
+[Architecture](./docs/architecture.md) · [Self-hosting](./docs/self-hosting.md) · [Provider notes](./docs/provider-notes.md) · [Release readiness](./docs/release-readiness.md) · [ADRs](./docs/adr/README.md) · [Roadmap](./ROADMAP.md) · [Changelog](./CHANGELOG.md) · [Security](./SECURITY.md) · [Contributing](./CONTRIBUTING.md)
 
 ## License
 

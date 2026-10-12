@@ -9,7 +9,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 export const metadata: Metadata = {
   title: "Bestdecks",
   description:
-    "Batch website research and proposal generation for tailored outreach decks.",
+    "Evidence-gated proposal decks. Research targets, draft tailored PPTX decks, and block any factual claim without a retained source.",
   icons: {
     icon: "/icon.svg",
   },

@@ -49,6 +49,15 @@ function isForbidden(relativePath) {
   return false;
 }
 
+// The runtime image creates an empty, unprivileged `.data` directory as the
+// mount point for the database volume. An empty directory carries no state;
+// anything inside it would.
+async function isEmptyDataMountPoint(relativePath, entry, absolutePath) {
+  return relativePath === ".data"
+    && entry.isDirectory()
+    && (await readdir(absolutePath)).length === 0;
+}
+
 function isWithinRoot(rootPath, candidatePath) {
   const candidateRelative = relative(rootPath, candidatePath);
   return candidateRelative === ""
@@ -85,7 +94,9 @@ async function collectViolations() {
       const absolutePath = resolve(directory, entry.name);
       const relativePath = relative(root, absolutePath);
       if (isForbidden(relativePath)) {
-        violations.push(relativePath);
+        if (!(await isEmptyDataMountPoint(relativePath, entry, absolutePath))) {
+          violations.push(relativePath);
+        }
         continue;
       }
       const normalized = relativePath.split(sep).join("/");
